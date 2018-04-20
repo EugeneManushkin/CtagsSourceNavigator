@@ -199,6 +199,21 @@ int StrCmp(const void* v1,const void* v2)
   return strcmp(*(char**)v1,*(char**)v2);
 }
 
+//TODO: rework
+char const* GetLine(char const* &str, std::string& buffer, FILE *f)
+{
+  buffer.clear();
+  str = 0;
+  char const* ptr = 0;
+  do
+  {
+    ptr = fgets(strbuf, sizeof(strbuf), f);
+    buffer += ptr ? ptr : "";
+  }
+  while(ptr && *buffer.rbegin() != '\n'); 
+  str = !ptr && !buffer.length() ? nullptr : buffer.c_str();
+  return str;
+}
 
 static int CreateIndex(TagFileInfo* fi)
 {
@@ -216,7 +231,9 @@ static int CreateIndex(TagFileInfo* fi)
   lines.SetSize(sz/80);
 
   Hash<int> files;
-  fgets(strbuf,sizeof(strbuf),f);
+  std::string buffer;
+  char const* strbuf;
+  GetLine(strbuf, buffer, f);
   if(strncmp(strbuf,"!_TAG_FILE_FORMAT",17))
   {
     fclose(f);
@@ -259,7 +276,7 @@ static int CreateIndex(TagFileInfo* fi)
 
   pos=ftell(f);
   bool sorted=true;
-  while(fgets(strbuf,sizeof(strbuf),f))
+  while(GetLine(strbuf, buffer, f))
   {
     if(strbuf[0]=='!')
     {
