@@ -16,9 +16,11 @@
   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 */
 
+#include <set>
 #include <stdio.h>
 #include <sys/stat.h>
 #include <sys/utime.h>
+#include <string>
 #include <string.h>
 #include <windows.h>
 #include "Hash.hpp"
@@ -664,20 +666,18 @@ void FindFile(TagFileInfo* fi,const char* str,PTagArray ta)
         break;
       }
     }
-    Vector<char*> lines;
+    std::set<std::string> lines;
     int i;
     for(i=pos;i<=endpos;i++)
     {
       fseek(f,offsets[i],SEEK_SET);
       fgets(strbuf,sizeof(strbuf),f);
-      lines.Push(strdup(strbuf));
+      lines.insert(strbuf);
     }
-    qsort(&lines[0],lines.Count(),4,StrCmp);
-    for(i=0;i<lines.Count();i++)
+    for(auto const& line : lines)
     {
-      TagInfo *ti=ParseLine(lines[i],base);
+      TagInfo *ti=ParseLine(line.c_str(),base);
       if(ti)ta->Push(ti);
-      free(lines[i]);
     }
   }
   fclose(f);
@@ -800,19 +800,18 @@ void FindClass(TagFileInfo* fi,const char* str,PTagArray ta)
         break;
       }
     }
-    Vector<char*> lines;
+    //TODO: refactor duplicated code
+    std::set<std::string> lines;
     for(int i=pos;i<=endpos;i++)
     {
       fseek(f,offsets[i],SEEK_SET);
       fgets(strbuf,sizeof(strbuf),f);
-      lines.Push(strdup(strbuf));
+      lines.insert(strbuf);
     }
-    qsort(&lines[0],lines.Count(),4,StrCmp);
-    for(int i=0;i<lines.Count();i++)
+    for(auto const& line : lines)
     {
-      TagInfo *ti=ParseLine(lines[i],base);
+      TagInfo *ti=ParseLine(line.c_str(),base);
       if(ti)ta->Push(ti);
-      free(lines[i]);
     }
   }
   fclose(f);
