@@ -32,16 +32,22 @@
 #define FARAPI(type) extern "C" type __declspec(dllexport) WINAPI
 #pragma comment(lib,"user32.lib")
 #define _FAR_NO_NAMELESS_UNIONS
-#include "plugin.hpp"
+#include <plugin_sdk/plugin.hpp>
 #include "String.hpp"
 #include "List.hpp"
 #include "XTools.hpp"
 #include "Registry.hpp"
 #include "tags.h"
 
+#include <algorithm>
+#include <string>
+#include <vector>
+
 using std::auto_ptr;
 
 static struct PluginStartupInfo I;
+FarStandardFunctions FSF;
+
 static const char* APPNAME="Source Navigator";
 
 static String tagfile;
@@ -49,6 +55,8 @@ static String tagfile;
 static String targetFile;
 
 static String rootKey;
+
+RegExp RegexInstance;
 
 static char wordChars[256]={0,};
 
@@ -64,46 +72,122 @@ struct SUndoInfo{
 
 Array<SUndoInfo> UndoArray;
 
-int Msg(const char* err)
+GUID StringToGuid(const std::string& str)
 {
-  const char *msg[3]={APPNAME,"","Ok"};
-  msg[1]=err;
+  GUID guid;
+  std::string lowercasedStr(str);
+  std::transform(str.begin(), str.end(), lowercasedStr.begin(), ::tolower);
+  auto sannedItems = sscanf(lowercasedStr.c_str(),
+    "{%8x-%4hx-%4hx-%2hhx%2hhx-%2hhx%2hhx%2hhx%2hhx%2hhx%2hhx}",
+    &guid.Data1, &guid.Data2, &guid.Data3,
+    &guid.Data4[0], &guid.Data4[1], &guid.Data4[2], &guid.Data4[3],
+    &guid.Data4[4], &guid.Data4[5], &guid.Data4[6], &guid.Data4[7]);
+
+  if (sannedItems != 11)
+    throw std::invalid_argument("Invalid guid string specified");
+
+  return guid;
+}
+
+::GUID ErrorMessageGuid = StringToGuid("{7b8b2958-e934-49c8-b08c-84d2f365e2b8}");
+::GUID InfoMessageGuid = StringToGuid("{7b8b2958-e934-49c8-b08c-84d2f365e2b8}");
+::GUID InteractiveDialogGuid = StringToGuid("{c9dabc4b-ec8a-4d58-b434-8965779f2a56}");
+::GUID InputBoxGuid = StringToGuid("{8bb007e1-3db4-4966-97ba-ff99aff828de}");
+::GUID PluginGuid = StringToGuid("{10c6ca3c-d051-442f-875c-2615007fa87d}");
+::GUID CtagsMenuGuid = StringToGuid("{fd88aac1-213a-40b2-9db8-7d1428b0803f}");
+::GUID MenuGuid = StringToGuid("{fd4f4e3e-38b7-4528-830c-13ab39bd07c5}");
+using WideString = std::basic_string<wchar_t>;
+
+WideString ToString(std::string const& str)
+{
+  return WideString(str.begin(), str.end());
+}
+
+std::string ToStdString(WideString const& str)
+{
+  return std::string(str.begin(), str.end());
+}
+
+bool IsPathSeparator(WideString::value_type c)
+{
+  return c == '/' || c == '\\';
+}
+
+WideString JoinPath(WideString const& dirPath, WideString const& name)
+{
+  return dirPath.empty() || IsPathSeparator(dirPath.back()) ? dirPath + name : dirPath + WideString(L"\\") + name;
+}
+
+enum class YesNoCancel
+{
+  Yes = 0,
+  No = 1,
+  Cancel = 2
+};
+
+YesNoCancel YesNoCalncelDialog(WideString const& title, WideString const& what)
+{
+  WideString msg(title + L"\n" + what);
+  auto result = I.Message(&PluginGuid, &InfoMessageGuid, FMSG_MB_YESNOCANCEL | FMSG_ALLINONE, nullptr, reinterpret_cast<const wchar_t* const*>(msg.c_str()), 0, 1);
+  return static_cast<YesNoCancel>(result);
+}
+
+int Msg(wchar_t const* err)
+{
+  WideString msg = ToString(APPNAME) + L"\n";
   if(!err)
   {
-    msg[0] =  "Wrong argument!" ;
-    msg[1] =  "Msg" ;
-    I.Message(I.ModuleNumber,0,NULL,(char**)msg,3,1);
+    msg += L"Wrong argument!\nMsg\n";
   }
   else
-    I.Message(I.ModuleNumber,0,NULL,msg,3,1);
+  {
+    msg += err;
+  }
+  msg += L"\nOk";
+  I.Message(&PluginGuid, &ErrorMessageGuid, FMSG_WARNING | FMSG_ALLINONE, nullptr, reinterpret_cast<const wchar_t* const*>(msg.c_str()), 0, 1);
   return 0;
 }
 int Msg2(char* header,char* err)
 {
-  char *msg[]={"","","Ok"};
-  msg[0]=header;
-  msg[1]=err;
+  WideString msg;
   if(!err || !header)
   {
-    msg[0] =  "Wrong argument!" ;
-    msg[1] =  "Msg2" ;
-    I.Message(I.ModuleNumber,0,NULL,msg,3,1);
+    msg = L"Wrong argument!\n";
   }
   else
-  I.Message(I.ModuleNumber,0,NULL,msg,3,1);
+  {
+    msg = ToString(header) + L"\n" + ToString(err);
+  }
+  I.Message(&PluginGuid, &ErrorMessageGuid, FMSG_WARNING | FMSG_ALLINONE, nullptr, reinterpret_cast<const wchar_t* const*>(msg.c_str()), 0, 1);
   return 0;
 }
 
-static const char*
+static const wchar_t*
 GetMsg(int MsgId)
 {
-  return(I.GetMsg(I.ModuleNumber,MsgId));
+  return I.GetMsg(&PluginGuid, MsgId);
 }
 
 int Msg(int msgid)
 {
   Msg(GetMsg(msgid));
   return 0;
+}
+
+EditorInfo GetCurrentEditorInfo()
+{
+  EditorInfo ei;
+  I.EditorControl(-1, ECTL_GETINFO, 0, &ei);
+  return ei;
+}
+
+std::string GetFileNameFromEditor(intptr_t editorID)
+{
+  auto requiredSize = I.EditorControl(editorID, ECTL_GETFILENAME, 0, nullptr);
+  std::vector<wchar_t> buffer(requiredSize);
+  I.EditorControl(editorID, ECTL_GETFILENAME, buffer.size(), &buffer[0]);
+  //TODO: consider returning wide string or fix encoding
+  return ToStdString(WideString(buffer.begin(), buffer.end() - 1));
 }
 
 struct MI{
@@ -114,7 +198,7 @@ struct MI{
     data=-1;
   }
   MI(const char* str,int value):item(str),data(value){}
-  MI(int msgid,int value):item(GetMsg(msgid)),data(value){}
+  MI(int msgid,int value):item(ToStdString(GetMsg(msgid)).c_str()),data(value){}
 };
 
 typedef List<MI> MenuList;
@@ -123,15 +207,17 @@ typedef List<MI> MenuList;
 #define MF_FILTER 2
 #define MF_SHOWCOUNT 4
 
-int Menu(const char *title,MenuList& lst,int sel,int flags=MF_LABELS,const void* param=NULL)
+int Menu(const wchar_t *title,MenuList& lst,int sel,int flags=MF_LABELS,const void* param=NULL)
 {
   Vector<FarMenuItem> menu;
   menu.Init(lst.Count());
   static const char labels[]="1234567890ABCDEFGHIJKLMNOPQRSTUVWXYZ";
   static const int labelsCount=sizeof(labels)-1;
+  std::vector<WideString> menuTexts;
+
   int i=0;
   int j=0;
-  char buf[16];
+  char buf[256];
   ZeroMemory(&menu[0],sizeof(FarMenuItem)*lst.Count());
   if(!(flags&MF_FILTER))
   {
@@ -142,28 +228,29 @@ int Menu(const char *title,MenuList& lst,int sel,int flags=MF_LABELS,const void*
         if(i<labelsCount)
         {
           sprintf(buf,"&%c ",labels[i]);
-          strcpy(menu[i].Text,buf);
         }else
         {
-          strcpy(menu[i].Text,"  ");
+          strcpy(buf, "  ");
         }
-        strcat(menu[i].Text,lst[i].item.Substr(0,120));
+        strcat(buf,lst[i].item.Substr(0,120));
       }else
       {
-        strcpy(menu[i].Text,lst[i].item.Substr(0,120));
+        strcpy(buf,lst[i].item.Substr(0,120));
       }
-      if(sel==i)menu[i].Selected=1;
+      menuTexts.push_back(ToString(buf));
+      menu[i].Text = menuTexts.back().c_str();
+      if(sel==i)menu[i].Flags |= MIF_SELECTED;
     }
     String cnt;
     cnt.Sprintf(" %s%d ",GetMsg(MItemsCount),lst.Count());
-    int res=I.Menu(I.ModuleNumber,-1,-1,0,FMENU_WRAPMODE,title,flags&MF_SHOWCOUNT?cnt.Str():NULL,
-                   "content",NULL,NULL,&menu[0],lst.Count());
+    int res=I.Menu(&PluginGuid, &CtagsMenuGuid, -1, -1, 0, FMENU_WRAPMODE, title,flags&MF_SHOWCOUNT?ToString(cnt.Str()).c_str():NULL,
+                   L"content",NULL,NULL,&menu[0],lst.Count());
     return res!=-1?lst[res].data:res;
   }else
   {
     String filter=param?(char*)param:"";
     Vector<int> idx;
-    Vector<int> fk;
+    Vector<FarKey> fk;
     static const char *filterkeys="1234567890abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_$\\\x08-_=|;':\",./<>? []*&^%#@!~";
     int shift;
     for(i=0;filterkeys[i];i++)
@@ -171,7 +258,7 @@ int Menu(const char *title,MenuList& lst,int sel,int flags=MF_LABELS,const void*
       DWORD k=VkKeyScan(filterkeys[i]);
       if(k==0xffff)
       {
-        fk.Push(0);
+        fk.Push(FarKey());
         continue;
       }
       shift=(k&0xff00)>>8;
@@ -179,9 +266,10 @@ int Menu(const char *title,MenuList& lst,int sel,int flags=MF_LABELS,const void*
       else if (shift==2)shift=1;
       else if (shift==4)shift=2;
       k=(k&0xff)|(shift<<16);
-      fk.Push(k);
+      FarKey tmp = {k, 0}; // TODO: what is this?
+      fk.Push(tmp);
     }
-    fk.Push(0);
+    fk.Push(FarKey());
 #ifdef DEBUG
     //DebugBreak();
 #endif
@@ -226,8 +314,9 @@ int Menu(const char *title,MenuList& lst,int sel,int flags=MF_LABELS,const void*
           }
         }
         idx.Push(i);
-        strcpy(menu[j].Text,lst[i].item.Substr(0,120));
-        if(sel==j)menu[j].Selected=1;
+        menuTexts.push_back(ToString(lst[i].item.Substr(0,120).Str()));
+        menu[j].Text = menuTexts.back().c_str();
+        if(sel==j)menu[j].Flags |= MIF_SELECTED;
         j++;
         if(fnd!=-1)oldfnd=fnd;
       }
@@ -242,7 +331,7 @@ int Menu(const char *title,MenuList& lst,int sel,int flags=MF_LABELS,const void*
       }
       if(sel>j)
       {
-        menu[j-1].Selected=1;
+        menu[j-1].Flags |= MIF_SELECTED;
       }
       if(match.Length()>filter.Length() && j>1 && mode!=1)
       {
@@ -250,11 +339,10 @@ int Menu(const char *title,MenuList& lst,int sel,int flags=MF_LABELS,const void*
       }
       String cnt;
       cnt.Sprintf(" %s%d ",GetMsg(MItemsCount),j);
-      int bkey;
-      String ftitle=title;
-      ftitle+=" ["+filter+"]";
-      int res=I.Menu(I.ModuleNumber,-1,-1,0,FMENU_WRAPMODE|FMENU_SHOWAMPERSAND,ftitle,
-                     flags&MF_SHOWCOUNT?cnt.Str():NULL,"content",&fk[0],&bkey,&menu[0],j);
+      intptr_t bkey;
+      WideString ftitle=WideString(L" [") + title + L"]";
+      int res = I.Menu(&PluginGuid, &CtagsMenuGuid,-1,-1,0,FMENU_WRAPMODE|FMENU_SHOWAMPERSAND,ftitle.c_str(),
+                     flags&MF_SHOWCOUNT?ToString(cnt.Str()).c_str():NULL,L"content",&fk[0],&bkey,&menu[0],j);
       if(res==-1 && bkey==-1)return -1;
       if(bkey==-1)
       {
@@ -272,15 +360,18 @@ int Menu(const char *title,MenuList& lst,int sel,int flags=MF_LABELS,const void*
       sel=res;
     }
   }
+  return -1;
 }
 
-
-FARAPI(void) SetStartupInfo(const struct PluginStartupInfo *Info)
+void WINAPI SetStartupInfoW(const struct PluginStartupInfo *Info)
 {
-  RegExp::InitLocale();
+  RegexInstance.InitLocale();
   I=*Info;
-  rootKey=I.RootKey;
-  rootKey+="\\ctags";
+  //TODO: don't use registry
+  rootKey = "SOFTWARE\\FarCtagsPlugin"; //I.RootKey;
+  rootKey += "\\ctags";
+  FSF = *Info->FSF;
+  I.FSF = &FSF;
 }
 
 int isident(int chr)
@@ -291,11 +382,10 @@ int isident(int chr)
 static String GetWord(int offset=0)
 {
 //  DebugBreak();
-  EditorInfo ei;
-  I.EditorControl(ECTL_GETINFO,&ei);
-  EditorGetString egs;
+  EditorInfo ei = GetCurrentEditorInfo();
+  EditorGetString egs = {sizeof(EditorGetString)};
   egs.StringNumber=-1;
-  I.EditorControl(ECTL_GETSTRING,&egs);
+  I.EditorControl(ei.EditorID, ECTL_GETSTRING, 0, &egs);
   int pos=ei.CurPos-offset;
   if(pos<0)pos=0;
   if(pos>egs.StringLength)return "";
@@ -305,7 +395,7 @@ static String GetWord(int offset=0)
   while(end<egs.StringLength-1 && isident(egs.StringText[end+1]))end++;
   if(start==end || (!isident(egs.StringText[start])))return "";
   String rv;
-  rv.Set(egs.StringText,start,end-start+1);
+  rv.Set(ToStdString(egs.StringText).c_str(),start,end-start+1);
   return rv;
 }
 
@@ -344,52 +434,51 @@ int SetPos(const char *filename,int line,int col,int top,int left);
 
 static void NotFound(const char* fn,int line)
 {
-  const char *msg[4]={APPNAME,GetMsg(MNotFoundAsk)};
-  int rc=I.Message(I.ModuleNumber,FMSG_WARNING|FMSG_MB_YESNO,NULL,msg,2,0);
-  if(rc==-1 || rc==1)return;
+  if(YesNoCalncelDialog(ToString(APPNAME), GetMsg(MNotFoundAsk)) == YesNoCancel::Yes)
   SetPos(fn,line,0,-1,-1);
+}
+
+bool GotoOpenedFile(const char* file)
+{
+  int c = I.AdvControl(&PluginGuid, ACTL_GETWINDOWCOUNT, 0, nullptr);
+  for(int i=0;i<c;i++)
+  {
+    WindowInfo wi = {sizeof(WindowInfo)};
+    wi.Pos=i;
+    I.AdvControl(&PluginGuid, ACTL_GETWINDOWINFO, 0, (void*)&wi);
+    std::vector<wchar_t> name(wi.NameSize);
+    wi.Name = &name[0];
+    I.AdvControl(&PluginGuid, ACTL_GETWINDOWINFO, 0, (void*)&wi);
+    if(wi.Type==WTYPE_EDITOR && !FSF.LStricmp(wi.Name, ToString(file).c_str()))
+    {
+      I.AdvControl(&PluginGuid, ACTL_SETCURRENTWINDOW, i, nullptr);
+      I.AdvControl(&PluginGuid, ACTL_COMMIT, 0, nullptr);
+      return true;
+    }
+  }
+
+  return false;
 }
 
 static void NavigateTo(TagInfo* info)
 {
-  DWORD ver=I.AdvControl(I.ModuleNumber,ACTL_GETFARVERSION,NULL);
-  int build=(ver&0xffff0000)>>16;
-  EditorInfo ei;
-  I.EditorControl(ECTL_GETINFO,&ei);
+  auto ei = GetCurrentEditorInfo();
+  std::string fileName = GetFileNameFromEditor(ei.EditorID); // TODO: auto
   {
     SUndoInfo ui;
-    ui.file=ei.FileName;
+    ui.file=fileName.c_str();
     ui.line=ei.CurLine;
     ui.pos=ei.CurPos;
     ui.top=ei.TopScreenLine;
     ui.left=ei.LeftPos;
     UndoArray.Push(ui);
   }
-  WindowInfo wi;
-  int ok=0;
 
   const char* file=info->file.Str();
-  if(build>1500)
-  {
-    int c=I.AdvControl(I.ModuleNumber,ACTL_GETWINDOWCOUNT,NULL);
-    for(int i=0;i<c;i++)
-    {
-      wi.Pos=i;
-      I.AdvControl(I.ModuleNumber,ACTL_GETWINDOWINFO,(void*)&wi);
-      if(wi.Type==WTYPE_EDITOR && !lstrcmpi(wi.Name,file))
-      {
-        I.AdvControl(I.ModuleNumber,ACTL_SETCURRENTWINDOW,(void*)i);
-        //if(mode==MODE_EDITOR)I.AdvControl(I.ModuleNumber,ACTL_COMMIT,(void*)i);
-        I.AdvControl(I.ModuleNumber,ACTL_COMMIT,(void*)i);
-        ok=1;
-        break;
-      }
-    }
-  }
   int havere=info->re.Length()>0;
-  RegExp re;
+  RegExp& re = RegexInstance;
   if(havere)re.Compile(info->re);
-  if(!ok)
+  if(!GotoOpenedFile(file))
   {
     FILE *f=fopen(file,"rt");
     if(!f)
@@ -409,7 +498,7 @@ static void NavigateTo(TagInfo* info)
       if(havere && !re.Match(buf,m,n))
       {
         line=-1;
-//        Msg("not found in place, searching");
+        Msg(L"not found in place, searching");
       }
     }
     if(line==-1)
@@ -440,11 +529,11 @@ static void NavigateTo(TagInfo* info)
       }
     }
     fclose(f);
-    I.Editor(file,"",0,0,-1,-1,build>1500?EF_NONMODAL:0,line+1,1);
+    I.Editor(ToString(file).c_str(), L"", 0, 0, -1, -1, EF_NONMODAL, line + 1, 1, CP_DEFAULT);
     return;
   }
   EditorSetPosition esp;
-  I.EditorControl(ECTL_GETINFO,&ei);
+  ei = GetCurrentEditorInfo();
 
   esp.CurPos=-1;
   esp.CurTabPos=-1;
@@ -456,13 +545,14 @@ static void NavigateTo(TagInfo* info)
   int line=info->lineno-1;
   if(line!=-1)
   {
-    EditorGetString egs;
+    EditorGetString egs = {sizeof(EditorGetString)};
     egs.StringNumber=line;
-    I.EditorControl(ECTL_GETSTRING,&egs);
+    I.EditorControl(ei.EditorID, ECTL_GETSTRING, 0, &egs);
     SMatch m[10];
     int n=10;
 
-    if(havere && !re.Match(egs.StringText,egs.StringText+egs.StringLength,m,n))
+    std::string strLine = ToStdString(egs.StringText);
+    if(havere && !re.Match(strLine.c_str(),strLine.c_str() + strLine.length(),m,n))
     {
       line=-1;
     }
@@ -473,7 +563,7 @@ static void NavigateTo(TagInfo* info)
     {
       esp.CurLine=ei.CurLine;
       esp.TopScreenLine=ei.TopScreenLine;
-      I.EditorControl(ECTL_SETPOSITION,&esp);
+      I.EditorControl(ei.EditorID, ECTL_SETPOSITION, 0, &esp);
       NotFound(file,info->lineno);
       return;
     }
@@ -484,11 +574,12 @@ static void NavigateTo(TagInfo* info)
     while(line<ei.TotalLines)
     {
       esp.CurLine=line;
-      I.EditorControl(ECTL_SETPOSITION,&esp);
+      I.EditorControl(ei.EditorID, ECTL_SETPOSITION, 0, &esp);
       egs.StringNumber=-1;
-      I.EditorControl(ECTL_GETSTRING,&egs);
+      I.EditorControl(ei.EditorID, ECTL_GETSTRING, 0, &egs);
       n=10;
-      if(re.Match(egs.StringText,egs.StringText+egs.StringLength,m,n))
+      std::string strLine = ToStdString(egs.StringText);
+      if(re.Match(strLine.c_str(),strLine.c_str()+strLine.length(),m,n))
       {
         break;
       }
@@ -498,7 +589,7 @@ static void NavigateTo(TagInfo* info)
     {
       esp.CurLine=info->lineno==-1?ei.CurLine:info->lineno-1;
       esp.TopScreenLine=ei.TopScreenLine;
-      I.EditorControl(ECTL_SETPOSITION,&esp);
+      I.EditorControl(ei.EditorID, ECTL_SETPOSITION, 0, &esp);
       NotFound(file,info->lineno);
       return;
     }
@@ -509,51 +600,28 @@ static void NavigateTo(TagInfo* info)
   if(esp.TopScreenLine==-1)esp.TopScreenLine=0;
   if(ei.TotalLines<ei.WindowSizeY)esp.TopScreenLine=0;
   esp.LeftPos=0;
-  I.EditorControl(ECTL_SETPOSITION,&esp);
-  I.EditorControl(ECTL_REDRAW,NULL);
+  I.EditorControl(ei.EditorID, ECTL_SETPOSITION, 0, &esp);
+  I.EditorControl(ei.EditorID, ECTL_REDRAW, 0, nullptr);
 }
 
 int SetPos(const char *filename,int line,int col,int top,int left)
 {
-  DWORD ver=I.AdvControl(I.ModuleNumber,ACTL_GETFARVERSION,NULL);
-  int build=(ver&0xffff0000)>>16;
-
-  WindowInfo wi;
-  int ok=0;
-  if(build>1500)
+  if(!GotoOpenedFile(filename))
   {
-    int c=I.AdvControl(I.ModuleNumber,ACTL_GETWINDOWCOUNT,NULL);
-    for(int i=0;i<c;i++)
-    {
-      wi.Pos=i;
-      I.AdvControl(I.ModuleNumber,ACTL_GETWINDOWINFO,(void*)&wi);
-      if(wi.Type==WTYPE_EDITOR && !lstrcmpi(wi.Name,filename))
-      {
-        I.AdvControl(I.ModuleNumber,ACTL_SETCURRENTWINDOW,(void*)i);
-        //if(mode==MODE_EDITOR)I.AdvControl(I.ModuleNumber,ACTL_COMMIT,(void*)i);
-        I.AdvControl(I.ModuleNumber,ACTL_COMMIT,(void*)i);
-        ok=1;
-        break;
-      }
-    }
-  }
-  if(!ok)
-  {
-    I.Editor(filename,"",0,0,-1,-1,build>1500?EF_NONMODAL:0,line,col);
+    I.Editor(ToString(filename).c_str(), L"", 0, 0, -1, -1,  EF_NONMODAL, line, col, CP_DEFAULT);
     return 0;
   }
 
-  EditorInfo ei;
-  EditorSetPosition esp;
-  I.EditorControl(ECTL_GETINFO,&ei);
+  EditorInfo ei = GetCurrentEditorInfo();
+  EditorSetPosition esp = {sizeof(EditorSetPosition)};
   esp.CurLine=line;
   esp.CurPos=col;
   esp.CurTabPos=-1;
   esp.TopScreenLine=top;
   esp.LeftPos=left;
   esp.Overtype=-1;
-  I.EditorControl(ECTL_SETPOSITION,&esp);
-  I.EditorControl(ECTL_REDRAW,NULL);
+  I.EditorControl(ei.EditorID, ECTL_SETPOSITION, 0, &esp);
+  I.EditorControl(ei.EditorID, ECTL_REDRAW, 0, nullptr);
   return 1;
 }
 
@@ -570,8 +638,7 @@ String TrimFilename(const String& file,int maxlength)
 
 static TagInfo* TagsMenu(PTagArray pta)
 {
-  EditorInfo ei;
-  I.EditorControl(ECTL_GETINFO,&ei);
+  EditorInfo ei = GetCurrentEditorInfo();
   MenuList sm;
   String s;
   TagArray& ta=*pta;
@@ -668,19 +735,44 @@ static void UpdateConfig()
   }
 }
 
-FARAPI(HANDLE) OpenPlugin(int OpenFrom,int Item)
+WideString GetPanelDir(HANDLE hPanel = PANEL_ACTIVE)
 {
+  size_t sz = I.PanelControl(hPanel, FCTL_GETPANELDIRECTORY, 0, nullptr);
+  std::vector<wchar_t> buffer(sz);
+  FarPanelDirectory* dir = reinterpret_cast<FarPanelDirectory*>(&buffer[0]);
+  dir->StructSize = sizeof(FarPanelDirectory);
+  sz = I.PanelControl(hPanel, FCTL_GETPANELDIRECTORY, sz, &buffer[0]);
+  return dir->Name;
+}
+
+WideString GetCurFile(HANDLE hPanel = PANEL_ACTIVE)
+{
+  PanelInfo pi;
+  I.PanelControl(hPanel, FCTL_GETPANELINFO, 0, &pi);
+  size_t sz = I.PanelControl(hPanel, FCTL_GETPANELITEM, pi.CurrentItem, nullptr);
+  std::vector<wchar_t> buffer(sz);
+  FarGetPluginPanelItem* item = reinterpret_cast<FarGetPluginPanelItem*>(&buffer[0]);
+  item->StructSize = sizeof(FarGetPluginPanelItem);
+  item->Size = sz;
+  item->Item = reinterpret_cast<PluginPanelItem*>(item + 1);
+  sz = I.PanelControl(hPanel, FCTL_GETPANELITEM, pi.CurrentItem, &buffer[0]);
+  return item->Item->FileName;
+}
+
+HANDLE WINAPI OpenW(const struct OpenInfo *info)
+{
+  OPENFROM OpenFrom = info->OpenFrom;
   UpdateConfig();
   if(OpenFrom==OPEN_EDITOR)
   {
     //DebugBreak();
-    EditorInfo ei;
-    I.EditorControl(ECTL_GETINFO,&ei);
-    Autoload(ei.FileName);
+    auto ei = GetCurrentEditorInfo();
+    std::string fileName = GetFileNameFromEditor(ei.EditorID); // TODO: auto
+    Autoload(fileName.c_str());
     if(Count()==0)
     {
       Msg(MENotLoaded);
-      return INVALID_HANDLE_VALUE;
+      return nullptr;
     }
     MenuList ml;
     enum{
@@ -694,19 +786,19 @@ FARAPI(HANDLE) OpenPlugin(int OpenFrom,int Item)
       <<MI(MBrowseSymbolsInFile,miBrowseFile)
       <<MI(MBrowseClass,miBrowseClass);
     int res=Menu(GetMsg(MPlugin),ml,0);
-    if(res==-1)return INVALID_HANDLE_VALUE;
+    if(res==-1)return nullptr;
     switch(res)
     {
       case miFindSymbol:
       {
         String word=GetWord();
-        if(word.Length()==0)return INVALID_HANDLE_VALUE;
+        if(word.Length()==0)return nullptr;
         //Msg(word);
-        PTagArray ta=Find(word,ei.FileName);
+        PTagArray ta = Find(word, fileName.c_str());
         if(!ta)
         {
           Msg(GetMsg(MNotFound));
-          return INVALID_HANDLE_VALUE;
+          return nullptr;
         }
         TagInfo *ti;
         if(ta->Count()==1)
@@ -721,14 +813,14 @@ FARAPI(HANDLE) OpenPlugin(int OpenFrom,int Item)
       }break;
       case miUndo:
       {
-        if(UndoArray.Count()==0)return INVALID_HANDLE_VALUE;
+        if(UndoArray.Count()==0)return nullptr;
         /*char b[32];
         sprintf(b,"%d",ei.CurState);
         Msg(b);*/
         if(ei.CurState==ECSTATE_SAVED)
         {
-          I.EditorControl(ECTL_QUIT,NULL);
-          I.AdvControl(I.ModuleNumber,ACTL_COMMIT,(void*)-1);
+          I.EditorControl(ei.EditorID, ECTL_QUIT, 0, nullptr);
+          I.AdvControl(&PluginGuid, ACTL_COMMIT, 0, nullptr);
         }
         SUndoInfo ui;
         UndoArray.Pop(ui);
@@ -740,16 +832,14 @@ FARAPI(HANDLE) OpenPlugin(int OpenFrom,int Item)
       }break;
       case miComplete:
       {
-        EditorInfo ei;
-        I.EditorControl(ECTL_GETINFO,&ei);
         String word=GetWord(1);
-        if(word.Length()==0)return INVALID_HANDLE_VALUE;
+        if(word.Length()==0)return nullptr;
         StrList lst;
-        FindParts(ei.FileName,word,lst);
+        FindParts(fileName.c_str(),word,lst);
         if(lst.Count()==0)
         {
           Msg(MNothingFound);
-          return INVALID_HANDLE_VALUE;
+          return nullptr;
         }
         int res;
         if(lst.Count()>1)
@@ -760,14 +850,14 @@ FARAPI(HANDLE) OpenPlugin(int OpenFrom,int Item)
             ml<<MI(lst[i],i);
           }
           res=Menu(GetMsg(MSelectSymbol),ml,0,MF_FILTER|MF_SHOWCOUNT,(void*)word.Str());
-          if(res==-1)return INVALID_HANDLE_VALUE;
+          if(res==-1)return nullptr;
         }else
         {
           res=0;
         }
         EditorGetString egs;
         egs.StringNumber=-1;
-        I.EditorControl(ECTL_GETSTRING,&egs);
+        I.EditorControl(ei.EditorID, ECTL_GETSTRING, 0, &egs);
         while(isident(egs.StringText[ei.CurPos]))ei.CurPos++;
         EditorSetPosition esp;
         esp.CurLine=-1;
@@ -776,18 +866,17 @@ FARAPI(HANDLE) OpenPlugin(int OpenFrom,int Item)
         esp.TopScreenLine=-1;
         esp.LeftPos=-1;
         esp.Overtype=-1;
-        I.EditorControl(ECTL_SETPOSITION,&esp);
-        I.EditorControl(ECTL_INSERTTEXT,(void*)lst[res].Substr(word.Length()).Str());
+        I.EditorControl(ei.EditorID, ECTL_SETPOSITION, 0, &esp);
+        WideString newText(ToString(lst[res].Substr(word.Length()).Str()));
+        I.EditorControl(ei.EditorID, ECTL_INSERTTEXT, 0, const_cast<wchar_t*>(newText.c_str()));
       }break;
       case miBrowseFile:
       {
-        EditorInfo ei;
-        I.EditorControl(ECTL_GETINFO,&ei);
-        PTagArray ta=FindFileSymbols(ei.FileName);
+        PTagArray ta = FindFileSymbols(fileName.c_str());
         if(!ta)
         {
           Msg(MNothingFound);
-          return INVALID_HANDLE_VALUE;
+          return nullptr;
         }
         TagInfo *ti=TagsMenu(ta);
         if(ti)NavigateTo(ti);
@@ -801,18 +890,16 @@ FARAPI(HANDLE) OpenPlugin(int OpenFrom,int Item)
         String word=GetWord();
         if(word.Length()==0)
         {
-          char buf[256];
-          if(!I.InputBox(GetMsg(MBrowseClassTitle),GetMsg(MInputClassToBrowse),NULL,
-                      "",buf,sizeof(buf),NULL,0))return INVALID_HANDLE_VALUE;
-          word=buf;
+          wchar_t buf[256] = L"";
+          if(!I.InputBox(&PluginGuid, &InputBoxGuid, GetMsg(MBrowseClassTitle),GetMsg(MInputClassToBrowse),nullptr,
+                      L"",buf,sizeof(buf)/sizeof(buf[0]),nullptr,0))return nullptr;
+          word=ToStdString(buf).c_str();
         }
-        EditorInfo ei;
-        I.EditorControl(ECTL_GETINFO,&ei);
-        PTagArray ta=FindClassSymbols(ei.FileName,word);
+        PTagArray ta = FindClassSymbols(fileName.c_str(), word);
         if(!ta)
         {
           Msg(MNothingFound);
-          return INVALID_HANDLE_VALUE;
+          return nullptr;
         }
         TagInfo *ti=TagsMenu(ta);
         if(ti)NavigateTo(ti);
@@ -850,34 +937,29 @@ FARAPI(HANDLE) OpenPlugin(int OpenFrom,int Item)
             ml<<MI(l[i],i+1);
           }
           int rc=Menu(GetMsg(MUnloadTagsFile),ml,0);
-          if(rc==-1)return INVALID_HANDLE_VALUE;
+          if(rc==-1)return nullptr;
           UnloadTags(rc-1);
         }break;
         case miCreateTagsFile:
         {
           HANDLE hScreen=I.SaveScreen(0,0,-1,-1);
-          const char *msg[]={GetMsg(MPlugin),GetMsg(MTagingCurrentDirectory)};
-          I.Message(I.ModuleNumber,0,NULL,msg,2,0);
+          WideString msg = WideString(GetMsg(MPlugin)) + L"\n" + GetMsg(MTagingCurrentDirectory);
+          I.Message(&PluginGuid, &InfoMessageGuid, FMSG_ALLINONE, nullptr, reinterpret_cast<const wchar_t* const*>(msg.c_str()), 0, 1);
           int rc=TagCurrentDir();
           I.RestoreScreen(hScreen);
         }break;
         case miUpdateTagsFile:
         {
           HANDLE hScreen=I.SaveScreen(0,0,-1,-1);
-          const char *msg[]={GetMsg(MPlugin),GetMsg(MUpdatingTagsFile)};
+          WideString msg = WideString(GetMsg(MPlugin)) + L"\n" + GetMsg(MUpdatingTagsFile);
           StrList changed;
-          PanelInfo pi;
-          String file;
-          I.Control(INVALID_HANDLE_VALUE,FCTL_GETPANELINFO,&pi);
-          file=pi.CurDir;
-          if(file[-1]!='\\')file+="\\";
-          file+=pi.PanelItems[pi.CurrentItem].FindData.cFileName;
-          I.Message(I.ModuleNumber,0,NULL,msg,2,0);
+          String file = ToStdString(JoinPath(GetPanelDir(), GetCurFile())).c_str();
+          I.Message(&PluginGuid, &InfoMessageGuid, FMSG_ALLINONE, nullptr, reinterpret_cast<const wchar_t* const*>(msg.c_str()), 0, 1);
           if(!UpdateTagsFile(file))
           {
             I.RestoreScreen(hScreen);
             Msg(MUnableToUpdate);
-            return INVALID_HANDLE_VALUE;
+            return nullptr;
           }
           I.RestoreScreen(hScreen);
         }break;
@@ -886,63 +968,54 @@ FARAPI(HANDLE) OpenPlugin(int OpenFrom,int Item)
     if(load)
     {
       //DebugBreak();
-      PanelInfo pi;
-      I.Control(INVALID_HANDLE_VALUE,FCTL_GETPANELINFO,&pi);
-      tagfile=pi.CurDir;
-      if(tagfile[-1]!='\\')tagfile+="\\";
       if(OpenFrom==OPEN_PLUGINSMENU)
       {
-        tagfile+=pi.PanelItems[pi.CurrentItem].FindData.cFileName;
+        tagfile = ToStdString(JoinPath(GetPanelDir(), GetCurFile())).c_str();
       }else
       if(OpenFrom==OPEN_COMMANDLINE)
       {
-        char *cmd=(char*)Item;
+        OpenCommandLineInfo const* cmdInfo = reinterpret_cast<OpenCommandLineInfo const*>(info->Data);
+        WideString cmd(cmdInfo->CommandLine);
         if(cmd[1]==':')
         {
-          tagfile=cmd;
+          tagfile=ToStdString(cmd).c_str();
         }else
         {
           if(cmd[0]=='\\')
           {
-            tagfile.Delete(2);
-            tagfile+=cmd;
-          }else
-          {
-            tagfile+=cmd;
+            cmd = cmd.substr(1);
           }
+          tagfile = ToStdString(JoinPath(GetPanelDir(), cmd)).c_str();
         }
       }
       int rc=Load(tagfile,"",true);
       if(rc>1)
       {
         Msg(GetMsg(rc));
-        return INVALID_HANDLE_VALUE;
+        return nullptr;
       }
       String msg;
       msg.Sprintf("%s:%d",GetMsg(MLoadOk),Count());
-      Msg(msg);
+      Msg(ToString(msg.Str()).c_str());
     }
   }
-  return INVALID_HANDLE_VALUE;
+  return nullptr;
 }
 
-FARAPI(void) GetPluginInfo(struct PluginInfo *pi)
-{
-  static const char *PluginMenuStrings[1];
-  static const char *PluginConfigStrings[1];
-  pi->StructSize=sizeof(struct PluginInfo);
-  pi->Flags=PF_EDITOR;
-  pi->DiskMenuStringsNumber=0;
-  PluginMenuStrings[0]=GetMsg(MPlugin);
-  pi->PluginMenuStrings=PluginMenuStrings;
-  pi->PluginMenuStringsNumber=sizeof(PluginMenuStrings)/sizeof(PluginMenuStrings[0]);
 
-  static const char *ConfigMenuStrings[1];
-  ConfigMenuStrings[0]=GetMsg(MPlugin);
-  pi->PluginConfigStrings=ConfigMenuStrings;
-  pi->PluginConfigStringsNumber=1;
-  static const char *pfx="tag";
-  pi->CommandPrefix=pfx;
+void WINAPI GetPluginInfoW(struct PluginInfo *pi)
+{
+  static const wchar_t *PluginMenuStrings[1];
+  PluginMenuStrings[0] = GetMsg(MPlugin);
+  pi->StructSize = sizeof(*pi);
+  pi->Flags = PF_EDITOR;
+  pi->PluginMenu.Guids = &MenuGuid;
+  pi->PluginMenu.Strings = PluginMenuStrings;
+  pi->PluginMenu.Count = sizeof(PluginMenuStrings) / sizeof(PluginMenuStrings[0]);
+  pi->PluginConfig.Guids = &MenuGuid;
+  pi->PluginConfig.Strings = PluginMenuStrings;
+  pi->PluginConfig.Count = sizeof(PluginMenuStrings) / sizeof(PluginMenuStrings[0]);
+  pi->CommandPrefix = L"tag";
 }
 
 struct InitDialogItem
@@ -959,25 +1032,56 @@ struct InitDialogItem
 void InitDialogItems(struct InitDialogItem *Init,struct FarDialogItem *Item,
                     int ItemsNumber)
 {
+  FarDialogItem empty = {};
   for (int I=0;I<ItemsNumber;I++)
   {
-    Item[I].Type=Init[I].Type;
+    Item[I] = empty;
+    Item[I].Type=static_cast<FARDIALOGITEMTYPES>(Init[I].Type);
     Item[I].X1=Init[I].X1;
     Item[I].Y1=Init[I].Y1;
     Item[I].X2=Init[I].X2;
     Item[I].Y2=Init[I].Y2;
-    Item[I].Focus=Init[I].Focus;
-    Item[I].Param.Selected=Init[I].Selected;
+//    Item[I].Focus=Init[I].Focus;
+    Item[I].Selected=Init[I].Selected;
     Item[I].Flags=Init[I].Flags;
-    Item[I].DefaultButton=Init[I].DefaultButton;
+//    Item[I].DefaultButton=Init[I].DefaultButton;
     if ((unsigned int)Init[I].Data<2000)
-      strcpy(Item[I].Data.Data,GetMsg((unsigned int)Init[I].Data));
+      Item[I].Data = ::I.GetMsg(&PluginGuid, (intptr_t)Init[I].Data);
     else
-      strcpy(Item[I].Data.Data,Init[I].Data);
+      Item[I].Data = L""; // TODO: Init[I].Data?
   }
 }
 
-FARAPI(int) Configure(int item)
+//TODO: rework
+std::vector<WideString> dialogStrings;
+//TODO: rework
+HANDLE ConfigureDialog = 0;
+
+WideString get_text(unsigned ctrl_id) {
+  FarDialogItemData item = { sizeof(FarDialogItemData) };
+  item.PtrLength = I.SendDlgMessage(ConfigureDialog, DM_GETTEXT, ctrl_id, 0);
+  std::vector<wchar_t> buf(item.PtrLength + 1);
+  item.PtrData = buf.data();
+  I.SendDlgMessage(ConfigureDialog, DM_GETTEXT, ctrl_id, &item);
+  return WideString(item.PtrData, item.PtrLength);
+}
+
+intptr_t ConfigureDlgProc(
+    HANDLE   hDlg,
+    intptr_t Msg,
+    intptr_t Param1,
+    void* Param2)
+{
+  if (Msg == DN_EDITCHANGE)
+  {
+    dialogStrings[Param1 / 2 - 1] = get_text(Param1);
+  }
+
+  return I.DefDlgProc(hDlg, Msg, Param1, Param2);
+}
+
+
+intptr_t WINAPI ConfigureW(const struct ConfigureInfo *Info)
 {
   struct InitDialogItem InitItems[]={
         /*Type         X1 Y2 X2 Y2  F S           Flags D Data */
@@ -1005,27 +1109,33 @@ FARAPI(int) Configure(int item)
     return FALSE;
   }
   char buf[512];
+  dialogStrings.clear();
   if(r.Get("pathtoexe",buf,sizeof(buf)))
   {
-    strcpy(DialogItems[2].Data.Data,buf);
+    dialogStrings.push_back(ToString(std::string(buf)));
+    DialogItems[2].Data = dialogStrings.back().c_str();
   }else
   {
-    strcpy(DialogItems[2].Data.Data,"ctags.exe");
+    DialogItems[2].Data = L"ctags.exe";
   }
   if(r.Get("commandline",buf,sizeof(buf)))
   {
-    strcpy(DialogItems[4].Data.Data,buf);
+    dialogStrings.push_back(ToString(std::string(buf)));
+    DialogItems[4].Data = dialogStrings.back().c_str();
   }else
   {
-    wsprintf(DialogItems[4].Data.Data,"%s","--c++-types=+px --c-types=+px --fields=+n -R *");
+    dialogStrings.push_back(L"--c++-types=+px --c-types=+px --fields=+n -R *");
+    DialogItems[4].Data = dialogStrings.back().c_str();
   }
   if(r.Get("autoload",buf,sizeof(buf)))
   {
-    strcpy(DialogItems[6].Data.Data,buf);
+    dialogStrings.push_back(ToString(std::string(buf)));
+    DialogItems[6].Data = dialogStrings.back().c_str();
   }
   if(r.Get("wordchars",buf,sizeof(buf)))
   {
-    strcpy(DialogItems[8].Data.Data,buf);
+    dialogStrings.push_back(ToString(std::string(buf)));
+    DialogItems[8].Data = dialogStrings.back().c_str();
   }else
   {
     String s;
@@ -1036,21 +1146,54 @@ FARAPI(int) Configure(int item)
         s+=(char)i;
       }
     }
-    strcpy(DialogItems[8].Data.Data,s.Str());
+    dialogStrings.push_back(ToString(std::string(s.Str())));
+    DialogItems[8].Data = dialogStrings.back().c_str();
   }
   if(r.Get("casesensfilt",buf,sizeof(buf)))
   {
-    DialogItems[9].Param.Selected=!stricmp(buf,"true");
+    DialogItems[9].Selected=!stricmp(buf,"true");
   }else
   {
-    DialogItems[9].Param.Selected=1;
+    DialogItems[9].Selected=1;
   }
-  int ExitCode=I.Dialog(I.ModuleNumber,-1,-1,68,15,"ctagscfg",DialogItems,sizeof(DialogItems)/sizeof(DialogItems[0]));
+  auto handle = I.DialogInit(
+               &PluginGuid,
+               &InteractiveDialogGuid,
+               -1,
+               -1,
+               68,
+               15,
+               L"ctagscfg",
+               DialogItems,
+               sizeof(DialogItems)/sizeof(DialogItems[0]),
+               0,
+               FDLG_NONE,
+               &ConfigureDlgProc,
+               nullptr);
+
+  if (handle == INVALID_HANDLE_VALUE)
+    return FALSE;
+
+  ConfigureDialog = handle;
+  std::shared_ptr<void> handleHolder(handle, [](void* h){I.DialogFree(h);});
+  auto ExitCode = I.DialogRun(handle);
   if(ExitCode!=11)return FALSE;
-  r.Set("pathtoexe",DialogItems[2].Data.Data);
-  r.Set("commandline",DialogItems[4].Data.Data);
-  r.Set("autoload",DialogItems[6].Data.Data);
-  r.Set("wordchars",DialogItems[8].Data.Data);
-  r.Set("casesensfilt",DialogItems[9].Param.Selected?"True":"False");
+  r.Set("pathtoexe",ToStdString(dialogStrings[0]).c_str());
+  r.Set("commandline", ToStdString(dialogStrings[1]).c_str());
+  r.Set("autoload", ToStdString(dialogStrings[2]).c_str());
+  r.Set("wordchars", ToStdString(dialogStrings[3]).c_str());
+  //TODO: support
+  r.Set("casesensfilt",DialogItems[9].Selected?"True":"False");
   return TRUE;
+}
+
+void WINAPI GetGlobalInfoW(struct GlobalInfo *info)
+{
+  info->StructSize = sizeof(*info);
+  info->MinFarVersion = MAKEFARVERSION(3, 0, 0, 0, VS_RELEASE);
+  info->Version = MAKEFARVERSION(1, 0, 0, 1, VS_RELEASE);
+  info->Guid = PluginGuid;
+  info->Title = L"TODO: fix";
+  info->Description = L"TODO: fix description";
+  info->Author = L"TODO: fix author";
 }
