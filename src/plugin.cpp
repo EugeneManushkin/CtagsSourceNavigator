@@ -98,14 +98,26 @@ GUID StringToGuid(const std::string& str)
 ::GUID MenuGuid = StringToGuid("{fd4f4e3e-38b7-4528-830c-13ab39bd07c5}");
 using WideString = std::basic_string<wchar_t>;
 
-WideString ToString(std::string const& str)
+WideString ToString(std::string const& str, UINT codePage = CP_ACP)
 {
-  return WideString(str.begin(), str.end());
+  auto sz = MultiByteToWideChar(codePage, 0, str.c_str(), str.length(), nullptr, 0);
+  if (!sz)
+    return WideString();
+
+  std::vector<wchar_t> buffer(sz);
+  MultiByteToWideChar(codePage, 0, str.c_str(), str.length(), &buffer[0], sz);
+  return WideString(buffer.begin(), buffer.end());
 }
 
-std::string ToStdString(WideString const& str)
+std::string ToStdString(WideString const& str, UINT codePage = CP_ACP)
 {
-  return std::string(str.begin(), str.end());
+  auto sz = WideCharToMultiByte(codePage, 0, str.c_str(), str.length(), nullptr, 0, nullptr, nullptr);
+  if (!sz)
+    return std::string();
+
+  std::vector<char> buffer(sz);
+  WideCharToMultiByte(codePage, 0, str.c_str(), str.length(), &buffer[0], sz, nullptr, nullptr);
+  return std::string(buffer.begin(), buffer.end());
 }
 
 bool IsPathSeparator(WideString::value_type c)
@@ -186,7 +198,6 @@ std::string GetFileNameFromEditor(intptr_t editorID)
   auto requiredSize = I.EditorControl(editorID, ECTL_GETFILENAME, 0, nullptr);
   std::vector<wchar_t> buffer(requiredSize);
   I.EditorControl(editorID, ECTL_GETFILENAME, buffer.size(), &buffer[0]);
-  //TODO: consider returning wide string or fix encoding
   return ToStdString(WideString(buffer.begin(), buffer.end() - 1));
 }
 
