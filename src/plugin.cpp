@@ -48,7 +48,7 @@ using std::auto_ptr;
 static struct PluginStartupInfo I;
 FarStandardFunctions FSF;
 
-static const char* APPNAME="Source Navigator";
+static const wchar_t* APPNAME=L"Ctags Source Navigator";
 
 static String tagfile;
 
@@ -89,13 +89,13 @@ GUID StringToGuid(const std::string& str)
   return guid;
 }
 
-::GUID ErrorMessageGuid = StringToGuid("{7b8b2958-e934-49c8-b08c-84d2f365e2b8}");
-::GUID InfoMessageGuid = StringToGuid("{7b8b2958-e934-49c8-b08c-84d2f365e2b8}");
-::GUID InteractiveDialogGuid = StringToGuid("{c9dabc4b-ec8a-4d58-b434-8965779f2a56}");
-::GUID InputBoxGuid = StringToGuid("{8bb007e1-3db4-4966-97ba-ff99aff828de}");
-::GUID PluginGuid = StringToGuid("{10c6ca3c-d051-442f-875c-2615007fa87d}");
-::GUID CtagsMenuGuid = StringToGuid("{fd88aac1-213a-40b2-9db8-7d1428b0803f}");
-::GUID MenuGuid = StringToGuid("{fd4f4e3e-38b7-4528-830c-13ab39bd07c5}");
+::GUID ErrorMessageGuid = StringToGuid("{03cceb3e-20ba-438a-9972-85a48b0d28e4}");
+::GUID InfoMessageGuid = StringToGuid("{58a20c1d-44e2-40ba-9223-5f96d31d8c09}");
+::GUID InteractiveDialogGuid = StringToGuid("{fcd1e1b9-4060-4696-9e40-11f055c2909e}");
+::GUID InputBoxGuid = StringToGuid("{6ac0c4bb-b907-43c6-8c7a-642e4a34ee35}");
+::GUID PluginGuid = StringToGuid("{2e34b611-3df1-463f-8711-74b0f21558a5}");
+::GUID CtagsMenuGuid = StringToGuid("{7f125c0d-5e18-4b7f-a6df-1caae013c48f}");
+::GUID MenuGuid = StringToGuid("{a5b1037e-2f54-4609-b6dd-70cd47bd222b}");
 using WideString = std::basic_string<wchar_t>;
 
 WideString ToString(std::string const& str, UINT codePage = CP_ACP)
@@ -146,7 +146,7 @@ YesNoCancel YesNoCalncelDialog(WideString const& title, WideString const& what)
 
 int Msg(wchar_t const* err)
 {
-  WideString msg = ToString(APPNAME) + L"\n";
+  WideString msg = WideString(APPNAME) + L"\n";
   if(!err)
   {
     msg += L"Wrong argument!\nMsg\n";
@@ -445,7 +445,7 @@ int SetPos(const char *filename,int line,int col,int top,int left);
 
 static void NotFound(const char* fn,int line)
 {
-  if(YesNoCalncelDialog(ToString(APPNAME), GetMsg(MNotFoundAsk)) == YesNoCancel::Yes)
+  if(YesNoCalncelDialog(APPNAME, GetMsg(MNotFoundAsk)) == YesNoCancel::Yes)
   SetPos(fn,line,0,-1,-1);
 }
 
@@ -1202,9 +1202,10 @@ void WINAPI GetGlobalInfoW(struct GlobalInfo *info)
 {
   info->StructSize = sizeof(*info);
   info->MinFarVersion = MAKEFARVERSION(3, 0, 0, 0, VS_RELEASE);
+  //TODO: add versioning using resource file
   info->Version = MAKEFARVERSION(1, 0, 0, 1, VS_RELEASE);
   info->Guid = PluginGuid;
-  info->Title = L"TODO: fix";
-  info->Description = L"TODO: fix description";
-  info->Author = L"TODO: fix author";
+  info->Title = APPNAME;
+  info->Description = L"Helps to browse source code indexed by ctags utility";
+  info->Author = L"Konstantin Stupnik (ported by Eugene Manushkin)";
 }
