@@ -107,7 +107,6 @@ PTagArray FindFileSymbols(const char* file);
 PTagArray FindClassSymbols(const char* file,const char* classname);
 void Autoload(const char* fn);
 void GetFiles(StrList& dst);
-int TagCurrentDir();
 int UpdateTagsFile(const char* file);
 
 

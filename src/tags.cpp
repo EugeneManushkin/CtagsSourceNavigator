@@ -1265,6 +1265,7 @@ int MergeFiles(const char* target,const char* mfile)
   return 1;
 }
 
+//TODO: remove
 bool Execute(const char* cmd)
 {
   STARTUPINFO si;
@@ -1279,13 +1280,7 @@ bool Execute(const char* cmd)
   return true;
 }
 
-int TagCurrentDir()
-{
-  String cmd=config.exe+" "+config.opt;
-  if(!Execute(cmd))return 0;
-  return 1;
-}
-
+//TODO: fix
 int UpdateTagsFile(const char* file)
 {
   TagFileInfo *fi=NULL;

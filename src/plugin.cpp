@@ -201,6 +201,69 @@ std::string GetFileNameFromEditor(intptr_t editorID)
   return ToStdString(WideString(buffer.begin(), buffer.end() - 1));
 }
 
+WideString GetPanelDir(HANDLE hPanel = PANEL_ACTIVE)
+{
+  size_t sz = I.PanelControl(hPanel, FCTL_GETPANELDIRECTORY, 0, nullptr);
+  std::vector<wchar_t> buffer(sz);
+  FarPanelDirectory* dir = reinterpret_cast<FarPanelDirectory*>(&buffer[0]);
+  dir->StructSize = sizeof(FarPanelDirectory);
+  sz = I.PanelControl(hPanel, FCTL_GETPANELDIRECTORY, sz, &buffer[0]);
+  return dir->Name;
+}
+
+WideString GetCurFile(HANDLE hPanel = PANEL_ACTIVE)
+{
+  PanelInfo pi;
+  I.PanelControl(hPanel, FCTL_GETPANELINFO, 0, &pi);
+  size_t sz = I.PanelControl(hPanel, FCTL_GETPANELITEM, pi.CurrentItem, nullptr);
+  std::vector<wchar_t> buffer(sz);
+  FarGetPluginPanelItem* item = reinterpret_cast<FarGetPluginPanelItem*>(&buffer[0]);
+  item->StructSize = sizeof(FarGetPluginPanelItem);
+  item->Size = sz;
+  item->Item = reinterpret_cast<PluginPanelItem*>(item + 1);
+  sz = I.PanelControl(hPanel, FCTL_GETPANELITEM, pi.CurrentItem, &buffer[0]);
+  return item->Item->FileName;
+}
+
+void ExecuteScript(WideString const& script, WideString const& args, WideString workingDirectory)
+{
+  SHELLEXECUTEINFOW ShExecInfo = {};
+  ShExecInfo.cbSize = sizeof(SHELLEXECUTEINFO);
+  ShExecInfo.fMask = SEE_MASK_NOCLOSEPROCESS;
+  ShExecInfo.hwnd = nullptr;
+  ShExecInfo.lpVerb = nullptr;
+  ShExecInfo.lpFile = script.c_str();
+  ShExecInfo.lpParameters = args.c_str();
+  ShExecInfo.lpDirectory = workingDirectory.c_str();
+  ShExecInfo.nShow = 0;
+  ShExecInfo.hInstApp = nullptr;
+  if (!::ShellExecuteExW(&ShExecInfo))
+    throw std::system_error(static_cast<int>(GetLastError()), std::generic_category(), "Failed to run external utility");
+
+  WaitForSingleObject(ShExecInfo.hProcess, INFINITE);
+  DWORD exitCode = 0;
+  if (!GetExitCodeProcess(ShExecInfo.hProcess, &exitCode))
+    throw std::system_error(static_cast<int>(GetLastError()), std::generic_category(), "Failed to get exit code of process");
+
+  if (exitCode)
+    throw std::runtime_error("External utility failed with code " + std::to_string(exitCode));
+}
+
+int TagCurrentDir(std::string& errorMessage)
+{
+  try
+  {
+    ExecuteScript(ToString(config.exe.Str()), ToString(config.opt.Str()), GetPanelDir());
+  }
+  catch(std::exception const& e)
+  {
+    errorMessage = e.what();
+    return 0;
+  }
+
+  return 1;
+}
+
 struct MI{
   String item;
   int data;
@@ -746,30 +809,6 @@ static void UpdateConfig()
   }
 }
 
-WideString GetPanelDir(HANDLE hPanel = PANEL_ACTIVE)
-{
-  size_t sz = I.PanelControl(hPanel, FCTL_GETPANELDIRECTORY, 0, nullptr);
-  std::vector<wchar_t> buffer(sz);
-  FarPanelDirectory* dir = reinterpret_cast<FarPanelDirectory*>(&buffer[0]);
-  dir->StructSize = sizeof(FarPanelDirectory);
-  sz = I.PanelControl(hPanel, FCTL_GETPANELDIRECTORY, sz, &buffer[0]);
-  return dir->Name;
-}
-
-WideString GetCurFile(HANDLE hPanel = PANEL_ACTIVE)
-{
-  PanelInfo pi;
-  I.PanelControl(hPanel, FCTL_GETPANELINFO, 0, &pi);
-  size_t sz = I.PanelControl(hPanel, FCTL_GETPANELITEM, pi.CurrentItem, nullptr);
-  std::vector<wchar_t> buffer(sz);
-  FarGetPluginPanelItem* item = reinterpret_cast<FarGetPluginPanelItem*>(&buffer[0]);
-  item->StructSize = sizeof(FarGetPluginPanelItem);
-  item->Size = sz;
-  item->Item = reinterpret_cast<PluginPanelItem*>(item + 1);
-  sz = I.PanelControl(hPanel, FCTL_GETPANELITEM, pi.CurrentItem, &buffer[0]);
-  return item->Item->FileName;
-}
-
 HANDLE WINAPI OpenW(const struct OpenInfo *info)
 {
   OPENFROM OpenFrom = info->OpenFrom;
@@ -955,9 +994,14 @@ HANDLE WINAPI OpenW(const struct OpenInfo *info)
         {
           HANDLE hScreen=I.SaveScreen(0,0,-1,-1);
           WideString msg = WideString(GetMsg(MPlugin)) + L"\n" + GetMsg(MTagingCurrentDirectory);
-          I.Message(&PluginGuid, &InfoMessageGuid, FMSG_ALLINONE, nullptr, reinterpret_cast<const wchar_t* const*>(msg.c_str()), 0, 1);
-          int rc=TagCurrentDir();
+          I.Message(&PluginGuid, &InfoMessageGuid, FMSG_LEFTALIGN | FMSG_ALLINONE, nullptr, reinterpret_cast<const wchar_t* const*>(msg.c_str()), 0, 0);
+          std::string errorMessage;
+          int rc=TagCurrentDir(errorMessage);
           I.RestoreScreen(hScreen);
+          if (!rc)
+          {
+            Msg(ToString(errorMessage).c_str());
+          }
         }break;
         case miUpdateTagsFile:
         {
