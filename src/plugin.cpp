@@ -238,12 +238,12 @@ void ExecuteScript(WideString const& script, WideString const& args, WideString 
   ShExecInfo.nShow = 0;
   ShExecInfo.hInstApp = nullptr;
   if (!::ShellExecuteExW(&ShExecInfo))
-    throw std::system_error(static_cast<int>(GetLastError()), std::generic_category(), "Failed to run external utility");
+    throw std::runtime_error("Failed to run external utility: " + std::to_string(GetLastError()));
 
   WaitForSingleObject(ShExecInfo.hProcess, INFINITE);
   DWORD exitCode = 0;
   if (!GetExitCodeProcess(ShExecInfo.hProcess, &exitCode))
-    throw std::system_error(static_cast<int>(GetLastError()), std::generic_category(), "Failed to get exit code of process");
+    throw std::runtime_error("Failed to get exit code of process: " + std::to_string(GetLastError()));
 
   if (exitCode)
     throw std::runtime_error("External utility failed with code " + std::to_string(exitCode));
@@ -1121,7 +1121,7 @@ WideString get_text(unsigned ctrl_id) {
   return WideString(item.PtrData, item.PtrLength);
 }
 
-intptr_t ConfigureDlgProc(
+intptr_t WINAPI ConfigureDlgProc(
     HANDLE   hDlg,
     intptr_t Msg,
     intptr_t Param1,
