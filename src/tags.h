@@ -68,6 +68,7 @@ struct Config{
   String exe;
   String opt;
   String autoload;
+  String wordchars;
   bool casesens;
 };
 

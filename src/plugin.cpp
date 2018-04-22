@@ -23,6 +23,7 @@
 #include <wincon.h>
 #pragma pack(pop)
 
+#include <fstream>
 #include <stdio.h>
 #include <string.h>
 #include <time.h>
@@ -36,7 +37,6 @@
 #include "String.hpp"
 #include "List.hpp"
 #include "XTools.hpp"
-#include "Registry.hpp"
 #include "tags.h"
 
 #include <algorithm>
@@ -50,11 +50,11 @@ FarStandardFunctions FSF;
 
 static const wchar_t* APPNAME=L"Ctags Source Navigator";
 
+static const wchar_t* ConfigFileName=L"config";
+
 static String tagfile;
 
 static String targetFile;
-
-static String rootKey;
 
 RegExp RegexInstance;
 
@@ -264,6 +264,103 @@ int TagCurrentDir(std::string& errorMessage)
   return 1;
 }
 
+static void SetWordchars(std::string const& str)
+{
+  config.wordchars = str.c_str();
+  memset(wordChars, 0, sizeof(wordChars));
+  for (auto c : str)
+  {
+    wordChars[(unsigned char)c]=1;
+  }
+}
+
+static void SetDefaultConfig()
+{
+  config.exe = "ctags.exe";
+  config.opt = "--c++-types=+px --c-types=+px --fields=+n -R *";
+  config.autoload = "";
+  config.casesens = true;
+  SetWordchars("0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz~$_");
+}
+
+static WideString GetModulePath()
+{
+  WideString path(I.ModuleName);
+  auto pos = path.rfind('\\');
+  pos = pos == WideString::npos ? path.rfind('/') : pos;
+  if (!pos || pos == WideString::npos)
+    throw std::invalid_argument("Invalid module path");
+
+  return path.substr(0, pos);
+}
+
+static WideString GetConfigFilePath()
+{
+  return JoinPath(GetModulePath(), ConfigFileName);
+}
+
+static void LoadConfig()
+{
+  SetDefaultConfig();
+  std::ifstream file;
+  file.exceptions(std::ifstream::goodbit);
+  file.open(ToStdString(GetConfigFilePath()));
+  std::shared_ptr<void> fileCloser(0, [&](void*) { file.close(); });
+  std::string buf;
+  while (std::getline(file, buf))
+  {
+    auto pos = buf.find('=');
+    if (pos == std::string::npos)
+      continue;
+
+    auto key = buf.substr(0, pos);
+    auto val = buf.substr(pos + 1);
+    if(key == "pathtoexe")
+    {
+      config.exe=val.c_str();
+    }
+    else if(key == "commandline")
+    {
+      config.opt=val.c_str();
+    }
+    else if(key == "autoload")
+    {
+      config.autoload=val.c_str();
+    }
+    else if(key == "casesensfilt")
+    {
+      config.casesens = val == "true";
+    }
+    else if(key == "wordchars")
+    {
+      SetWordchars(val);
+    }
+  }
+}
+
+static bool SaveConfig()
+{
+  try
+  {
+    std::ofstream file;
+    file.exceptions(std::ifstream::failbit | std::ifstream::badbit);
+    file.open(ToStdString(GetConfigFilePath()));
+    std::shared_ptr<void> fileCloser(0, [&](void*) { file.close(); });
+    file << "pathtoexe=" << config.exe << std::endl;
+    file << "commandline=" << config.opt << std::endl;
+    file << "autoload=" << config.autoload << std::endl;
+    file << "casesensfilt=" << (config.casesens ? "true" : "false") << std::endl;
+    file << "wordchars=" << config.wordchars << std::endl;
+  }
+  catch(std::exception const&)
+  {
+    Msg((L"Failed to save configuration to file: " + GetConfigFilePath()).c_str());
+    return false;
+  }
+
+  return true;
+}
+
 struct MI{
   String item;
   int data;
@@ -441,11 +538,9 @@ void WINAPI SetStartupInfoW(const struct PluginStartupInfo *Info)
 {
   RegexInstance.InitLocale();
   I=*Info;
-  //TODO: don't use registry
-  rootKey = "SOFTWARE\\FarCtagsPlugin"; //I.RootKey;
-  rootKey += "\\ctags";
   FSF = *Info->FSF;
   I.FSF = &FSF;
+  LoadConfig();
 }
 
 int isident(int chr)
@@ -749,70 +844,9 @@ static void FreeTagsArray(PTagArray ta)
   delete ta;
 }
 
-static void UpdateConfig()
-{
-  Registry r(HKEY_CURRENT_USER);
-  if(!r.Open(rootKey))
-  {
-    config.exe="ctags.exe";
-    config.opt="--c++-types=+px --c-types=+px --fields=+n";
-    config.autoload="";
-    memset(wordChars,0,sizeof(wordChars));
-    for(int i=0;i<256;i++)
-    {
-      if(isalnum(i) || i=='$' || i=='_' || i=='~')
-      {
-        wordChars[i]=1;
-      }
-    }
-    return;
-  }
-  char buf[512];
-  if(r.Get("pathtoexe",buf,sizeof(buf)))
-  {
-    config.exe=buf;
-  }
-  if(r.Get("commandline",buf,sizeof(buf)))
-  {
-    config.opt=buf;
-  }
-  if(r.Get("autoload",buf,sizeof(buf)))
-  {
-    config.autoload=buf;
-  }
-  if(r.Get("wordchars",buf,sizeof(buf)))
-  {
-    memset(wordChars,0,sizeof(wordChars));
-    int i=0;
-    while(buf[i])
-    {
-      wordChars[(unsigned char)buf[i]]=1;
-      i++;
-    }
-  }else
-  {
-    memset(wordChars,0,sizeof(wordChars));
-    for(int i=0;i<256;i++)
-    {
-      if(isalnum(i) || i=='$' || i=='_' || i=='~')
-      {
-        wordChars[i]=1;
-      }
-    }
-  }
-  if(r.Get("casesensfilt",buf,sizeof(buf)))
-  {
-    config.casesens=!stricmp(buf,"true");
-  }else
-  {
-    config.casesens=true;
-  }
-}
-
 HANDLE WINAPI OpenW(const struct OpenInfo *info)
 {
   OPENFROM OpenFrom = info->OpenFrom;
-  UpdateConfig();
   if(OpenFrom==OPEN_EDITOR)
   {
     //DebugBreak();
@@ -1081,34 +1115,32 @@ struct InitDialogItem
   unsigned int Selected;
   unsigned int Flags;
   unsigned char DefaultButton;
-  char *Data;
+  intptr_t MessageID;
+  wchar_t const* MessageText;
 };
 
 void InitDialogItems(struct InitDialogItem *Init,struct FarDialogItem *Item,
                     int ItemsNumber)
 {
   FarDialogItem empty = {};
-  for (int I=0;I<ItemsNumber;I++)
+  for (int i=0;i<ItemsNumber;i++)
   {
-    Item[I] = empty;
-    Item[I].Type=static_cast<FARDIALOGITEMTYPES>(Init[I].Type);
-    Item[I].X1=Init[I].X1;
-    Item[I].Y1=Init[I].Y1;
-    Item[I].X2=Init[I].X2;
-    Item[I].Y2=Init[I].Y2;
-//    Item[I].Focus=Init[I].Focus;
-    Item[I].Selected=Init[I].Selected;
-    Item[I].Flags=Init[I].Flags;
-//    Item[I].DefaultButton=Init[I].DefaultButton;
-    if ((unsigned int)Init[I].Data<2000)
-      Item[I].Data = ::I.GetMsg(&PluginGuid, (intptr_t)Init[I].Data);
-    else
-      Item[I].Data = L""; // TODO: Init[I].Data?
+    auto& item = Item[i];
+    auto const& init = Init[i];
+    item = empty;
+    item.Type=static_cast<FARDIALOGITEMTYPES>(init.Type);
+    item.X1=init.X1;
+    item.Y1=init.Y1;
+    item.X2=init.X2;
+    item.Y2=init.Y2;
+    item.Selected=init.Selected;
+    item.Flags=init.Flags;
+    item.Flags |= init.Focus ? DIF_FOCUS : 0;
+    item.Flags |= init.DefaultButton ? DIF_DEFAULTBUTTON : 0;
+    item.Data = init.MessageID < 0 ? init.MessageText : I.GetMsg(&PluginGuid, init.MessageID);
   }
 }
 
-//TODO: rework
-std::vector<WideString> dialogStrings;
 //TODO: rework
 HANDLE ConfigureDialog = 0;
 
@@ -1129,88 +1161,54 @@ intptr_t WINAPI ConfigureDlgProc(
 {
   if (Msg == DN_EDITCHANGE)
   {
-    dialogStrings[Param1 / 2 - 1] = get_text(Param1);
+    String* dest = 0;
+    if (Param1 == 2)
+      dest = &config.exe;
+    if (Param1 == 4)
+      dest = &config.opt;
+    if (Param1 == 6)
+      dest = &config.autoload;
+    if (Param1 == 8)
+      dest = &config.wordchars;
+
+    if (dest)
+      *dest = ToStdString(get_text(Param1)).c_str();
+  }
+
+  if (Msg == DN_BTNCLICK && Param1 == 9)
+  {
+    config.casesens = !!Param2;
   }
 
   return I.DefDlgProc(hDlg, Msg, Param1, Param2);
 }
 
-
 intptr_t WINAPI ConfigureW(const struct ConfigureInfo *Info)
 {
+  std::vector<WideString> dialogStrings;
+  dialogStrings.push_back(ToString(config.exe.Str()));
+  dialogStrings.push_back(ToString(config.opt.Str()));
+  dialogStrings.push_back(ToString(config.autoload.Str()));
+  dialogStrings.push_back(ToString(config.wordchars.Str())); 
   struct InitDialogItem InitItems[]={
         /*Type         X1 Y2 X2 Y2  F S           Flags D Data */
-/*00*/    DI_DOUBLEBOX, 3, 1,64,13, 0,0,              0,0,(char*)MPlugin,
-/*01*/    DI_TEXT,      5, 2, 0, 0, 0,0,              0,0,(char*)MPathToExe,
-/*02*/    DI_EDIT,      5, 3,62, 3, 1,0,              0,0,"",
-/*03*/    DI_TEXT,      5, 4, 0, 0, 0,0,              0,0,(char*)MCmdLineOptions,
-/*04*/    DI_EDIT,      5, 5,62, 5, 1,0,              0,0,"",
-/*05*/    DI_TEXT,      5, 6, 0, 0, 0,0,              0,0,(char*)MAutoloadFile,
-/*06*/    DI_EDIT,      5, 7,62, 7, 1,0,              0,0,"",
-/*07*/    DI_TEXT,      5, 8, 0, 0, 0,0,              0,0,(char*)MWordChars,
-/*08*/    DI_EDIT,      5, 9,62, 9, 1,0,              0,0,"",
-/*09*/    DI_CHECKBOX,  5, 10,62,10,1,0,              0,0,(char*)MCaseSensFilt,
-/*10*/    DI_TEXT,      5,11,62,10, 1,0,DIF_SEPARATOR|DIF_BOXCOLOR,0,"",
-/*11*/    DI_BUTTON,    0,12, 0, 0, 0,0,DIF_CENTERGROUP,1,(char *)MOk,
-/*12*/    DI_BUTTON,    0,12, 0, 0, 0,0,DIF_CENTERGROUP,0,(char *)MCancel
+/*00*/    DI_DOUBLEBOX, 3, 1,64,13, 0,0,              0,0,MPlugin,nullptr,
+/*01*/    DI_TEXT,      5, 2, 0, 0, 0,0,              0,0,MPathToExe,nullptr,
+/*02*/    DI_EDIT,      5, 3,62, 3, 1,0,              0,0,-1,dialogStrings[0].c_str(),
+/*03*/    DI_TEXT,      5, 4, 0, 0, 0,0,              0,0,MCmdLineOptions,nullptr,
+/*04*/    DI_EDIT,      5, 5,62, 5, 1,0,              0,0,-1,dialogStrings[1].c_str(),
+/*05*/    DI_TEXT,      5, 6, 0, 0, 0,0,              0,0,MAutoloadFile,nullptr,
+/*06*/    DI_EDIT,      5, 7,62, 7, 1,0,              0,0,-1,dialogStrings[2].c_str(),
+/*07*/    DI_TEXT,      5, 8, 0, 0, 0,0,              0,0,MWordChars,nullptr,
+/*08*/    DI_EDIT,      5, 9,62, 9, 1,0,              0,0,-1,dialogStrings[3].c_str(),
+/*09*/    DI_CHECKBOX,  5, 10,62,10,1,config.casesens,0,0,MCaseSensFilt,nullptr,
+/*10*/    DI_TEXT,      5,11,62,10, 1,0,DIF_SEPARATOR|DIF_BOXCOLOR,0,-1,nullptr,
+/*11*/    DI_BUTTON,    0,12, 0, 0, 0,0,DIF_CENTERGROUP,1,MOk,nullptr,
+/*12*/    DI_BUTTON,    0,12, 0, 0, 0,0,DIF_CENTERGROUP,0,MCancel,nullptr
   };
 
   struct FarDialogItem DialogItems[sizeof(InitItems)/sizeof(InitItems[0])];
   InitDialogItems(InitItems,DialogItems,sizeof(InitItems)/sizeof(InitItems[0]));
-  Registry r(HKEY_CURRENT_USER);
-  if(!r.Open(rootKey))
-  {
-    Msg(MRegFailed);
-    return FALSE;
-  }
-  char buf[512];
-  dialogStrings.clear();
-  if(r.Get("pathtoexe",buf,sizeof(buf)))
-  {
-    dialogStrings.push_back(ToString(std::string(buf)));
-    DialogItems[2].Data = dialogStrings.back().c_str();
-  }else
-  {
-    DialogItems[2].Data = L"ctags.exe";
-  }
-  if(r.Get("commandline",buf,sizeof(buf)))
-  {
-    dialogStrings.push_back(ToString(std::string(buf)));
-    DialogItems[4].Data = dialogStrings.back().c_str();
-  }else
-  {
-    dialogStrings.push_back(L"--c++-types=+px --c-types=+px --fields=+n -R *");
-    DialogItems[4].Data = dialogStrings.back().c_str();
-  }
-  if(r.Get("autoload",buf,sizeof(buf)))
-  {
-    dialogStrings.push_back(ToString(std::string(buf)));
-    DialogItems[6].Data = dialogStrings.back().c_str();
-  }
-  if(r.Get("wordchars",buf,sizeof(buf)))
-  {
-    dialogStrings.push_back(ToString(std::string(buf)));
-    DialogItems[8].Data = dialogStrings.back().c_str();
-  }else
-  {
-    String s;
-    for(int i=0;i<256;i++)
-    {
-      if(isalnum(i) || i=='$' || i=='_' || i=='~')
-      {
-        s+=(char)i;
-      }
-    }
-    dialogStrings.push_back(ToString(std::string(s.Str())));
-    DialogItems[8].Data = dialogStrings.back().c_str();
-  }
-  if(r.Get("casesensfilt",buf,sizeof(buf)))
-  {
-    DialogItems[9].Selected=!stricmp(buf,"true");
-  }else
-  {
-    DialogItems[9].Selected=1;
-  }
   auto handle = I.DialogInit(
                &PluginGuid,
                &InteractiveDialogGuid,
@@ -1233,12 +1231,9 @@ intptr_t WINAPI ConfigureW(const struct ConfigureInfo *Info)
   std::shared_ptr<void> handleHolder(handle, [](void* h){I.DialogFree(h);});
   auto ExitCode = I.DialogRun(handle);
   if(ExitCode!=11)return FALSE;
-  r.Set("pathtoexe",ToStdString(dialogStrings[0]).c_str());
-  r.Set("commandline", ToStdString(dialogStrings[1]).c_str());
-  r.Set("autoload", ToStdString(dialogStrings[2]).c_str());
-  r.Set("wordchars", ToStdString(dialogStrings[3]).c_str());
-  //TODO: support
-  r.Set("casesensfilt",DialogItems[9].Selected?"True":"False");
+  if (SaveConfig())
+    LoadConfig();
+
   return TRUE;
 }
 
