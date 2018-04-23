@@ -38,6 +38,7 @@
 #include "List.hpp"
 #include "XTools.hpp"
 #include "tags.h"
+#include "resource.h"
 
 #include <algorithm>
 #include <string>
@@ -50,7 +51,7 @@ using std::auto_ptr;
 static struct PluginStartupInfo I;
 FarStandardFunctions FSF;
 
-static const wchar_t* APPNAME=L"Ctags Source Navigator";
+static const wchar_t* APPNAME = CTAGS_PRODUCT_NAME;
 
 static const wchar_t* ConfigFileName=L"config";
 
@@ -190,15 +191,18 @@ int Msg(int msgid)
 
 EditorInfo GetCurrentEditorInfo()
 {
-  EditorInfo ei;
+  EditorInfo ei = {sizeof(EditorInfo)};
   I.EditorControl(-1, ECTL_GETINFO, 0, &ei);
   return ei;
 }
 
 std::string GetFileNameFromEditor(intptr_t editorID)
 {
-  auto requiredSize = I.EditorControl(editorID, ECTL_GETFILENAME, 0, nullptr);
-  std::vector<wchar_t> buffer(requiredSize);
+  size_t sz = I.EditorControl(editorID, ECTL_GETFILENAME, 0, nullptr);
+  if (!sz)
+    return std::string();
+
+  std::vector<wchar_t> buffer(sz);
   I.EditorControl(editorID, ECTL_GETFILENAME, buffer.size(), &buffer[0]);
   return ToStdString(WideString(buffer.begin(), buffer.end() - 1));
 }
@@ -206,6 +210,9 @@ std::string GetFileNameFromEditor(intptr_t editorID)
 WideString GetPanelDir(HANDLE hPanel = PANEL_ACTIVE)
 {
   size_t sz = I.PanelControl(hPanel, FCTL_GETPANELDIRECTORY, 0, nullptr);
+  if (!sz)
+    return WideString();
+
   std::vector<wchar_t> buffer(sz);
   FarPanelDirectory* dir = reinterpret_cast<FarPanelDirectory*>(&buffer[0]);
   dir->StructSize = sizeof(FarPanelDirectory);
@@ -218,6 +225,9 @@ WideString GetCurFile(HANDLE hPanel = PANEL_ACTIVE)
   PanelInfo pi;
   I.PanelControl(hPanel, FCTL_GETPANELINFO, 0, &pi);
   size_t sz = I.PanelControl(hPanel, FCTL_GETPANELITEM, pi.CurrentItem, nullptr);
+  if (!sz)
+    return WideString();
+
   std::vector<wchar_t> buffer(sz);
   FarGetPluginPanelItem* item = reinterpret_cast<FarGetPluginPanelItem*>(&buffer[0]);
   item->StructSize = sizeof(FarGetPluginPanelItem);
@@ -270,6 +280,9 @@ static WideString GenerateTempPath()
 {
   WideString const prefix = L"TMPDIR";
   auto sz = FSF.MkTemp(0, 0, prefix.c_str());
+  if (!sz)
+    return WideString();
+
   std::vector<wchar_t> buffer(sz);
   FSF.MkTemp(&buffer[0], buffer.size(), prefix.c_str());
   return WideString(buffer.begin(), --buffer.end());
@@ -642,6 +655,9 @@ bool GotoOpenedFile(const char* file)
     WindowInfo wi = {sizeof(WindowInfo)};
     wi.Pos=i;
     I.AdvControl(&PluginGuid, ACTL_GETWINDOWINFO, 0, (void*)&wi);
+    if (!wi.NameSize)
+      continue;
+
     std::vector<wchar_t> name(wi.NameSize);
     wi.Name = &name[0];
     I.AdvControl(&PluginGuid, ACTL_GETWINDOWINFO, 0, (void*)&wi);
@@ -1268,10 +1284,9 @@ void WINAPI GetGlobalInfoW(struct GlobalInfo *info)
 {
   info->StructSize = sizeof(*info);
   info->MinFarVersion = MAKEFARVERSION(3, 0, 0, 0, VS_RELEASE);
-  //TODO: add versioning using resource file
-  info->Version = MAKEFARVERSION(1, 0, 0, 1, VS_RELEASE);
+  info->Version = MAKEFARVERSION(CTAGS_VERSION_MAJOR, CTAGS_VERSION_MINOR, 0, CTAGS_BUILD, VS_RELEASE);
   info->Guid = PluginGuid;
   info->Title = APPNAME;
-  info->Description = L"Helps to browse source code indexed by ctags utility";
+  info->Description = CTAGS_FILE_DESCR;
   info->Author = L"Konstantin Stupnik (ported by Eugene Manushkin)";
 }

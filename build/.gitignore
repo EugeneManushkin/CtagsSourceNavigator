@@ -256,6 +256,8 @@ paket-files/
 *.vcxproj*
 *.sln
 
+RelWithDebInfo
+
 # CMake temporary files
 CMakeCache.txt
 CMakeFiles
