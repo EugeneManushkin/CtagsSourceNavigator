@@ -1101,7 +1101,7 @@ HANDLE WINAPI OpenW(const struct OpenInfo *info)
           WideString msg = WideString(GetMsg(MPlugin)) + L"\n" + GetMsg(MUpdatingTagsFile);
           StrList changed;
           String file = ToStdString(JoinPath(GetPanelDir(), GetCurFile())).c_str();
-          I.Message(&PluginGuid, &InfoMessageGuid, FMSG_ALLINONE, nullptr, reinterpret_cast<const wchar_t* const*>(msg.c_str()), 0, 1);
+          I.Message(&PluginGuid, &InfoMessageGuid, FMSG_LEFTALIGN | FMSG_ALLINONE, nullptr, reinterpret_cast<const wchar_t* const*>(msg.c_str()), 0, 0);
           if(!UpdateTagsFile(file))
           {
             I.RestoreScreen(hScreen);
