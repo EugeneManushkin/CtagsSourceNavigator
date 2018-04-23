@@ -42,6 +42,7 @@
 #include <algorithm>
 #include <string>
 #include <vector>
+#include <list>
 
 using std::auto_ptr;
 
@@ -384,7 +385,7 @@ int Menu(const wchar_t *title,MenuList& lst,int sel,int flags=MF_LABELS,const vo
   menu.Init(lst.Count());
   static const char labels[]="1234567890ABCDEFGHIJKLMNOPQRSTUVWXYZ";
   static const int labelsCount=sizeof(labels)-1;
-  std::vector<WideString> menuTexts;
+  std::list<WideString> menuTexts;
 
   int i=0;
   int j=0;
