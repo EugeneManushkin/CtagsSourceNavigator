@@ -357,6 +357,28 @@ static WideString GetConfigFilePath()
   return JoinPath(GetModulePath(), ConfigFileName);
 }
 
+static DWORD ToFarControlState(WORD controlState)
+{
+  switch (controlState)
+  {
+  case 1:
+    return SHIFT_PRESSED;
+  case 2:
+    return LEFT_CTRL_PRESSED;
+  case 4:
+    return LEFT_ALT_PRESSED;
+  }
+
+  return 0;
+}
+
+static FarKey ToFarKey(WORD virtualKey)
+{
+  WORD key = virtualKey & 0xff;
+  WORD controlState = (virtualKey & 0xff00) >> 8;
+  return {key, ToFarControlState(controlState)};
+}
+
 static void LoadConfig()
 {
   SetDefaultConfig();
@@ -442,14 +464,13 @@ int Menu(const wchar_t *title,MenuList& lst,int sel,int flags=MF_LABELS,const vo
   menu.Init(lst.Count());
   static const char labels[]="1234567890ABCDEFGHIJKLMNOPQRSTUVWXYZ";
   static const int labelsCount=sizeof(labels)-1;
-  std::list<WideString> menuTexts;
-
   int i=0;
   int j=0;
   char buf[256];
   ZeroMemory(&menu[0],sizeof(FarMenuItem)*lst.Count());
   if(!(flags&MF_FILTER))
   {
+    std::list<WideString> menuTexts;
     for(i=0;i<lst.Count();i++)
     {
       if((flags&MF_LABELS))
@@ -470,33 +491,20 @@ int Menu(const wchar_t *title,MenuList& lst,int sel,int flags=MF_LABELS,const vo
       menu[i].Text = menuTexts.back().c_str();
       if(sel==i)menu[i].Flags |= MIF_SELECTED;
     }
-    String cnt;
-    cnt.Sprintf(" %s%d ",GetMsg(MItemsCount),lst.Count());
-    int res=I.Menu(&PluginGuid, &CtagsMenuGuid, -1, -1, 0, FMENU_WRAPMODE, title,flags&MF_SHOWCOUNT?ToString(cnt.Str()).c_str():NULL,
+    WideString bottomText = flags&MF_SHOWCOUNT ? GetMsg(MItemsCount) + std::to_wstring(lst.Count()) : L"";
+    int res=I.Menu(&PluginGuid, &CtagsMenuGuid, -1, -1, 0, FMENU_WRAPMODE, title, bottomText.c_str(),
                    L"content",NULL,NULL,&menu[0],lst.Count());
     return res!=-1?lst[res].data:res;
   }else
   {
     String filter=param?(char*)param:"";
-    Vector<int> idx;
     Vector<FarKey> fk;
-    static const char *filterkeys="1234567890abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_$\\\x08-_=|;':\",./<>? []*&^%#@!~";
-    int shift;
-    for(i=0;filterkeys[i];i++)
+    std::string filterkeys = "1234567890abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_$\\\x08-_=|;':\",./<>?[]*&^%#@!~";
+    for(auto filterKey : filterkeys)
     {
-      DWORD k=VkKeyScan(filterkeys[i]);
-      if(k==0xffff)
-      {
-        fk.Push(FarKey());
-        continue;
-      }
-      shift=(k&0xff00)>>8;
-      if(shift==1)shift=4;
-      else if (shift==2)shift=1;
-      else if (shift==4)shift=2;
-      k=(k&0xff)|(shift<<16);
-      FarKey tmp = {k, 0}; // TODO: what is this?
-      fk.Push(tmp);
+      auto virtualKey = VkKeyScanA(filterKey);
+      if (virtualKey != 0xffff)
+        fk.Push(ToFarKey(virtualKey));
     }
     fk.Push(FarKey());
 #ifdef DEBUG
@@ -510,7 +518,8 @@ int Menu(const wchar_t *title,MenuList& lst,int sel,int flags=MF_LABELS,const vo
       String match="";
       int minit=0;
       int fnd=-1,oldfnd=-1;
-      idx.Clean();
+      Vector<int> idx;
+      std::list<WideString> menuTexts;
       for(i=0;i<lst.Count();i++)
       {
         lst[i].item.SetNoCase(!config.casesens);
@@ -532,6 +541,7 @@ int Menu(const wchar_t *title,MenuList& lst,int sel,int flags=MF_LABELS,const vo
             for(int k=0;k<match.Length();k++)
             {
               if(xfnd+k>=lst[i].item.Length() ||
+                  filterkeys.find(match[k]) == std::string::npos ||
                   (config.casesens && match[k]!=lst[i].item[xfnd+k]) ||
                   (!config.casesens && tolower(match[k])!=tolower(lst[i].item[xfnd+k]))
                 )
@@ -566,12 +576,11 @@ int Menu(const wchar_t *title,MenuList& lst,int sel,int flags=MF_LABELS,const vo
       {
         filter=match;
       }
-      String cnt;
-      cnt.Sprintf(" %s%d ",GetMsg(MItemsCount),j);
       intptr_t bkey;
-      WideString ftitle=WideString(L" [") + title + L"]";
+      WideString ftitle = filter.Length() > 0 ? L"[Filter: " + ToString(filter.Str()) + L"]" : WideString(L" [") + title + L"]";
+      WideString bottomText = flags&MF_SHOWCOUNT ? GetMsg(MItemsCount) + std::to_wstring(j) : L"";
       int res = I.Menu(&PluginGuid, &CtagsMenuGuid,-1,-1,0,FMENU_WRAPMODE|FMENU_SHOWAMPERSAND,ftitle.c_str(),
-                     flags&MF_SHOWCOUNT?ToString(cnt.Str()).c_str():NULL,L"content",&fk[0],&bkey,&menu[0],j);
+                       bottomText.c_str(),L"content",&fk[0],&bkey,&menu[0],j);
       if(res==-1 && bkey==-1)return -1;
       if(bkey==-1)
       {
