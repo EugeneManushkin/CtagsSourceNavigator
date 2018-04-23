@@ -43,6 +43,7 @@
 #include <string>
 #include <vector>
 #include <list>
+#include <map>
 
 using std::auto_ptr;
 
@@ -510,16 +511,13 @@ int Menu(const wchar_t *title,MenuList& lst,int sel,int flags=MF_LABELS,const vo
 #ifdef DEBUG
     //DebugBreak();
 #endif
-    int mode=0;
     for(;;)
     {
-      int oldj=j;
       j=0;
       String match="";
       int minit=0;
-      int fnd=-1,oldfnd=-1;
-      Vector<int> idx;
-      std::list<WideString> menuTexts;
+      int fnd=-1;
+      std::multimap<int, MI const*> idx;
       for(i=0;i<lst.Count();i++)
       {
         lst[i].item.SetNoCase(!config.casesens);
@@ -529,53 +527,17 @@ int Menu(const wchar_t *title,MenuList& lst,int sel,int flags=MF_LABELS,const vo
           match=lst[i].item.Substr(fnd);
           minit=1;
         }
-        if(oldfnd!=-1 && oldfnd!=fnd)
-        {
-          oldj=-1;
-        }
-        if(fnd!=-1 && filter.Length())
-        {
-          int xfnd=-1;
-          while((xfnd=lst[i].item.Index(filter,xfnd+1))!=-1)
-          {
-            for(int k=0;k<match.Length();k++)
-            {
-              if(xfnd+k>=lst[i].item.Length() ||
-                  filterkeys.find(match[k]) == std::string::npos ||
-                  (config.casesens && match[k]!=lst[i].item[xfnd+k]) ||
-                  (!config.casesens && tolower(match[k])!=tolower(lst[i].item[xfnd+k]))
-                )
-              {
-                match.Delete(k);
-                break;
-              }
-            }
-          }
-        }
-        idx.Push(i);
-        menuTexts.push_back(ToString(lst[i].item.Substr(0,120).Str()));
-        menu[j].Text = menuTexts.back().c_str();
-        if(sel==j)menu[j].Flags |= MIF_SELECTED;
-        j++;
-        if(fnd!=-1)oldfnd=fnd;
+        idx.insert(std::make_pair(fnd, &lst[i]));
       }
-      if((mode==0 && j==0) || (mode==1 && j==oldj))
+      std::list<WideString> menuTexts;
+      for (auto const& i : idx)
       {
-        if(filter.Length())
-        {
-          //DebugBreak();
-          filter.Delete(-1);
-          continue;
-        }
+        menuTexts.push_back(ToString(i.second->item.Substr(0, 120).Str()));
+        menu[j++] = { MIF_NONE, menuTexts.back().c_str(), {}, i.second->data };
       }
-      if(sel>j)
-      {
-        menu[j-1].Flags |= MIF_SELECTED;
-      }
-      if(match.Length()>filter.Length() && j>1 && mode!=1)
-      {
-        filter=match;
-      }
+      if (j > 0)
+        menu[0].Flags != MIF_SELECTED;
+
       intptr_t bkey;
       WideString ftitle = filter.Length() > 0 ? L"[Filter: " + ToString(filter.Str()) + L"]" : WideString(L" [") + title + L"]";
       WideString bottomText = flags&MF_SHOWCOUNT ? GetMsg(MItemsCount) + std::to_wstring(j) : L"";
@@ -584,17 +546,15 @@ int Menu(const wchar_t *title,MenuList& lst,int sel,int flags=MF_LABELS,const vo
       if(res==-1 && bkey==-1)return -1;
       if(bkey==-1)
       {
-        return lst[idx[res]].data;
+        return menu[res].UserData;
       }
       int key=filterkeys[bkey];
       if(key==8)
       {
         filter.Delete(-1);
-        mode=1;
         continue;
       }
       filter+=(char)key;
-      mode=0;
       sel=res;
     }
   }
