@@ -265,6 +265,63 @@ int TagCurrentDir(std::string& errorMessage)
   return 1;
 }
 
+static WideString GenerateTempPath()
+{
+  WideString const prefix = L"TMPDIR";
+  auto sz = FSF.MkTemp(0, 0, prefix.c_str());
+  std::vector<wchar_t> buffer(sz);
+  FSF.MkTemp(&buffer[0], buffer.size(), prefix.c_str());
+  return WideString(buffer.begin(), --buffer.end());
+}
+
+static std::shared_ptr<void> MakeTemp(WideString const& dirPath)
+{
+  if (!::CreateDirectoryW(dirPath.c_str(), nullptr))
+    return std::shared_ptr<void>();
+
+  return std::shared_ptr<void>(0, [&](void*){
+    //TODO: remove dir recursive
+  });
+}
+
+static bool UpdateTagsFile(const char* file)
+{
+  WideString tempPath = GenerateTempPath();
+  if (tempPath.empty())
+    return false;
+
+  auto dirHolder = MakeTemp(tempPath);
+  WideString changesFile = JoinPath(tempPath, L"tags.changes");
+  if (!SaveChangedFiles(file, ToStdString(changesFile).c_str()))
+    return false;
+
+  String opt=config.opt;
+  opt.Replace("-R","");
+  RegExp re("/\\*(\\.\\S*)?/");
+  SMatch m[4];
+  int n=4;
+  while(re.Search(opt,m,n))
+  {
+    opt.Delete(m[0].start,m[0].end-m[0].start);
+  }
+
+  WideString updateFile = JoinPath(tempPath, L"tags.update");
+  WideString arguments = ToString(opt.Str()) + L" -f " + updateFile + L" -L " + changesFile;
+  try
+  {
+    ExecuteScript(ToString(config.exe.Str()), arguments, GetPanelDir());
+  }
+  catch(std::exception const&)
+  {
+    return false;
+  }
+
+  if (!MergeFiles(file, ToStdString(updateFile).c_str()))
+    return false;
+
+  return !Load(file,"");
+}
+
 static void SetWordchars(std::string const& str)
 {
   config.wordchars = str.c_str();

@@ -834,7 +834,22 @@ void FindClass(TagFileInfo* fi,const char* str,PTagArray ta)
   fclose(f);
 }
 
-static void CheckFiles(TagFileInfo* fi,StrList& dst)
+static bool IsPathSeparator(std::string::value_type c)
+{
+  return c == '/' || c == '\\';
+}
+
+static std::string JoinPath(std::string const& dirPath, std::string const& name)
+{
+  return dirPath.empty() || IsPathSeparator(dirPath.back()) ? dirPath + name : dirPath + std::string("\\") + name;
+}
+
+static bool IsFullPath(char const* fn, unsigned short fsz)
+{
+  return fsz > 1 && fn[1] == ':';
+}
+
+static void CheckFiles(std::string const& projectRoot, TagFileInfo* fi,StrList& dst)
 {
   FILE *g=fopen(fi->indexFile,"rb");
   int sz;
@@ -852,14 +867,22 @@ static void CheckFiles(TagFileInfo* fi,StrList& dst)
     fread(&fsz,sizeof(fsz),1,g);
     fread(fn,fsz,1,g);
     fn[fsz]=0;
+    std::string fullPath = IsFullPath(fn, fsz) ? fn : JoinPath(projectRoot, fn);
     fread(&modt,sizeof(modt),1,g);
-    if(stat(fn,&st)==-1)continue;
+    if(stat(fullPath.c_str(),&st)==-1)continue;
     if(st.st_mtime!=modt)
     {
       dst<<fn;
     }
   }
   fclose(g);
+}
+
+static std::string GetDirOfFile(std::string const& filePath)
+{
+  auto pos = filePath.rfind('\\');
+  pos = pos == std::string::npos ? filePath.rfind('/') : pos;
+  return !pos || pos == std::string::npos ? "" : filePath.substr(0, pos);
 }
 
 int CheckChangedFiles(const char* filename,StrList& dst)
@@ -874,7 +897,7 @@ int CheckChangedFiles(const char* filename,StrList& dst)
       if(stat(file,&stf)==-1)return 0;
       if(stat(files[i]->indexFile,&sti)==-1)return 0;
       if(stf.st_mtime!=sti.st_mtime)return 0;
-      CheckFiles(files[i],dst);
+      CheckFiles(GetDirOfFile(filename), files[i],dst);
       return 1;
     }
   }
@@ -1265,23 +1288,7 @@ int MergeFiles(const char* target,const char* mfile)
   return 1;
 }
 
-//TODO: remove
-bool Execute(const char* cmd)
-{
-  STARTUPINFO si;
-  PROCESS_INFORMATION pi;
-  si.cb=sizeof(si);
-  GetStartupInfo(&si);
-  if(!CreateProcess(NULL,(char*)cmd,NULL,NULL,FALSE,0,NULL,".",&si,&pi))
-  {
-    return false;
-  }
-  WaitForSingleObject(pi.hProcess,INFINITE);
-  return true;
-}
-
-//TODO: fix
-int UpdateTagsFile(const char* file)
+int SaveChangedFiles(const char* file, const char* outputFilename)
 {
   TagFileInfo *fi=NULL;
   int i;
@@ -1307,30 +1314,5 @@ int UpdateTagsFile(const char* file)
   }
   StrList sl;
   if(!CheckChangedFiles(filename,sl))return 0;
-  if(sl.Count()==0)return 1;
-  sl.SaveToFile("tags.changes");
-  String cmd=config.exe+" ";
-  String opt=config.opt;
-  opt.Replace("-R","");
-  RegExp re("/\\*(\\.\\S*)?/");
-  SMatch m[4];
-  int n=4;
-  while(re.Search(opt,m,n))
-  {
-    opt.Delete(m[0].start,m[0].end-m[0].start);
-  }
-  cmd+=opt;
-  cmd+=" -f tags.update -L tags.changes";
-  //extern int Msg(const char* err);
-  //Msg(cmd);
-  if(!Execute(cmd))
-  {
-    remove("tags.changes");
-    return 0;
-  }
-  MergeFiles(file,"tags.update");
-  remove("tags.changes");
-  remove("tags.update");
-  Load(file,"");
-  return 1;
+  return sl.SaveToFile(outputFilename);
 }
