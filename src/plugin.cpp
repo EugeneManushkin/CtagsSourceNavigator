@@ -17,6 +17,7 @@
 */
 
 #define _WINCON_
+#define NOMINMAX
 #include <windows.h>
 #undef _WINCON_
 #pragma pack(push,4)
@@ -100,6 +101,8 @@ GUID StringToGuid(const std::string& str)
 ::GUID CtagsMenuGuid = StringToGuid("{7f125c0d-5e18-4b7f-a6df-1caae013c48f}");
 ::GUID MenuGuid = StringToGuid("{a5b1037e-2f54-4609-b6dd-70cd47bd222b}");
 using WideString = std::basic_string<wchar_t>;
+//TODO: determine MaxMenuWidth depending on max Far Manager window width
+intptr_t const MaxMenuWidth = 120;
 
 WideString ToString(std::string const& str, UINT codePage = CP_ACP)
 {
@@ -496,10 +499,10 @@ int Menu(const wchar_t *title,MenuList& lst,int sel,int flags=MF_LABELS,const vo
         {
           strcpy(buf, "  ");
         }
-        strcat(buf,lst[i].item.Substr(0,120));
+        strcat(buf,lst[i].item.Substr(0, MaxMenuWidth));
       }else
       {
-        strcpy(buf,lst[i].item.Substr(0,120));
+        strcpy(buf,lst[i].item.Substr(0, MaxMenuWidth));
       }
       menuTexts.push_back(ToString(buf));
       menu[i].Text = menuTexts.back().c_str();
@@ -545,7 +548,7 @@ int Menu(const wchar_t *title,MenuList& lst,int sel,int flags=MF_LABELS,const vo
       std::list<WideString> menuTexts;
       for (auto const& i : idx)
       {
-        menuTexts.push_back(ToString(i.second->item.Substr(0, 120).Str()));
+        menuTexts.push_back(ToString(i.second->item.Substr(0, MaxMenuWidth).Str()));
         menu[j++] = { MIF_NONE, menuTexts.back().c_str(), {}, i.second->data };
       }
       if (j > 0)
@@ -850,7 +853,6 @@ String TrimFilename(const String& file,int maxlength)
 
 static TagInfo* TagsMenu(PTagArray pta)
 {
-  EditorInfo ei = GetCurrentEditorInfo();
   MenuList sm;
   String s;
   TagArray& ta=*pta;
@@ -863,7 +865,7 @@ static TagInfo* TagsMenu(PTagArray pta)
     if(ti->info.Length()>maxinfo)maxinfo=ti->info.Length();
     //if(ti->file.Length()>maxfile)
   }
-  int maxfile=ei.WindowSizeX-8-maxid-maxinfo-1-1-1;
+  int maxfile=std::min(GetCurrentEditorInfo().WindowSizeX, MaxMenuWidth)-8-maxid-maxinfo-1-1-1;
   for(i=0;i<ta.Count();i++)
   {
     TagInfo *ti=ta[i];
