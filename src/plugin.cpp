@@ -738,7 +738,8 @@ static void NavigateTo(TagInfo* info)
     UndoArray.Push(ui);
   }
 
-  const char* file=info->file.Str();
+  String file=info->file.Str();
+  file.Replace('/', '\\');
   int havere=info->re.Length()>0;
   RegExp& re = RegexInstance;
   if(havere)re.Compile(info->re);
@@ -793,7 +794,7 @@ static void NavigateTo(TagInfo* info)
       }
     }
     fclose(f);
-    I.Editor(ToString(file).c_str(), L"", 0, 0, -1, -1, EF_NONMODAL, line + 1, 1, CP_DEFAULT);
+    I.Editor(ToString(file.Str()).c_str(), L"", 0, 0, -1, -1, EF_NONMODAL, line + 1, 1, CP_DEFAULT);
     return;
   }
   EditorSetPosition esp = {sizeof(EditorSetPosition)};
