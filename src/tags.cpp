@@ -441,8 +441,7 @@ void LoadIndex(TagFileInfo* fi)
   int sz;
   if(ReadSignature(f))
   {
-    char separator = 0;
-    fread(&separator, 1, 1, f);
+    fseek(f, 1, SEEK_CUR);
   }
   fread(&sz,4,1,f);
   fi->offsets.Clean();
@@ -896,6 +895,11 @@ void FindClass(TagFileInfo* fi,const char* str,PTagArray ta)
 static void CheckFiles(std::string const& projectRoot, TagFileInfo* fi,StrList& dst)
 {
   FILE *g=fopen(fi->indexFile,"rb");
+  if (ReadSignature(g))
+  {
+    fseek(g, 1, SEEK_CUR);
+  }
+
   int sz;
   fread(&sz,4,1,g);
   fseek(g,sz*4*2,SEEK_CUR);
