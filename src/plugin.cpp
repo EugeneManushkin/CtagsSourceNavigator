@@ -435,7 +435,7 @@ static void LoadConfig()
   }
 }
 
-static bool SaveConfig()
+static bool SaveConfig(Config const& config)
 {
   try
   {
@@ -443,11 +443,17 @@ static bool SaveConfig()
     file.exceptions(std::ifstream::failbit | std::ifstream::badbit);
     file.open(ToStdString(GetConfigFilePath()));
     std::shared_ptr<void> fileCloser(0, [&](void*) { file.close(); });
-    file << "pathtoexe=" << config.exe << std::endl;
+    if (config.exe.Length() > 0)
+    {
+      file << "pathtoexe=" << config.exe << std::endl;
+    }
     file << "commandline=" << config.opt << std::endl;
     file << "autoload=" << config.autoload << std::endl;
     file << "casesensfilt=" << (config.casesens ? "true" : "false") << std::endl;
-    file << "wordchars=" << config.wordchars << std::endl;
+    if (config.wordchars.Length() > 0)
+    {
+      file << "wordchars=" << config.wordchars << std::endl;
+    }
   }
   catch(std::exception const&)
   {
@@ -1188,6 +1194,8 @@ void InitDialogItems(struct InitDialogItem *Init,struct FarDialogItem *Item,
 
 //TODO: rework
 HANDLE ConfigureDialog = 0;
+//TODO: rework
+Config TempConfig;
 
 WideString get_text(unsigned ctrl_id) {
   FarDialogItemData item = { sizeof(FarDialogItemData) };
@@ -1208,13 +1216,13 @@ intptr_t WINAPI ConfigureDlgProc(
   {
     String* dest = 0;
     if (Param1 == 2)
-      dest = &config.exe;
+      dest = &TempConfig.exe;
     if (Param1 == 4)
-      dest = &config.opt;
+      dest = &TempConfig.opt;
     if (Param1 == 6)
-      dest = &config.autoload;
+      dest = &TempConfig.autoload;
     if (Param1 == 8)
-      dest = &config.wordchars;
+      dest = &TempConfig.wordchars;
 
     if (dest)
       *dest = ToStdString(get_text(Param1)).c_str();
@@ -1222,7 +1230,7 @@ intptr_t WINAPI ConfigureDlgProc(
 
   if (Msg == DN_BTNCLICK && Param1 == 9)
   {
-    config.casesens = !!Param2;
+    TempConfig.casesens = !!Param2;
   }
 
   return I.DefDlgProc(hDlg, Msg, Param1, Param2);
@@ -1254,6 +1262,7 @@ intptr_t WINAPI ConfigureW(const struct ConfigureInfo *Info)
 
   struct FarDialogItem DialogItems[sizeof(InitItems)/sizeof(InitItems[0])];
   InitDialogItems(InitItems,DialogItems,sizeof(InitItems)/sizeof(InitItems[0]));
+  TempConfig = config;
   auto handle = I.DialogInit(
                &PluginGuid,
                &InteractiveDialogGuid,
@@ -1276,7 +1285,7 @@ intptr_t WINAPI ConfigureW(const struct ConfigureInfo *Info)
   std::shared_ptr<void> handleHolder(handle, [](void* h){I.DialogFree(h);});
   auto ExitCode = I.DialogRun(handle);
   if(ExitCode!=11)return FALSE;
-  if (SaveConfig())
+  if (SaveConfig(TempConfig))
     LoadConfig();
 
   return TRUE;
