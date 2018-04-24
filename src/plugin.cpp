@@ -279,7 +279,12 @@ int TagCurrentDir(std::string& errorMessage)
 {
   try
   {
-    ExecuteScript(ToString(ExpandEnvString(config.exe.Str())), ToString(config.opt.Str()), GetPanelDir());
+    WideString selected = GetCurFile();
+    WideString workingDirectory = selected == L".." ? GetPanelDir() : JoinPath(GetPanelDir(), selected);
+    if (!(GetFileAttributesW(workingDirectory.c_str()) & FILE_ATTRIBUTE_DIRECTORY))
+      throw std::runtime_error("Selected item is not a direcory");
+
+    ExecuteScript(ToString(ExpandEnvString(config.exe.Str())), ToString(config.opt.Str()), workingDirectory);
   }
   catch(std::exception const& e)
   {
@@ -924,8 +929,6 @@ static TagInfo* TagsMenu(PTagArray pta)
     TagInfo *ti=ta[i];
     std::string info = ti->info.Substr(0, maxinfo);
     s.Sprintf("%c:%s%*s %s%*s %s",ti->type,ti->name.Str(),maxid-ti->name.Length(),"",
-
-
       info.c_str(),maxinfo-info.length(),"",
       TrimFilename(ti->file,maxfile).Str()
     );
