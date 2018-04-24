@@ -1090,80 +1090,17 @@ PTagArray FindClassSymbols(const char* file,const char* classname)
 
 void Autoload(const char* fn)
 {
-  String dir;
-  if(fn)
-  {
-    dir=fn;
-    int bs=dir.RIndex("\\");
-    dir.Delete(bs);
-  }
-  else
-  {
-    char buf[512];
-    GetCurrentDirectory(sizeof(buf),buf);
-    dir=buf;
-  }
-  dir+="\\.tags-autoload";
-  dir.ToLower();
+  String dir = fn;
   //DebugBreak();
   StrList sl;
-  int isenv=0;
-  bool mainaload=false;
-  for(;;)
+  if(GetFileAttributes(dir)!=0xFFFFFFFF)
   {
-    if(GetFileAttributes(dir)!=0xFFFFFFFF)
+    sl.LoadFromFile(dir);
+    for(int i=0;i<sl.Count();i++)
     {
-      sl.LoadFromFile(dir);
-      for(int i=0;i<sl.Count();i++)
-      {
-        String fn=sl[i];
-        if(fn.Length()==0)continue;
-        if(!(fn[0]=='\\' || fn[1]==':'))
-        {
-          int i=dir.RIndex("\\");
-          if(i!=-1)
-          {
-            fn.Insert(0,dir.Substr(0,i+1));
-          }
-        }
-        int z=dir.RIndex("\\");
-        if(z==-1)z=dir.RIndex(":");
-        Load(fn,isenv && z!=-1?"":dir.Substr(0,z+1),mainaload);
-      }
-    }
-    if(!isenv)
-    {
-      int bs=dir.RIndex("\\");
-      if(bs!=-1)
-      {
-        dir.Delete(bs);
-        bs=dir.RIndex("\\");
-        if(bs!=-1)
-        {
-          dir.Delete(bs+1);
-          dir+=".tags-autoload";
-        }else
-        {
-          isenv=1;
-        }
-      }else
-      {
-        isenv=1;
-      }
-      if(isenv==1)
-      {
-        if(config.autoload.Length()!=0)
-        {
-          dir=config.autoload;
-          mainaload=true;
-        }else
-        {
-          break;
-        }
-      }
-    }else
-    {
-      break;
+      String fn=sl[i];
+      if(fn.Length()==0 || !IsFullPath(fn, fn.Length()))continue;
+      Load(fn, "", true);
     }
   }
 }

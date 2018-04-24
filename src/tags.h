@@ -70,6 +70,7 @@ struct Config{
   String autoload;
   String wordchars;
   bool casesens;
+  bool autoload_changed;
 };
 
 extern Config config;

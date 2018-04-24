@@ -240,6 +240,17 @@ WideString GetCurFile(HANDLE hPanel = PANEL_ACTIVE)
   return item->Item->FileName;
 }
 
+static std::string ExpandEnvString(std::string const& str)
+{
+  auto sz = ::ExpandEnvironmentStringsA(str.c_str(), nullptr, 0);
+  if (!sz)
+    return std::string();
+
+  std::vector<char> buffer(sz);
+  ::ExpandEnvironmentStringsA(str.c_str(), &buffer[0], sz);
+  return std::string(buffer.begin(), buffer.end());
+}
+
 void ExecuteScript(WideString const& script, WideString const& args, WideString workingDirectory)
 {
   SHELLEXECUTEINFOW ShExecInfo = {};
@@ -268,7 +279,7 @@ int TagCurrentDir(std::string& errorMessage)
 {
   try
   {
-    ExecuteScript(ToString(config.exe.Str()), ToString(config.opt.Str()), GetPanelDir());
+    ExecuteScript(ToString(ExpandEnvString(config.exe.Str())), ToString(config.opt.Str()), GetPanelDir());
   }
   catch(std::exception const& e)
   {
@@ -326,7 +337,7 @@ static bool UpdateTagsFile(const char* file)
   WideString arguments = ToString(opt.Str()) + L" -f " + updateFile + L" -L " + changesFile;
   try
   {
-    ExecuteScript(ToString(config.exe.Str()), arguments, GetPanelDir());
+    ExecuteScript(ToString(ExpandEnvString(config.exe.Str())), arguments, GetPanelDir());
   }
   catch(std::exception const&)
   {
@@ -353,7 +364,7 @@ static void SetDefaultConfig()
 {
   config.exe = "ctags.exe";
   config.opt = "--c++-types=+px --c-types=+px --fields=+n -R *";
-  config.autoload = "";
+  config.autoload = "%USERPROFILE%\\.tags-autoload";
   config.casesens = true;
   SetWordchars("0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz~$_");
 }
@@ -399,6 +410,7 @@ static FarKey ToFarKey(WORD virtualKey)
 static void LoadConfig()
 {
   SetDefaultConfig();
+  config.autoload_changed = true;
   std::ifstream file;
   file.exceptions(std::ifstream::goodbit);
   file.open(ToStdString(GetConfigFilePath()));
@@ -462,6 +474,16 @@ static bool SaveConfig(Config const& config)
   }
 
   return true;
+}
+
+static void LazyAutoload()
+{
+  if (config.autoload_changed)
+  {
+    Autoload(ExpandEnvString(config.autoload.Str()).c_str());
+  }
+
+  config.autoload_changed = false;
 }
 
 struct MI{
@@ -753,7 +775,7 @@ static void NavigateTo(TagInfo* info)
     I.Editor(ToString(file).c_str(), L"", 0, 0, -1, -1, EF_NONMODAL, line + 1, 1, CP_DEFAULT);
     return;
   }
-  EditorSetPosition esp;
+  EditorSetPosition esp = {sizeof(EditorSetPosition)};
   ei = GetCurrentEditorInfo();
 
   esp.CurPos=-1;
@@ -903,7 +925,7 @@ HANDLE WINAPI OpenW(const struct OpenInfo *info)
     //DebugBreak();
     auto ei = GetCurrentEditorInfo();
     std::string fileName = GetFileNameFromEditor(ei.EditorID); // TODO: auto
-    Autoload(fileName.c_str());
+    LazyAutoload();
     if(Count()==0)
     {
       Msg(MENotLoaded);
