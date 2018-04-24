@@ -62,6 +62,9 @@ enum{
   MWordChars,
   MCaseSensFilt,
   MNotFoundAsk,
+  MAddTagsToAutoload,
+  MFailedSaveAutoload,
+  MNotTagFile,
 };
 
 struct Config{
@@ -111,4 +114,5 @@ void Autoload(const char* fn);
 void GetFiles(StrList& dst);
 int SaveChangedFiles(const char* file, const char* outputFilename);
 int MergeFiles(const char* target,const char* mfile);
+bool IsTagFile(const char* file);
 #endif

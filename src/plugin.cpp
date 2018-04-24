@@ -225,7 +225,7 @@ WideString GetPanelDir(HANDLE hPanel = PANEL_ACTIVE)
 
 WideString GetCurFile(HANDLE hPanel = PANEL_ACTIVE)
 {
-  PanelInfo pi;
+  PanelInfo pi = {sizeof(PanelInfo)};
   I.PanelControl(hPanel, FCTL_GETPANELINFO, 0, &pi);
   size_t sz = I.PanelControl(hPanel, FCTL_GETPANELITEM, pi.CurrentItem, nullptr);
   if (!sz)
@@ -484,6 +484,27 @@ static void LazyAutoload()
   }
 
   config.autoload_changed = false;
+}
+
+static int AddToAutoload(std::string const& fname)
+{
+  if (!IsTagFile(fname.c_str()))
+    return MNotTagFile;
+
+  auto autoloadFilename = ExpandEnvString(config.autoload.Str());
+  StrList sl;
+  sl.LoadFromFile(autoloadFilename.c_str());
+  for (int i = 0; i<sl.Count(); i++)
+  {
+    if (!fname.compare(sl[i].Str()))
+      return 0;
+  }
+  sl.Insert(fname.c_str());
+  if (!sl.SaveToFile(autoloadFilename.c_str()))
+    return MFailedSaveAutoload;
+
+  config.autoload_changed = true;
+  return 0;
 }
 
 struct MI{
@@ -1071,11 +1092,12 @@ HANDLE WINAPI OpenW(const struct OpenInfo *info)
     {
       MenuList ml;
       enum {miLoadTagsFile,miUnloadTagsFile,
-            miUpdateTagsFile,miCreateTagsFile};
-      ml<<MI(MLoadTagsFile,miLoadTagsFile)
-        <<MI(MUnloadTagsFile,miUnloadTagsFile)
-        <<MI(MCreateTagsFile,miCreateTagsFile)
-        <<MI(MUpdateTagsFile,miUpdateTagsFile);
+            miUpdateTagsFile,miCreateTagsFile,miAddTagsToAutoload};
+      ml << MI(MLoadTagsFile, miLoadTagsFile)
+        << MI(MUnloadTagsFile, miUnloadTagsFile)
+        << MI(MCreateTagsFile, miCreateTagsFile)
+        << MI(MUpdateTagsFile, miUpdateTagsFile)
+        << MI(MAddTagsToAutoload, miAddTagsToAutoload);
       int rc=Menu(GetMsg(MPlugin),ml,0);
       switch(rc)
       {
@@ -1124,6 +1146,14 @@ HANDLE WINAPI OpenW(const struct OpenInfo *info)
             return nullptr;
           }
           I.RestoreScreen(hScreen);
+        }break;
+        case miAddTagsToAutoload:
+        {
+          auto err = AddToAutoload(ToStdString(JoinPath(GetPanelDir(), GetCurFile())));
+          if (err)
+          {
+            Msg(err);
+          }
         }break;
       }
     }

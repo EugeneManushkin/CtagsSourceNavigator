@@ -36,3 +36,6 @@
 "&Word chars"
 "Case &Sensitive filter"
 "Symbol not found. Goto last known position?"
+"Add tag file to autoload"
+"Failed to save autoload list to file: "
+"Invalid tag file format"

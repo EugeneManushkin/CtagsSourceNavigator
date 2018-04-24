@@ -1253,3 +1253,16 @@ int SaveChangedFiles(const char* file, const char* outputFilename)
   if(!CheckChangedFiles(filename,sl))return 0;
   return sl.SaveToFile(outputFilename);
 }
+
+bool IsTagFile(const char* file)
+{
+  FILE *f = fopen(file, "rt");
+  if (!f)
+    return false;
+
+  std::string const pattern("!_TAG_FILE_FORMAT");
+  char strbuf[256];
+  char *result = fgets(strbuf, sizeof(strbuf), f);
+  fclose(f);
+  return result && !pattern.compare(0, std::string::npos, result, pattern.length());
+};
