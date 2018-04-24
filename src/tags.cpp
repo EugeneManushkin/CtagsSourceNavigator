@@ -59,6 +59,44 @@ struct TagFileInfo{
 
 Vector<TagFileInfo*> files;
 
+static bool IsPathSeparator(std::string::value_type c)
+{
+  return c == '/' || c == '\\';
+}
+
+static std::string JoinPath(std::string const& dirPath, std::string const& name)
+{
+  return dirPath.empty() || IsPathSeparator(dirPath.back()) ? dirPath + name : dirPath + std::string("\\") + name;
+}
+
+static bool IsFullPath(char const* fn, unsigned short fsz)
+{
+  return fsz > 1 && fn[1] == ':';
+}
+
+static char GetPathSeparator(char const* str)
+{
+  static char const defaultPathSeparator = '\\';
+  while (*str && *str != '\t' && !IsPathSeparator(*str))
+    ++str;
+
+  return IsPathSeparator(*str) ? *str : defaultPathSeparator;
+}
+
+char const IndexFileSignature[] = "tags.idx";
+
+static bool ReadSignature(FILE* f)
+{
+  char signature[sizeof(IndexFileSignature)];
+  if (fread(signature, 1, sizeof(IndexFileSignature), f) != sizeof(IndexFileSignature) || memcmp(signature, IndexFileSignature, sizeof(IndexFileSignature)))
+  {
+    fseek(f, 0, SEEK_SET);
+    return false;
+  }
+
+  return true;
+}
+
 static void SetStr(String& s,const char* buf,SMatch& m)
 {
   s.Set(buf,m.start,m.end-m.start);
@@ -276,6 +314,7 @@ static int CreateIndex(TagFileInfo* fi)
 
   pos=ftell(f);
   bool sorted=true;
+  char pathSeparator = 0;
   while(GetLine(strbuf, buffer, f))
   {
     if(strbuf[0]=='!')
@@ -297,6 +336,7 @@ static int CreateIndex(TagFileInfo* fi)
     //strdup(strbuf);
     li->pos=pos;
     li->fn=strchr(li->line,'\t')+1;
+    pathSeparator = !pathSeparator ? GetPathSeparator(li->fn) : pathSeparator;
     file.Set(li->fn,0,strchr(li->fn,'\t')-li->fn);
     files.Insert(file,1);
     li->cls=strchr(li->line,'\t');
@@ -315,6 +355,7 @@ static int CreateIndex(TagFileInfo* fi)
 //    fi->offsets.Push(pos);
     pos=ftell(f);
   }
+  pathSeparator = !pathSeparator ? '\\' : pathSeparator;
   fclose(f);
   FILE *g=fopen(fi->indexFile,"wb");
   if(!g)
@@ -338,6 +379,8 @@ static int CreateIndex(TagFileInfo* fi)
     fi->offsets[i]=lines[i]->pos;
   }
   int cnt=fi->offsets.Count();
+  fwrite(IndexFileSignature, 1, sizeof(IndexFileSignature), g);
+  fwrite(&pathSeparator, 1, 1, g);
   fwrite(&cnt,4,1,g);
   fwrite(&fi->offsets[0],4,fi->offsets.Count(),g);
   if(lines.Count())
@@ -396,6 +439,11 @@ void LoadIndex(TagFileInfo* fi)
 {
   FILE *f=fopen(fi->indexFile,"rb");
   int sz;
+  if(ReadSignature(f))
+  {
+    char separator = 0;
+    fread(&separator, 1, 1, f);
+  }
   fread(&sz,4,1,f);
   fi->offsets.Clean();
   fi->offsets.Init(sz);
@@ -611,19 +659,30 @@ static void FindInFile(TagFileInfo* fi,const char* str,PTagArray ta)
   fclose(f);
 }
 
-void FindFile(TagFileInfo* fi,const char* str,PTagArray ta)
+void FindFile(TagFileInfo* fi,const char* filename,PTagArray ta)
 {
   FILE *g=fopen(fi->indexFile,"rb");
   if(!g)return;
+  char filePathSeparator = '\\';
+  if (ReadSignature(g))
+  {
+    fread(&filePathSeparator, 1, 1, g);
+  }
+
   int sz;
   fread(&sz,4,1,g);
-  fseek(g,4+sz*4,SEEK_SET);
+  fseek(g,4+sz*4+sizeof(IndexFileSignature)+1,SEEK_SET);
   Vector<int> offsets;
   offsets.Init(sz);
   if(sz)fread(&offsets[0],4,sz,g);
   fclose(g);
   FILE *f=fopen(fi->filename,"rb");
   if(!f)return;
+  String str(filename);
+  char separator = GetPathSeparator(str);
+  if (separator != filePathSeparator)
+    str.Replace(separator, filePathSeparator);
+
   int len=strlen(str);
   int left=0;
   int right=offsets.Count()-1;
@@ -832,21 +891,6 @@ void FindClass(TagFileInfo* fi,const char* str,PTagArray ta)
     }
   }
   fclose(f);
-}
-
-static bool IsPathSeparator(std::string::value_type c)
-{
-  return c == '/' || c == '\\';
-}
-
-static std::string JoinPath(std::string const& dirPath, std::string const& name)
-{
-  return dirPath.empty() || IsPathSeparator(dirPath.back()) ? dirPath + name : dirPath + std::string("\\") + name;
-}
-
-static bool IsFullPath(char const* fn, unsigned short fsz)
-{
-  return fsz > 1 && fn[1] == ':';
 }
 
 static void CheckFiles(std::string const& projectRoot, TagFileInfo* fi,StrList& dst)
