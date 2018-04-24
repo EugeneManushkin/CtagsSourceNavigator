@@ -14,7 +14,7 @@
 #endif
 #define CTAGS_VERSION_MAJOR 2
 #define CTAGS_VERSION_MINOR 1
-#define CTAGS_BUILD 1
+#define CTAGS_BUILD 2
 #define CTAGS_FILENAME "ctags.dll"
 #define CTAGS_PRODUCT_NAME L"Ctags Source Navigator"
 #define CTAGS_FILE_DESCR L"Far Manager plugin that helps browse source code indexed by ctags utility"
