@@ -908,6 +908,8 @@ static TagInfo* TagsMenu(PTagArray pta)
   TagArray& ta=*pta;
   int maxid=0,maxinfo=0;
   int i;
+  const int currentWidth = std::min(GetCurrentEditorInfo().WindowSizeX, MaxMenuWidth);
+  const int maxInfoWidth = currentWidth / 5;
   for(i=0;i<ta.Count();i++)
   {
     TagInfo *ti=ta[i];
@@ -915,12 +917,16 @@ static TagInfo* TagsMenu(PTagArray pta)
     if(ti->info.Length()>maxinfo)maxinfo=ti->info.Length();
     //if(ti->file.Length()>maxfile)
   }
-  int maxfile=std::min(GetCurrentEditorInfo().WindowSizeX, MaxMenuWidth)-8-maxid-maxinfo-1-1-1;
+  maxinfo = std::min(maxinfo, maxInfoWidth);
+  int maxfile=currentWidth-8-maxid-maxinfo-1-1-1;
   for(i=0;i<ta.Count();i++)
   {
     TagInfo *ti=ta[i];
+    std::string info = ti->info.Substr(0, maxinfo);
     s.Sprintf("%c:%s%*s %s%*s %s",ti->type,ti->name.Str(),maxid-ti->name.Length(),"",
-      ti->info.Length()?ti->info.Str():"",maxinfo-ti->info.Length(),"",
+
+
+      info.c_str(),maxinfo-info.length(),"",
       TrimFilename(ti->file,maxfile).Str()
     );
     sm<<MI(s.Str(),i);
