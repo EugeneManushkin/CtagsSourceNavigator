@@ -108,11 +108,11 @@ static void QuoteMeta(String& str)
 {
   static char map[256];
   const char *toquote=".$^*()|+[]{}?";
-  if(!map[(unsigned)toquote[0]])
+  if(!map[(unsigned char)toquote[0]])
   {
     while(*toquote)
     {
-      map[(unsigned)*toquote]=1;
+      map[(unsigned char)*toquote]=1;
       toquote++;
     }
   }
@@ -129,7 +129,7 @@ static void QuoteMeta(String& str)
   if(str[-2]=='$')j=2;
   for(;i<str.Length()-j;i++)
   {
-    if(map[(unsigned)str[i]])
+    if(map[(unsigned char)str[i]])
     {
       dst+='\\';
     }
