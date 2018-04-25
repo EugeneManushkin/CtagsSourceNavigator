@@ -1096,12 +1096,12 @@ HANDLE WINAPI OpenW(const struct OpenInfo *info)
     {
       MenuList ml;
       enum {miLoadTagsFile,miUnloadTagsFile,
-            miUpdateTagsFile,miCreateTagsFile,miAddTagsToAutoload};
+            miCreateTagsFile,miAddTagsToAutoload, miUpdateTagsFile};
       ml << MI(MLoadTagsFile, miLoadTagsFile)
         << MI(MUnloadTagsFile, miUnloadTagsFile)
         << MI(MCreateTagsFile, miCreateTagsFile)
-        << MI(MUpdateTagsFile, miUpdateTagsFile)
         << MI(MAddTagsToAutoload, miAddTagsToAutoload);
+      //TODO: fix UpdateTagsFile operation and include in menu
       int rc=Menu(GetMsg(MPlugin),ml,0);
       switch(rc)
       {
