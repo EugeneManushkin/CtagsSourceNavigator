@@ -22,6 +22,8 @@
 #include <sys/utime.h>
 #include <string>
 #include <string.h>
+#include <vector>
+#include <memory>
 #include <windows.h>
 #include "Hash.hpp"
 #include "String.hpp"
@@ -57,7 +59,8 @@ struct TagFileInfo{
   }
 };
 
-Vector<TagFileInfo*> files;
+using TagFileInfoPtr = std::shared_ptr<TagFileInfo>;
+std::vector<TagFileInfoPtr> files;
 
 static bool IsPathSeparator(std::string::value_type c)
 {
@@ -484,29 +487,46 @@ bool FindIdx(TagFileInfo* fi)
   return false;
 }
 
+//TODO: add check if index file is consistent
+static bool FindAndLoadIndex(TagFileInfo *fi, time_t tagsTimeStamp)
+{
+  struct stat sti;
+  if (fi->indexFile.Length()>0)
+  {
+    if (stat(fi->indexFile, &sti) != -1 && sti.st_mtime == tagsTimeStamp)
+    {
+      LoadIndex(fi);
+      return 1;
+    }
+  }
+  else
+  if (FindIdx(fi))
+  {
+    if (stat(fi->indexFile, &sti) != -1 && sti.st_mtime == tagsTimeStamp)
+    {
+      LoadIndex(fi);
+      return 1;
+    }
+  }
+
+  return false;
+}
+
 int Load(const char* _filename,const char *base,bool mainaload)
 {
   String filename=_filename;
   struct stat st;
   filename.ToLower();
   if(stat(filename,&st)==-1)return MEFailedToOpen;
-  TagFileInfo *fi=NULL;
-  for(int i=0;i<files.Count();i++)
-  {
-    if(files[i]->filename==filename)
-    {
-      fi=files[i];
-      break;
-    }
-  }
+  auto iter = std::find_if(files.begin(), files.end(), [&](TagFileInfoPtr const& file) {return file->filename == filename;});
+  TagFileInfoPtr fi = iter == files.end() ? TagFileInfoPtr() : *iter;
   if(!fi)
   {
-    fi=new TagFileInfo;
+    fi= std::shared_ptr<TagFileInfo>(new TagFileInfo);
     fi->filename=filename;
     fi->modtm=st.st_mtime;
     fi->mainaload=mainaload;
     fi->addToLoadBases(base);
-    files.Push(fi);
   }else
   {
     fi->addToLoadBases(base);
@@ -515,70 +535,20 @@ int Load(const char* _filename,const char *base,bool mainaload)
       return 1;
     }
   }
-  struct stat sti;
-  if(fi->indexFile.Length()>0)
+  if (!FindAndLoadIndex(fi.get(), st.st_mtime))
   {
-    if(stat(fi->indexFile,&sti)!=-1 && sti.st_mtime==st.st_mtime)
+    fi->indexFile = fi->filename;
+    fi->indexFile += ".idx";
+    fi->modtm = st.st_mtime;
+    remove(fi->indexFile);
+    if (!CreateIndex(fi.get()))
     {
-      LoadIndex(fi);
-      return 1;
-    }
-  }else
-  if(FindIdx(fi))
-  {
-    if(stat(fi->indexFile,&sti)!=-1 && sti.st_mtime==st.st_mtime)
-    {
-      LoadIndex(fi);
-      return 1;
+      remove(fi->indexFile);
+      return MFailedToWriteIndex;
     }
   }
-  if(fi->indexFile.Length()==0)
-  {
-    for(;;)
-    {
-      fi->indexFile=fi->filename;
-      fi->indexFile+=".idx";
-      FILE *f=fopen(fi->indexFile,"wb");
-      if(f)
-      {
-        fclose(f);
-        remove(fi->indexFile);
-        break;
-      }
-      char idxdir[512];
-      const char *dirs[]={"TAGS_INDEX","TEMP","TMP",NULL};
-      const char **dir=dirs;
-      for(;*dir;dir++)
-      {
-        if(GetEnvironmentVariable(*dir,idxdir,sizeof(idxdir)))
-        {
-          fi->indexFile=fi->filename+".idx";
-          fi->indexFile.Replace('\\','_');
-          fi->indexFile.Replace(':','_');
-          if(idxdir[strlen(idxdir)-1]!='\\')
-          {
-            fi->indexFile.Insert(0,"\\");
-          }
-          fi->indexFile.Insert(0,idxdir);
-          f=fopen(fi->indexFile,"wb");
-          if(f)
-          {
-            fclose(f);
-            remove(fi->indexFile);
-            break;
-          }
-          fi->indexFile="";
-        }
-      }
-      break;
-    }
-  }
-  if(fi->indexFile.Length()==0)
-  {
-    return MFailedToWriteIndex;
-  }
-  fi->modtm=st.st_mtime;
-  CreateIndex(fi);
+
+  files.push_back(fi);
   return 0;
 }
 
@@ -937,7 +907,7 @@ int CheckChangedFiles(const char* filename,StrList& dst)
 {
   String file=filename;
   file.ToLower();
-  for(int i=0;i<files.Count();i++)
+  for(int i=0;i<files.size();i++)
   {
     if(files[i]->filename==file && files[i]->indexFile.Length())
     {
@@ -945,7 +915,7 @@ int CheckChangedFiles(const char* filename,StrList& dst)
       if(stat(file,&stf)==-1)return 0;
       if(stat(files[i]->indexFile,&sti)==-1)return 0;
       if(stf.st_mtime!=sti.st_mtime)return 0;
-      CheckFiles(GetDirOfFile(filename), files[i],dst);
+      CheckFiles(GetDirOfFile(filename), files[i].get(),dst);
       return 1;
     }
   }
@@ -957,12 +927,12 @@ PTagArray Find(const char* symbol,const char* file)
   PTagArray ta=new TagArray;
   String filename=file;
   filename.ToLower();
-  for(int i=0;i<files.Count();i++)
+  for(int i=0;i<files.size();i++)
   {
     if(files[i]->mainaload ||
        files[i]->isLoadBase(filename))
     {
-      FindInFile(files[i],symbol,ta);
+      FindInFile(files[i].get(),symbol,ta);
     }
   }
   if(ta->Count()==0)
@@ -1061,12 +1031,12 @@ void FindParts(const char* file, const char* part,StrList& dst)
   dst.Clean();
   StrList tmp;
   int i;
-  for(i=0;i<files.Count();i++)
+  for(i=0;i<files.size();i++)
   {
     if(files[i]->mainaload ||
        files[i]->isLoadBase(filename))
     {
-      FindPartsInFile(files[i],part,tmp);
+      FindPartsInFile(files[i].get(),part,tmp);
     }
   }
   if(tmp.Count()==0)return;
@@ -1092,7 +1062,7 @@ PTagArray FindFileSymbols(const char* file)
   String filename=file;
   filename.ToLower();
   PTagArray ta=new TagArray;
-  for(int i=0;i<files.Count();i++)
+  for(int i=0;i<files.size();i++)
   {
     if(files[i]->mainaload ||
        files[i]->isLoadBase(filename))
@@ -1102,8 +1072,8 @@ PTagArray FindFileSymbols(const char* file)
       while(filename[j-1]!='\\')j--;
       if(files[i]->filename.Index("\\",j)==-1)
       {
-        FindFile(files[i],filename.Substr(j),ta);
-        FindFile(files[i],filename,ta);
+        FindFile(files[i].get(),filename.Substr(j),ta);
+        FindFile(files[i].get(),filename,ta);
       }
     }
   }
@@ -1120,12 +1090,12 @@ PTagArray FindClassSymbols(const char* file,const char* classname)
   PTagArray ta=new TagArray;
   String filename=file;
   filename.ToLower();
-  for(int i=0;i<files.Count();i++)
+  for(int i=0;i<files.size();i++)
   {
     if(files[i]->mainaload ||
        files[i]->isLoadBase(filename))
     {
-      FindClass(files[i],classname,ta);
+      FindClass(files[i].get(),classname,ta);
     }
   }
   if(ta->Count()==0)
@@ -1156,7 +1126,7 @@ void Autoload(const char* fn)
 int Count()
 {
   int cnt=0;
-  for(int i=0;i<files.Count();i++)
+  for(int i=0;i<files.size();i++)
   {
     cnt+=files[i]->offsets.Count();
   }
@@ -1165,7 +1135,7 @@ int Count()
 
 void GetFiles(StrList& dst)
 {
-  for(int i=0;i<files.Count();i++)
+  for(int i=0;i<files.size();i++)
   {
     dst<<files[i]->filename;
   }
@@ -1175,15 +1145,10 @@ void UnloadTags(int idx)
 {
   if(idx==-1)
   {
-    for(int i=0;i<files.Count();i++)
-    {
-      delete files[i];
-    }
-    files.Clean();
+    files.clear();
   }else
   {
-    delete files[idx];
-    files.Delete(idx);
+    files.erase(files.begin() + idx);
   }
 }
 
@@ -1279,11 +1244,11 @@ int SaveChangedFiles(const char* file, const char* outputFilename)
   int i;
   String filename=file;
   filename.ToLower();
-  for(i=0;i<files.Count();i++)
+  for(i=0;i<files.size();i++)
   {
     if(files[i]->filename==filename)
     {
-      fi=files[i];
+      fi=files[i].get();
       break;
     }
   }
