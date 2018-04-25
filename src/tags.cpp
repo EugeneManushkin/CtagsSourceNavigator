@@ -1132,6 +1132,15 @@ int Count()
   }
   return cnt;
 }
+//TODO: refactor duplicated code
+int Count(char const* fname)
+{
+  String filename = fname;
+  filename.ToLower();
+  auto iter = std::find_if(files.begin(), files.end(), [&](TagFileInfoPtr const& file) {return file->filename == filename; });
+  TagFileInfoPtr fi = iter == files.end() ? TagFileInfoPtr() : *iter;
+  return iter == files.end() ? 0 : (*iter)->offsets.Count();
+}
 
 void GetFiles(StrList& dst)
 {

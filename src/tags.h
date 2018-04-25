@@ -107,6 +107,7 @@ int Load(const char* filename,const char* base,bool mainaload=false);
 void UnloadTags(int idx);
 PTagArray Find(const char* symbol,const char* filename);
 int Count();
+int Count(char const* fname);
 void FindParts(const char* file,const char* part,StrList& dst);
 PTagArray FindFileSymbols(const char* file);
 PTagArray FindClassSymbols(const char* file,const char* classname);

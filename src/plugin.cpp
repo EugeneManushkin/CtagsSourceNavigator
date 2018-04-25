@@ -163,19 +163,11 @@ int Msg(wchar_t const* err)
   I.Message(&PluginGuid, &ErrorMessageGuid, FMSG_WARNING | FMSG_ALLINONE, nullptr, reinterpret_cast<const wchar_t* const*>(msg.c_str()), 0, 1);
   return 0;
 }
-int Msg2(char* header,char* err)
+
+void InfoMessage(WideString const& str)
 {
-  WideString msg;
-  if(!err || !header)
-  {
-    msg = L"Wrong argument!\n";
-  }
-  else
-  {
-    msg = ToString(header) + L"\n" + ToString(err);
-  }
-  I.Message(&PluginGuid, &ErrorMessageGuid, FMSG_WARNING | FMSG_ALLINONE, nullptr, reinterpret_cast<const wchar_t* const*>(msg.c_str()), 0, 1);
-  return 0;
+  WideString msg = WideString(APPNAME) + L"\n" + str;
+  I.Message(&PluginGuid, &ErrorMessageGuid, FMSG_MB_OK | FMSG_ALLINONE, nullptr, reinterpret_cast<const wchar_t* const*>(msg.c_str()), 0, 1);
 }
 
 static const wchar_t*
@@ -1193,15 +1185,14 @@ HANDLE WINAPI OpenW(const struct OpenInfo *info)
     }
     if(!tagfile.empty())
     {
-      int rc=Load(ToStdString(tagfile).c_str(),"",true);
+      auto strTagFile = ToStdString(tagfile);
+      int rc=Load(strTagFile.c_str(),"",true);
       if(rc>1)
       {
         Msg(GetMsg(rc));
         return nullptr;
       }
-      String msg;
-      msg.Sprintf("%s:%d",GetMsg(MLoadOk),Count());
-      Msg(ToString(msg.Str()).c_str());
+      InfoMessage(GetMsg(MLoadOk) + WideString(L":") + std::to_wstring(Count(strTagFile.c_str())));
     }
   }
   return nullptr;
