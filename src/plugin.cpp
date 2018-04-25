@@ -56,8 +56,6 @@ static const wchar_t* APPNAME = CTAGS_PRODUCT_NAME;
 
 static const wchar_t* ConfigFileName=L"config";
 
-static String tagfile;
-
 static String targetFile;
 
 RegExp RegexInstance;
@@ -275,16 +273,20 @@ void ExecuteScript(WideString const& script, WideString const& args, WideString 
     throw std::runtime_error("External utility failed with code " + std::to_string(exitCode));
 }
 
-int TagCurrentDir(std::string& errorMessage)
+static WideString GetSelectedDirectory()
+{
+  WideString selected = GetCurFile();
+  return selected == L".." ? GetPanelDir() : JoinPath(GetPanelDir(), selected);
+}
+
+int TagDirectory(WideString const& dir, std::string& errorMessage)
 {
   try
   {
-    WideString selected = GetCurFile();
-    WideString workingDirectory = selected == L".." ? GetPanelDir() : JoinPath(GetPanelDir(), selected);
-    if (!(GetFileAttributesW(workingDirectory.c_str()) & FILE_ATTRIBUTE_DIRECTORY))
+    if (!(GetFileAttributesW(dir.c_str()) & FILE_ATTRIBUTE_DIRECTORY))
       throw std::runtime_error("Selected item is not a direcory");
 
-    ExecuteScript(ToString(ExpandEnvString(config.exe.Str())), ToString(config.opt.Str()), workingDirectory);
+    ExecuteScript(ToString(ExpandEnvString(config.exe.Str())), ToString(config.opt.Str()), dir);
   }
   catch(std::exception const& e)
   {
@@ -1097,7 +1099,7 @@ HANDLE WINAPI OpenW(const struct OpenInfo *info)
   }
   else
   {
-    int load=OpenFrom==OPEN_COMMANDLINE;
+    WideString tagfile;
     if(OpenFrom==OPEN_PLUGINSMENU)
     {
       MenuList ml;
@@ -1113,7 +1115,7 @@ HANDLE WINAPI OpenW(const struct OpenInfo *info)
       {
         case miLoadTagsFile:
         {
-          load=1;
+          tagfile = JoinPath(GetPanelDir(), GetCurFile());
         }break;
         case miUnloadTagsFile:
         {
@@ -1131,15 +1133,20 @@ HANDLE WINAPI OpenW(const struct OpenInfo *info)
         }break;
         case miCreateTagsFile:
         {
+          WideString selectedDir = GetSelectedDirectory();
           HANDLE hScreen=I.SaveScreen(0,0,-1,-1);
           WideString msg = WideString(GetMsg(MPlugin)) + L"\n" + GetMsg(MTagingCurrentDirectory);
           I.Message(&PluginGuid, &InfoMessageGuid, FMSG_LEFTALIGN | FMSG_ALLINONE, nullptr, reinterpret_cast<const wchar_t* const*>(msg.c_str()), 0, 0);
           std::string errorMessage;
-          int rc=TagCurrentDir(errorMessage);
+          int rc= TagDirectory(selectedDir, errorMessage);
           I.RestoreScreen(hScreen);
           if (!rc)
           {
             Msg(ToString(errorMessage).c_str());
+          }
+          else
+          {
+            tagfile = JoinPath(selectedDir, L"tags");
           }
         }break;
         case miUpdateTagsFile:
@@ -1167,30 +1174,26 @@ HANDLE WINAPI OpenW(const struct OpenInfo *info)
         }break;
       }
     }
-    if(load)
+    if (OpenFrom == OPEN_COMMANDLINE)
     {
-      //DebugBreak();
-      if(OpenFrom==OPEN_PLUGINSMENU)
+      OpenCommandLineInfo const* cmdInfo = reinterpret_cast<OpenCommandLineInfo const*>(info->Data);
+      WideString cmd(cmdInfo->CommandLine);
+      if (cmd[1] == ':')
       {
-        tagfile = ToStdString(JoinPath(GetPanelDir(), GetCurFile())).c_str();
-      }else
-      if(OpenFrom==OPEN_COMMANDLINE)
-      {
-        OpenCommandLineInfo const* cmdInfo = reinterpret_cast<OpenCommandLineInfo const*>(info->Data);
-        WideString cmd(cmdInfo->CommandLine);
-        if(cmd[1]==':')
-        {
-          tagfile=ToStdString(cmd).c_str();
-        }else
-        {
-          if(cmd[0]=='\\')
-          {
-            cmd = cmd.substr(1);
-          }
-          tagfile = ToStdString(JoinPath(GetPanelDir(), cmd)).c_str();
-        }
+        tagfile = cmd;
       }
-      int rc=Load(tagfile,"",true);
+      else
+      {
+        if (cmd[0] == '\\')
+        {
+          cmd = cmd.substr(1);
+        }
+        tagfile = JoinPath(GetPanelDir(), cmd);
+      }
+    }
+    if(!tagfile.empty())
+    {
+      int rc=Load(ToStdString(tagfile).c_str(),"",true);
       if(rc>1)
       {
         Msg(GetMsg(rc));
