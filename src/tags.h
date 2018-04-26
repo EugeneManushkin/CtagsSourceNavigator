@@ -22,6 +22,8 @@
 #include "RegExp.hpp"
 #include "Array.hpp"
 #include "XTools.hpp"
+#include <string>
+#include <bitset>
 
 using namespace XClasses;
 
@@ -68,12 +70,19 @@ enum{
 };
 
 struct Config{
+  Config();
+  void SetWordchars(std::string const& str);
+  std::string GetWordchars() const;
+  bool Config::isident(int chr) const;
   String exe;
   String opt;
   String autoload;
-  String wordchars;
   bool casesens;
   bool autoload_changed;
+
+private:
+  String wordchars;
+  std::bitset<256> wordCharsMap;
 };
 
 extern Config config;

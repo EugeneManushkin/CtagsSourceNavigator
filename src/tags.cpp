@@ -30,6 +30,36 @@
 #include "Array.hpp"
 #include "tags.h"
 
+Config::Config()
+  : exe("ctags.exe")
+  , opt("--c++-types=+px --c-types=+px --fields=+n -R *")
+  , autoload("%USERPROFILE%\\.tags-autoload")
+  , casesens(true)
+  , autoload_changed(true)
+{
+  SetWordchars("0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz~$_");
+}
+
+void Config::SetWordchars(std::string const& str)
+{
+  wordchars = str.c_str();
+  wordCharsMap.reset();
+  for (auto c : str)
+  {
+    wordCharsMap.set((unsigned char)c, true);
+  }
+}
+
+std::string Config::GetWordchars() const
+{
+  return wordchars.Str();
+}
+
+bool Config::isident(int chr) const
+{
+  return wordCharsMap[(unsigned char)chr];
+}
+
 struct TagFileInfo{
   String filename;
   String indexFile;

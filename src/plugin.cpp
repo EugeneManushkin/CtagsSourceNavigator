@@ -60,8 +60,6 @@ static String targetFile;
 
 RegExp RegexInstance;
 
-static char wordChars[256]={0,};
-
 Config config;
 
 struct SUndoInfo{
@@ -349,23 +347,9 @@ static bool UpdateTagsFile(const char* file)
   return !Load(file,"");
 }
 
-static void SetWordchars(std::string const& str)
-{
-  config.wordchars = str.c_str();
-  memset(wordChars, 0, sizeof(wordChars));
-  for (auto c : str)
-  {
-    wordChars[(unsigned char)c]=1;
-  }
-}
-
 static void SetDefaultConfig()
 {
-  config.exe = "ctags.exe";
-  config.opt = "--c++-types=+px --c-types=+px --fields=+n -R *";
-  config.autoload = "%USERPROFILE%\\.tags-autoload";
-  config.casesens = true;
-  SetWordchars("0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz~$_");
+  config = Config();
 }
 
 static WideString GetModulePath()
@@ -441,38 +425,9 @@ static void LoadConfig()
     }
     else if(key == "wordchars")
     {
-      SetWordchars(val);
+      config.SetWordchars(val);
     }
   }
-}
-
-static bool SaveConfig(Config const& config)
-{
-  try
-  {
-    std::ofstream file;
-    file.exceptions(std::ifstream::failbit | std::ifstream::badbit);
-    file.open(ToStdString(GetConfigFilePath()));
-    std::shared_ptr<void> fileCloser(0, [&](void*) { file.close(); });
-    if (config.exe.Length() > 0)
-    {
-      file << "pathtoexe=" << config.exe << std::endl;
-    }
-    file << "commandline=" << config.opt << std::endl;
-    file << "autoload=" << config.autoload << std::endl;
-    file << "casesensfilt=" << (config.casesens ? "true" : "false") << std::endl;
-    if (config.wordchars.Length() > 0)
-    {
-      file << "wordchars=" << config.wordchars << std::endl;
-    }
-  }
-  catch(std::exception const&)
-  {
-    Msg((L"Failed to save configuration to file: " + GetConfigFilePath()).c_str());
-    return false;
-  }
-
-  return true;
 }
 
 static void LazyAutoload()
@@ -636,7 +591,7 @@ void WINAPI SetStartupInfoW(const struct PluginStartupInfo *Info)
 
 int isident(int chr)
 {
-  return wordChars[(unsigned char)chr]!=0;
+  return config.isident(chr);
 }
 
 static String GetWord(int offset=0)
@@ -1214,6 +1169,7 @@ void WINAPI GetPluginInfoW(struct PluginInfo *pi)
   pi->CommandPrefix = L"tag";
 }
 
+//TODO: rework
 struct InitDialogItem
 {
   unsigned char Type;
@@ -1223,10 +1179,16 @@ struct InitDialogItem
   unsigned int Flags;
   unsigned char DefaultButton;
   intptr_t MessageID;
-  wchar_t const* MessageText;
+  WideString MessageText;
+  struct SaveInfo
+  {
+    std::string KeyName;
+    bool NotNull;
+    bool IsCheckbox;
+  } Save;
 };
 
-void InitDialogItems(struct InitDialogItem *Init,struct FarDialogItem *Item,
+static void InitDialogItems(struct InitDialogItem *Init,struct FarDialogItem *Item,
                     int ItemsNumber)
 {
   FarDialogItem empty = {};
@@ -1244,14 +1206,43 @@ void InitDialogItems(struct InitDialogItem *Init,struct FarDialogItem *Item,
     item.Flags=init.Flags;
     item.Flags |= init.Focus ? DIF_FOCUS : 0;
     item.Flags |= init.DefaultButton ? DIF_DEFAULTBUTTON : 0;
-    item.Data = init.MessageID < 0 ? init.MessageText : I.GetMsg(&PluginGuid, init.MessageID);
+    item.Data = init.MessageID < 0 ? init.MessageText.c_str() : I.GetMsg(&PluginGuid, init.MessageID);
   }
+}
+
+std::string SelectedToString(int selected)
+{
+  return !!selected ? "true" : "false";
+}
+
+static bool SaveConfig(InitDialogItem const* dlgItems, size_t count)
+{
+  try
+  {
+    std::ofstream file;
+    file.exceptions(std::ifstream::failbit | std::ifstream::badbit);
+    file.open(ToStdString(GetConfigFilePath()));
+    std::shared_ptr<void> fileCloser(0, [&](void*) { file.close(); });
+    for (size_t i = 0; i < count; ++i)
+    {
+      auto const& item = dlgItems[i];
+      if (!item.Save.KeyName.empty() && (!item.Save.NotNull || !item.MessageText.empty()))
+        file << item.Save.KeyName << "=" << (item.Save.IsCheckbox ? SelectedToString(item.Selected) : ToStdString(item.MessageText)) << std::endl;
+    }
+  }
+  catch(std::exception const&)
+  {
+    Msg((L"Failed to save configuration to file: " + GetConfigFilePath()).c_str());
+    return false;
+  }
+
+  return true;
 }
 
 //TODO: rework
 HANDLE ConfigureDialog = 0;
 //TODO: rework
-Config TempConfig;
+InitDialogItem* DlgItems = 0;
 
 WideString get_text(unsigned ctrl_id) {
   FarDialogItemData item = { sizeof(FarDialogItemData) };
@@ -1270,23 +1261,12 @@ intptr_t WINAPI ConfigureDlgProc(
 {
   if (Msg == DN_EDITCHANGE)
   {
-    String* dest = 0;
-    if (Param1 == 2)
-      dest = &TempConfig.exe;
-    if (Param1 == 4)
-      dest = &TempConfig.opt;
-    if (Param1 == 6)
-      dest = &TempConfig.autoload;
-    if (Param1 == 8)
-      dest = &TempConfig.wordchars;
-
-    if (dest)
-      *dest = ToStdString(get_text(Param1)).c_str();
+    DlgItems[Param1].MessageText = get_text(Param1);
   }
 
-  if (Msg == DN_BTNCLICK && Param1 == 9)
+  if (Msg == DN_BTNCLICK)
   {
-    TempConfig.casesens = !!Param2;
+      DlgItems[Param1].Selected = reinterpret_cast<intptr_t>(Param2);
   }
 
   return I.DefDlgProc(hDlg, Msg, Param1, Param2);
@@ -1294,31 +1274,27 @@ intptr_t WINAPI ConfigureDlgProc(
 
 intptr_t WINAPI ConfigureW(const struct ConfigureInfo *Info)
 {
-  std::vector<WideString> dialogStrings;
-  dialogStrings.push_back(ToString(config.exe.Str()));
-  dialogStrings.push_back(ToString(config.opt.Str()));
-  dialogStrings.push_back(ToString(config.autoload.Str()));
-  dialogStrings.push_back(ToString(config.wordchars.Str())); 
-  struct InitDialogItem InitItems[]={
+  struct InitDialogItem initItems[]={
         /*Type         X1 Y2 X2 Y2  F S           Flags D Data */
-/*00*/    DI_DOUBLEBOX, 3, 1,64,13, 0,0,              0,0,MPlugin,nullptr,
-/*01*/    DI_TEXT,      5, 2, 0, 0, 0,0,              0,0,MPathToExe,nullptr,
-/*02*/    DI_EDIT,      5, 3,62, 3, 1,0,              0,0,-1,dialogStrings[0].c_str(),
-/*03*/    DI_TEXT,      5, 4, 0, 0, 0,0,              0,0,MCmdLineOptions,nullptr,
-/*04*/    DI_EDIT,      5, 5,62, 5, 1,0,              0,0,-1,dialogStrings[1].c_str(),
-/*05*/    DI_TEXT,      5, 6, 0, 0, 0,0,              0,0,MAutoloadFile,nullptr,
-/*06*/    DI_EDIT,      5, 7,62, 7, 1,0,              0,0,-1,dialogStrings[2].c_str(),
-/*07*/    DI_TEXT,      5, 8, 0, 0, 0,0,              0,0,MWordChars,nullptr,
-/*08*/    DI_EDIT,      5, 9,62, 9, 1,0,              0,0,-1,dialogStrings[3].c_str(),
-/*09*/    DI_CHECKBOX,  5, 10,62,10,1,config.casesens,0,0,MCaseSensFilt,nullptr,
-/*10*/    DI_TEXT,      5,11,62,10, 1,0,DIF_SEPARATOR|DIF_BOXCOLOR,0,-1,nullptr,
-/*11*/    DI_BUTTON,    0,12, 0, 0, 0,0,DIF_CENTERGROUP,1,MOk,nullptr,
-/*12*/    DI_BUTTON,    0,12, 0, 0, 0,0,DIF_CENTERGROUP,0,MCancel,nullptr
+/*00*/    DI_DOUBLEBOX, 3, 1,64,13, 0,0,              0,0,MPlugin,L"",{},
+/*01*/    DI_TEXT,      5, 2, 0, 0, 0,0,              0,0,MPathToExe,L"",{},
+/*02*/    DI_EDIT,      5, 3,62, 3, 1,0,              0,0,-1,ToString(config.exe.Str()),{"pathtoexe", true},
+/*03*/    DI_TEXT,      5, 4, 0, 0, 0,0,              0,0,MCmdLineOptions,L"",{},
+/*04*/    DI_EDIT,      5, 5,62, 5, 1,0,              0,0,-1,ToString(config.opt.Str()),{"commandline"},
+/*05*/    DI_TEXT,      5, 6, 0, 0, 0,0,              0,0,MAutoloadFile,L"",{},
+/*06*/    DI_EDIT,      5, 7,62, 7, 1,0,              0,0,-1,ToString(config.autoload.Str()),{"autoload"},
+/*07*/    DI_TEXT,      5, 8, 0, 0, 0,0,              0,0,MWordChars,L"",{},
+/*08*/    DI_EDIT,      5, 9,62, 9, 1,0,              0,0,-1,ToString(config.GetWordchars()),{"wordchars", true},
+/*09*/    DI_CHECKBOX,  5, 10,62,10,1,config.casesens,0,0,MCaseSensFilt,L"",{"casesensfilt", false, true},
+/*10*/    DI_TEXT,      5,11,62,10, 1,0,DIF_SEPARATOR|DIF_BOXCOLOR,0,-1,L"",{},
+/*11*/    DI_BUTTON,    0,12, 0, 0, 0,0,DIF_CENTERGROUP,1,MOk,L"",{},
+/*12*/    DI_BUTTON,    0,12, 0, 0, 0,0,DIF_CENTERGROUP,0,MCancel,L"",{}
   };
 
-  struct FarDialogItem DialogItems[sizeof(InitItems)/sizeof(InitItems[0])];
-  InitDialogItems(InitItems,DialogItems,sizeof(InitItems)/sizeof(InitItems[0]));
-  TempConfig = config;
+  constexpr size_t itemsCount = sizeof(initItems)/sizeof(initItems[0]);
+  struct FarDialogItem DialogItems[itemsCount];
+  InitDialogItems(initItems,DialogItems,itemsCount);
+  DlgItems = initItems;
   auto handle = I.DialogInit(
                &PluginGuid,
                &InteractiveDialogGuid,
@@ -1341,7 +1317,7 @@ intptr_t WINAPI ConfigureW(const struct ConfigureInfo *Info)
   std::shared_ptr<void> handleHolder(handle, [](void* h){I.DialogFree(h);});
   auto ExitCode = I.DialogRun(handle);
   if(ExitCode!=11)return FALSE;
-  if (SaveConfig(TempConfig))
+  if (SaveConfig(initItems, itemsCount))
     LoadConfig();
 
   return TRUE;
