@@ -1,5 +1,6 @@
 /*
   Copyright (C) 2000 Konstantin Stupnik
+  Copyright (C) 2018 Eugene Manushkin
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
