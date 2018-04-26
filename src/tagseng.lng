@@ -41,3 +41,6 @@
 "Invalid tags file format"
 "History file"
 "History length"
+"Load from history"
+"History is empty"
+"Recently loaded tags files"

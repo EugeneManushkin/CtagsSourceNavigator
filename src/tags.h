@@ -69,6 +69,9 @@ enum{
   MNotTagFile,
   MHistoryFile,
   MHistoryLength,
+  MLoadFromHistory,
+  MHistoryEmpty,
+  MTitleHistory,
 };
 
 struct Config{
@@ -83,6 +86,7 @@ struct Config{
   size_t history_len;
   bool casesens;
   bool autoload_changed;
+  static const size_t max_history_len = 100;
 
 private:
   String wordchars;

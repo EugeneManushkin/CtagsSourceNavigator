@@ -35,7 +35,7 @@ Config::Config()
   , opt("--c++-types=+px --c-types=+px --fields=+n -R *")
   , autoload("%USERPROFILE%\\.tags-autoload")
   , history_file("%USERPROFILE%\\.tags-history")
-  , history_len(3)
+  , history_len(10)
   , casesens(true)
   , autoload_changed(true)
 {

@@ -4,3 +4,4 @@ EXPORTS
   OpenW
   SetStartupInfoW
   ConfigureW
+  ExitFARW

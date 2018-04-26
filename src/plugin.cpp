@@ -46,6 +46,7 @@
 #include <vector>
 #include <list>
 #include <map>
+#include <unordered_map>
 
 using std::auto_ptr;
 
@@ -72,6 +73,72 @@ struct SUndoInfo{
 
 Array<SUndoInfo> UndoArray;
 
+using WideString = std::basic_string<wchar_t>;
+
+struct VisitedTagsLru
+{
+  VisitedTagsLru(size_t max)
+    : MaxVisited(max)
+  {
+  }
+
+  using PathList = std::list<WideString>;
+  PathList::const_iterator begin() const
+  {
+    return OrderedTagPaths.begin();
+  }
+
+  PathList::const_iterator end() const
+  {
+    return OrderedTagPaths.end();
+  }
+
+  PathList::const_reverse_iterator rbegin() const
+  {
+    return OrderedTagPaths.rbegin();
+  }
+
+  PathList::const_reverse_iterator rend() const
+  {
+    return OrderedTagPaths.rend();
+  }
+
+  void Access(WideString const& str)
+  {
+    if (!MaxVisited)
+      return;
+
+    auto i = Index.find(str);
+    if (i == Index.end())
+    {
+      Add(str);
+    }
+    else
+    {
+      OrderedTagPaths.splice(OrderedTagPaths.begin(), OrderedTagPaths, i->second);
+    }
+  }
+
+private:
+  void Add(WideString const& str)
+  {
+    if (OrderedTagPaths.size() == MaxVisited)
+    {
+      Index.erase(OrderedTagPaths.back());
+      OrderedTagPaths.pop_back();
+    }
+
+    OrderedTagPaths.push_front(str);
+    Index[str] = OrderedTagPaths.begin();
+  }
+
+  size_t MaxVisited;
+  PathList OrderedTagPaths;
+  std::unordered_map<WideString, PathList::iterator> Index;
+};
+
+VisitedTagsLru VisitedTags(0);
+
 GUID StringToGuid(const std::string& str)
 {
   GUID guid;
@@ -96,7 +163,6 @@ GUID StringToGuid(const std::string& str)
 ::GUID PluginGuid = StringToGuid("{2e34b611-3df1-463f-8711-74b0f21558a5}");
 ::GUID CtagsMenuGuid = StringToGuid("{7f125c0d-5e18-4b7f-a6df-1caae013c48f}");
 ::GUID MenuGuid = StringToGuid("{a5b1037e-2f54-4609-b6dd-70cd47bd222b}");
-using WideString = std::basic_string<wchar_t>;
 //TODO: determine MaxMenuWidth depending on max Far Manager window width
 intptr_t const MaxMenuWidth = 120;
 
@@ -390,6 +456,32 @@ static FarKey ToFarKey(WORD virtualKey)
   return {key, ToFarControlState(controlState)};
 }
 
+static void LoadHistory(std::string fileName)
+{
+  std::ifstream file;
+  file.exceptions(std::ifstream::goodbit);
+  file.open(fileName);
+  std::shared_ptr<void> fileCloser(0, [&](void*) { file.close(); });
+  std::string buf;
+  while (std::getline(file, buf))
+  {
+    if (IsTagFile(buf.c_str()))
+      VisitedTags.Access(ToString(buf));
+  }
+}
+
+static void SaveHistory(std::string fileName)
+{
+  std::ofstream file;
+  file.exceptions(std::ifstream::goodbit);
+  file.open(fileName);
+  std::shared_ptr<void> fileCloser(0, [&](void*) { file.close(); });
+  for (auto i = VisitedTags.rbegin(); i != VisitedTags.rend(); ++i)
+  {
+    file << ToStdString(*i) << std::endl;
+  }
+}
+
 static void LoadConfig()
 {
   SetDefaultConfig();
@@ -435,11 +527,14 @@ static void LoadConfig()
     {
       unsigned len = 0;
       if (sscanf(val.c_str(), "%u", &len) == 1)
-        config.history_len = len;
+        config.history_len = std::min(static_cast<size_t>(len), Config::max_history_len);
     }
   }
 
   config.history_len = !config.history_file.Length() ? 0 : config.history_len;
+  VisitedTags = VisitedTagsLru(config.history_len);
+  if (config.history_len > 0)
+    LoadHistory(ExpandEnvString(config.history_file.Str()).c_str());
 }
 
 static void LazyAutoload()
@@ -900,6 +995,31 @@ static TagInfo* TagsMenu(PTagArray pta)
   return ta[sel];
 }
 
+static WideString SelectFromHistory()
+{
+  if (VisitedTags.begin() == VisitedTags.end())
+  {
+    InfoMessage(GetMsg(MHistoryEmpty));
+    return WideString();
+  }
+
+  size_t i = 0;
+  MenuList menuList;
+  for (auto const& file : VisitedTags)
+  {
+    menuList << MI(ToStdString(file).c_str(), i);
+    ++i;
+  }
+
+  auto rc = Menu(GetMsg(MTitleHistory), menuList, 0);
+  if (rc < 0)
+    return WideString();
+
+  auto selected = VisitedTags.begin();
+  std::advance(selected, rc);
+  return *selected;
+}
+
 static void FreeTagsArray(PTagArray ta)
 {
   for(int i=0;i<ta->Count();i++)
@@ -1062,16 +1182,21 @@ HANDLE WINAPI OpenW(const struct OpenInfo *info)
     if(OpenFrom==OPEN_PLUGINSMENU)
     {
       MenuList ml;
-      enum {miLoadTagsFile,miUnloadTagsFile,
+      enum {miLoadFromHistory,miLoadTagsFile,miUnloadTagsFile,
             miCreateTagsFile,miAddTagsToAutoload, miUpdateTagsFile};
-      ml << MI(MCreateTagsFile, miCreateTagsFile)
-        << MI(MLoadTagsFile, miLoadTagsFile)
-        << MI(MUnloadTagsFile, miUnloadTagsFile)
-        << MI(MAddTagsToAutoload, miAddTagsToAutoload);
+      ml << MI(MLoadTagsFile, miLoadTagsFile)
+        << MI(MLoadFromHistory, miLoadFromHistory)
+        << MI(MCreateTagsFile, miCreateTagsFile)
+        << MI(MAddTagsToAutoload, miAddTagsToAutoload)
+        << MI(MUnloadTagsFile, miUnloadTagsFile);
       //TODO: fix UpdateTagsFile operation and include in menu
       int rc=Menu(GetMsg(MPlugin),ml,0);
       switch(rc)
       {
+        case miLoadFromHistory:
+        {
+          tagfile = SelectFromHistory();
+        }break;
         case miLoadTagsFile:
         {
           tagfile = JoinPath(GetPanelDir(), GetCurFile());
@@ -1160,6 +1285,7 @@ HANDLE WINAPI OpenW(const struct OpenInfo *info)
         return nullptr;
       }
       InfoMessage(GetMsg(MLoadOk) + WideString(L":") + std::to_wstring(Count(strTagFile.c_str())));
+      VisitedTags.Access(tagfile);
     }
   }
   return nullptr;
@@ -1348,4 +1474,10 @@ void WINAPI GetGlobalInfoW(struct GlobalInfo *info)
   info->Title = APPNAME;
   info->Description = CTAGS_FILE_DESCR;
   info->Author = L"Konstantin Stupnik (ported by Eugene Manushkin)";
+}
+
+void WINAPI ExitFARW(const struct ExitInfo *info)
+{
+  if (config.history_file.Length() > 0)
+    SaveHistory(ExpandEnvString(config.history_file.Str()));
 }
