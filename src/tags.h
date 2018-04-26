@@ -67,6 +67,8 @@ enum{
   MAddTagsToAutoload,
   MFailedSaveAutoload,
   MNotTagFile,
+  MHistoryFile,
+  MHistoryLength,
 };
 
 struct Config{
@@ -77,6 +79,8 @@ struct Config{
   String exe;
   String opt;
   String autoload;
+  String history_file;
+  size_t history_len;
   bool casesens;
   bool autoload_changed;
 

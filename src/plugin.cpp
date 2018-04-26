@@ -427,7 +427,19 @@ static void LoadConfig()
     {
       config.SetWordchars(val);
     }
+    else if(key == "historyfile")
+    {
+      config.history_file = val.c_str();
+    }
+    else if(key == "historylen")
+    {
+      unsigned len = 0;
+      if (sscanf(val.c_str(), "%u", &len) == 1)
+        config.history_len = len;
+    }
   }
+
+  config.history_len = !config.history_file.Length() ? 0 : config.history_len;
 }
 
 static void LazyAutoload()
@@ -1276,7 +1288,7 @@ intptr_t WINAPI ConfigureW(const struct ConfigureInfo *Info)
 {
   struct InitDialogItem initItems[]={
         /*Type         X1 Y2 X2 Y2  F S           Flags D Data */
-/*00*/    DI_DOUBLEBOX, 3, 1,64,13, 0,0,              0,0,MPlugin,L"",{},
+/*00*/    DI_DOUBLEBOX, 3, 1,64,17, 0,0,              0,0,MPlugin,L"",{},
 /*01*/    DI_TEXT,      5, 2, 0, 0, 0,0,              0,0,MPathToExe,L"",{},
 /*02*/    DI_EDIT,      5, 3,62, 3, 1,0,              0,0,-1,ToString(config.exe.Str()),{"pathtoexe", true},
 /*03*/    DI_TEXT,      5, 4, 0, 0, 0,0,              0,0,MCmdLineOptions,L"",{},
@@ -1286,9 +1298,13 @@ intptr_t WINAPI ConfigureW(const struct ConfigureInfo *Info)
 /*07*/    DI_TEXT,      5, 8, 0, 0, 0,0,              0,0,MWordChars,L"",{},
 /*08*/    DI_EDIT,      5, 9,62, 9, 1,0,              0,0,-1,ToString(config.GetWordchars()),{"wordchars", true},
 /*09*/    DI_CHECKBOX,  5, 10,62,10,1,config.casesens,0,0,MCaseSensFilt,L"",{"casesensfilt", false, true},
-/*10*/    DI_TEXT,      5,11,62,10, 1,0,DIF_SEPARATOR|DIF_BOXCOLOR,0,-1,L"",{},
-/*11*/    DI_BUTTON,    0,12, 0, 0, 0,0,DIF_CENTERGROUP,1,MOk,L"",{},
-/*12*/    DI_BUTTON,    0,12, 0, 0, 0,0,DIF_CENTERGROUP,0,MCancel,L"",{}
+/*10*/    DI_TEXT,      5, 11, 0, 0, 0,0,              0,0,MHistoryFile,L"",{},
+/*11*/    DI_EDIT,      5, 12,62, 9, 1,0,              0,0,-1,ToString(config.history_file.Str()),{"historyfile"},
+/*12*/    DI_TEXT,      5, 13, 0, 0, 0,0,              0,0,MHistoryLength,L"",{},
+/*13*/    DI_EDIT,      5, 14,62, 9, 1,0,              0,0,-1,std::to_wstring(config.history_len),{"historylen", true},
+/*14*/    DI_TEXT,      5, 15,62,10, 1,0,DIF_SEPARATOR|DIF_BOXCOLOR,0,-1,L"",{},
+/*15*/    DI_BUTTON,    0, 16, 0, 0, 0,0,DIF_CENTERGROUP,1,MOk,L"",{},
+/*16*/    DI_BUTTON,    0, 16, 0, 0, 0,0,DIF_CENTERGROUP,0,MCancel,L"",{}
   };
 
   constexpr size_t itemsCount = sizeof(initItems)/sizeof(initItems[0]);
@@ -1301,7 +1317,7 @@ intptr_t WINAPI ConfigureW(const struct ConfigureInfo *Info)
                -1,
                -1,
                68,
-               15,
+               19,
                L"ctagscfg",
                DialogItems,
                sizeof(DialogItems)/sizeof(DialogItems[0]),
@@ -1316,7 +1332,7 @@ intptr_t WINAPI ConfigureW(const struct ConfigureInfo *Info)
   ConfigureDialog = handle;
   std::shared_ptr<void> handleHolder(handle, [](void* h){I.DialogFree(h);});
   auto ExitCode = I.DialogRun(handle);
-  if(ExitCode!=11)return FALSE;
+  if(ExitCode!=15)return FALSE;
   if (SaveConfig(initItems, itemsCount))
     LoadConfig();
 

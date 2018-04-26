@@ -39,3 +39,5 @@
 "Add tags file to autoload"
 "Failed to save autoload list to file: "
 "Invalid tags file format"
+"History file"
+"History length"

@@ -34,6 +34,8 @@ Config::Config()
   : exe("ctags.exe")
   , opt("--c++-types=+px --c-types=+px --fields=+n -R *")
   , autoload("%USERPROFILE%\\.tags-autoload")
+  , history_file("%USERPROFILE%\\.tags-history")
+  , history_len(3)
   , casesens(true)
   , autoload_changed(true)
 {
