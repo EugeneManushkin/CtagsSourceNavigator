@@ -6,7 +6,7 @@ This is a Far Manager plugin for browsing source code indexed by [Ctags](https:/
 3. Install ctags utility. You may either download standalone [Exuberant Ctags](http://ctags.sourceforge.net/) utility for Windows or 
    use ctags utility from [Cygwin](http://www.cygwin.com/) project.
 4. If ctags utility is available from command line (is written in %PATH% environment variable) you are not required to do anything. Otherwise configure installed plugin: 
-   go to F9-&gt;Options-&gt;Plugins configuration-&gt;Ctags Source Navigator, put the full path to ctags.exe in 'Path to ctags.exe' edit box, press OK button.
+   go to ```F9->Options->Plugins configuration->Ctags Source Navigator```, put the full path to ctags.exe in 'Path to ctags.exe' edit box, press OK button.
 ## Usage
 1. First you need to create a 'tags' file for a repository. You may use ctags plugin to do this: goto your repository folder, navigate cursor to folder you want to index by ctags or
    navigate to top folder ("..") if you want to index entire repository folder. Press F11-&gt;Ctags Source Navigator-&gt;Tag selected directory. Tags file will be created inside
