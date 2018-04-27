@@ -662,9 +662,6 @@ int Menu(const wchar_t *title,MenuList& lst,int sel,int flags=MF_LABELS,const vo
         menuTexts.push_back(ToString(i.second->item.Substr(0, MaxMenuWidth).Str()));
         menu[j++] = { MIF_NONE, menuTexts.back().c_str(), {}, i.second->data };
       }
-      if (j > 0)
-        menu[0].Flags != MIF_SELECTED;
-
       intptr_t bkey;
       WideString ftitle = filter.Length() > 0 ? L"[Filter: " + ToString(filter.Str()) + L"]" : WideString(L" [") + title + L"]";
       WideString bottomText = flags&MF_SHOWCOUNT ? GetMsg(MItemsCount) + std::to_wstring(j) : L"";
