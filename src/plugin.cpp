@@ -580,7 +580,7 @@ struct MI{
   MI(int msgid,int value):item(ToStdString(GetMsg(msgid)).c_str()),data(value){}
 };
 
-typedef List<MI> MenuList;
+using MenuList = std::list<MI>;
 
 #define MF_LABELS 1
 #define MF_FILTER 2
@@ -589,17 +589,17 @@ typedef List<MI> MenuList;
 int Menu(const wchar_t *title,MenuList& lst,int sel,int flags=MF_LABELS,const void* param=NULL)
 {
   Vector<FarMenuItem> menu;
-  menu.Init(lst.Count());
+  size_t const lstSize = lst.size();
+  menu.Init(lstSize);
   static const char labels[]="1234567890ABCDEFGHIJKLMNOPQRSTUVWXYZ";
   static const int labelsCount=sizeof(labels)-1;
-  int i=0;
-  int j=0;
   char buf[256];
-  ZeroMemory(&menu[0],sizeof(FarMenuItem)*lst.Count());
+  ZeroMemory(&menu[0],sizeof(FarMenuItem)*lst.size());
   if(!(flags&MF_FILTER))
   {
     std::list<WideString> menuTexts;
-    for(i=0;i<lst.Count();i++)
+    int i = 0;
+    for (auto& lstItem : lst)
     {
       if((flags&MF_LABELS))
       {
@@ -610,19 +610,25 @@ int Menu(const wchar_t *title,MenuList& lst,int sel,int flags=MF_LABELS,const vo
         {
           strcpy(buf, "  ");
         }
-        strcat(buf,lst[i].item.Substr(0, MaxMenuWidth));
+        strcat(buf,lstItem.item.Substr(0, MaxMenuWidth));
       }else
       {
-        strcpy(buf,lst[i].item.Substr(0, MaxMenuWidth));
+        strcpy(buf,lstItem.item.Substr(0, MaxMenuWidth));
       }
       menuTexts.push_back(ToString(buf));
       menu[i].Text = menuTexts.back().c_str();
       if(sel==i)menu[i].Flags |= MIF_SELECTED;
+      ++i;
     }
-    WideString bottomText = flags&MF_SHOWCOUNT ? GetMsg(MItemsCount) + std::to_wstring(lst.Count()) : L"";
+    WideString bottomText = flags&MF_SHOWCOUNT ? GetMsg(MItemsCount) + std::to_wstring(lstSize) : L"";
     int res=I.Menu(&PluginGuid, &CtagsMenuGuid, -1, -1, 0, FMENU_WRAPMODE, title, bottomText.c_str(),
-                   L"content",NULL,NULL,&menu[0],lst.Count());
-    return res!=-1?lst[res].data:res;
+                   L"content",NULL,NULL,&menu[0],lstSize);
+    if (res == -1)
+      return -1;
+
+    auto iter = lst.begin();
+    std::advance(iter, res);
+    return iter->data;
   }else
   {
     String filter=param?(char*)param:"";
@@ -640,21 +646,21 @@ int Menu(const wchar_t *title,MenuList& lst,int sel,int flags=MF_LABELS,const vo
 #endif
     for(;;)
     {
-      j=0;
+      int j=0;
       String match="";
       int minit=0;
       int fnd=-1;
       std::multimap<int, MI const*> idx;
-      for(i=0;i<lst.Count();i++)
+      for (auto& lstItem : lst)
       {
-        lst[i].item.SetNoCase(!config.casesens);
-        if(filter.Length() && (fnd=lst[i].item.Index(filter))==-1)continue;
+        lstItem.item.SetNoCase(!config.casesens);
+        if(filter.Length() && (fnd=lstItem.item.Index(filter))==-1)continue;
         if(!minit && fnd!=-1)
         {
-          match=lst[i].item.Substr(fnd);
+          match=lstItem.item.Substr(fnd);
           minit=1;
         }
-        idx.insert(std::make_pair(fnd, &lst[i]));
+        idx.insert(std::make_pair(fnd, &lstItem));
       }
       std::list<WideString> menuTexts;
       for (auto const& i : idx)
@@ -986,7 +992,7 @@ static TagInfo* TagsMenu(PTagArray pta)
       info.c_str(),maxinfo-info.length(),"",
       TrimFilename(ti->file,maxfile).Str()
     );
-    sm<<MI(s.Str(),i);
+    sm.push_back(MI(s.Str(), i));
   }
   int sel=Menu(GetMsg(MSelectSymbol),sm,0,MF_FILTER|MF_SHOWCOUNT);
   if(sel==-1)return NULL;
@@ -1005,7 +1011,7 @@ static WideString SelectFromHistory()
   MenuList menuList;
   for (auto const& file : VisitedTags)
   {
-    menuList << MI(ToStdString(file).c_str(), i);
+    menuList.push_back(MI(ToStdString(file).c_str(), i));
     ++i;
   }
 
@@ -1041,17 +1047,18 @@ HANDLE WINAPI OpenW(const struct OpenInfo *info)
       Msg(MENotLoaded);
       return nullptr;
     }
-    MenuList ml;
     enum{
       miFindSymbol,miUndo,miResetUndo,
       miComplete,miBrowseFile,miBrowseClass,
     };
-    ml<<MI(MFindSymbol,miFindSymbol)
-      <<MI(MCompleteSymbol,miComplete)
-      <<MI(MUndoNavigation,miUndo)
-      <<MI(MResetUndo,miResetUndo)
-      <<MI(MBrowseSymbolsInFile,miBrowseFile)
-      <<MI(MBrowseClass,miBrowseClass);
+    MenuList ml = {
+        MI(MFindSymbol,miFindSymbol)
+      , MI(MCompleteSymbol,miComplete)
+      , MI(MUndoNavigation,miUndo)
+      , MI(MResetUndo,miResetUndo)
+      , MI(MBrowseSymbolsInFile,miBrowseFile)
+      , MI(MBrowseClass,miBrowseClass)
+    };
     int res=Menu(GetMsg(MPlugin),ml,0);
     if(res==-1)return nullptr;
     switch(res)
@@ -1114,7 +1121,7 @@ HANDLE WINAPI OpenW(const struct OpenInfo *info)
           MenuList ml;
           for(int i=0;i<lst.Count();i++)
           {
-            ml<<MI(lst[i],i);
+            ml.push_back(MI(lst[i],i));
           }
           res=Menu(GetMsg(MSelectSymbol),ml,0,MF_FILTER|MF_SHOWCOUNT,(void*)word.Str());
           if(res==-1)return nullptr;
@@ -1179,14 +1186,15 @@ HANDLE WINAPI OpenW(const struct OpenInfo *info)
     WideString tagfile;
     if(OpenFrom==OPEN_PLUGINSMENU)
     {
-      MenuList ml;
       enum {miLoadFromHistory,miLoadTagsFile,miUnloadTagsFile,
             miCreateTagsFile,miAddTagsToAutoload, miUpdateTagsFile};
-      ml << MI(MLoadTagsFile, miLoadTagsFile)
-        << MI(MLoadFromHistory, miLoadFromHistory)
-        << MI(MCreateTagsFile, miCreateTagsFile)
-        << MI(MAddTagsToAutoload, miAddTagsToAutoload)
-        << MI(MUnloadTagsFile, miUnloadTagsFile);
+      MenuList ml = {
+           MI(MLoadTagsFile, miLoadTagsFile)
+         , MI(MLoadFromHistory, miLoadFromHistory)
+         , MI(MCreateTagsFile, miCreateTagsFile)
+         , MI(MAddTagsToAutoload, miAddTagsToAutoload)
+         , MI(MUnloadTagsFile, miUnloadTagsFile)
+      };
       //TODO: fix UpdateTagsFile operation and include in menu
       int rc=Menu(GetMsg(MPlugin),ml,0);
       switch(rc)
@@ -1201,13 +1209,13 @@ HANDLE WINAPI OpenW(const struct OpenInfo *info)
         }break;
         case miUnloadTagsFile:
         {
-          ml.Clean();
-          ml<<MI(MAll,0);
+          ml.clear();
+          ml.push_back(MI(MAll, 0));
           StrList l;
           GetFiles(l);
           for(int i=0;i<l.Count();i++)
           {
-            ml<<MI(l[i],i+1);
+            ml.push_back(MI(l[i], i + 1));
           }
           int rc=Menu(GetMsg(MUnloadTagsFile),ml,0);
           if(rc==-1)return nullptr;
