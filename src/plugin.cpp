@@ -576,6 +576,7 @@ struct MI{
   {
     data=-1;
   }
+  MI(WideString const& str,int value):item(str),data(value){}
   MI(const char* str,int value):item(ToString(str)),data(value){}
   MI(int msgid,int value):item(GetMsg(msgid)),data(value){}
 };
@@ -709,19 +710,65 @@ int FilterMenu(const wchar_t *title,MenuList const& lst,int sel,int flags=MF_LAB
   return -1;
 }
 
+String TrimFilename(const String& file,int maxlength)
+{
+  if(file.Length()<=maxlength)return file;
+  int ri=file.RIndex("\\")+1;
+  if(file.Length()-ri+3>maxlength)
+  {
+    return "..."+file.Substr(file.Length()-maxlength-3);
+  }
+  return file.Substr(0,3)+"..."+file.Substr(file.Length()-(maxlength-7));
+}
+
+//TODO: rework
+WideString FormatTagInfo(TagInfo const& ti, int maxid, int maxinfo, int maxfile)
+{
+  std::string info = ti.info.Substr(0, maxinfo);
+  String s;
+  s.Sprintf("%c:%s%*s %s%*s %s",ti.type,ti.name.Str(),maxid-ti.name.Length(),"",
+    info.c_str(),maxinfo-info.length(),"",
+    TrimFilename(ti.file,maxfile).Str()
+  );
+
+  return ToString(s.Str());
+}
+
+//TODO: rework this awful stuff
+void GetMaxParams(std::vector<TagInfo> const& ta, int& maxid, int& maxinfo)
+{
+  maxid=0;
+  maxinfo=0;
+  for (auto const& ti : ta)
+  {
+    if(ti.name.Length()>maxid)maxid=ti.name.Length();
+    if(ti.info.Length()>maxinfo)maxinfo=ti.info.Length();
+    //if(ti->file.Length()>maxfile)
+  }
+}
+
 bool LookupTagsMenu(char const* tagsFile, size_t maxCount, TagInfo& tag)
 {
   String filter;
   std::string filterkeys = "1234567890abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_$\\\x08-_=|;':\",./<>?[]*&^%#@!~";
   std::vector<FarKey> fk = GetFarKeys(filterkeys);
+  //TODO: what if opened in editor?
+  const int currentWidth = MaxMenuWidth;
+  const int maxInfoWidth = currentWidth / 5;
   while(true)
   {
     auto tags = FindPartiallyMatchedTags(tagsFile, filter.Str(), maxCount);
+//TODO: rework
+    int maxid = 0;
+    int maxinfo = 0;
+    GetMaxParams(tags, maxid, maxinfo);
+    maxinfo = std::min(maxinfo, maxInfoWidth);
+    int maxfile=currentWidth-8-maxid-maxinfo-1-1-1;
     std::vector<FarMenuItem> menu;
     std::list<WideString> menuStrings;
     for (auto const& i : tags)
     {
-      menuStrings.push_back(ToString(i.name.Str()));
+      menuStrings.push_back(FormatTagInfo(i, maxid, maxinfo, maxfile));
       FarMenuItem item = {MIF_NONE,menuStrings.back().c_str()};
       menu.push_back(item);
     }
@@ -1011,17 +1058,6 @@ int SetPos(const char *filename,int line,int col,int top,int left)
   return 1;
 }
 
-String TrimFilename(const String& file,int maxlength)
-{
-  if(file.Length()<=maxlength)return file;
-  int ri=file.RIndex("\\")+1;
-  if(file.Length()-ri+3>maxlength)
-  {
-    return "..."+file.Substr(file.Length()-maxlength-3);
-  }
-  return file.Substr(0,3)+"..."+file.Substr(file.Length()-(maxlength-7));
-}
-
 static TagInfo* TagsMenu(PTagArray pta)
 {
   MenuList sm;
@@ -1042,13 +1078,7 @@ static TagInfo* TagsMenu(PTagArray pta)
   int maxfile=currentWidth-8-maxid-maxinfo-1-1-1;
   for(i=0;i<ta.Count();i++)
   {
-    TagInfo *ti=ta[i];
-    std::string info = ti->info.Substr(0, maxinfo);
-    s.Sprintf("%c:%s%*s %s%*s %s",ti->type,ti->name.Str(),maxid-ti->name.Length(),"",
-      info.c_str(),maxinfo-info.length(),"",
-      TrimFilename(ti->file,maxfile).Str()
-    );
-    sm.push_back(MI(s.Str(), i));
+    sm.push_back(MI(FormatTagInfo(*ta[i], maxid, maxinfo, maxfile), i));
   }
   int sel=FilterMenu(GetMsg(MSelectSymbol),sm,0,MF_SHOWCOUNT);
   if(sel==-1)return NULL;
