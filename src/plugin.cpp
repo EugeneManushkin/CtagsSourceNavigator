@@ -570,14 +570,14 @@ static int AddToAutoload(std::string const& fname)
 }
 
 struct MI{
-  String item;
+  WideString item;
   int data;
   MI()
   {
     data=-1;
   }
-  MI(const char* str,int value):item(str),data(value){}
-  MI(int msgid,int value):item(ToStdString(GetMsg(msgid)).c_str()),data(value){}
+  MI(const char* str,int value):item(ToString(str)),data(value){}
+  MI(int msgid,int value):item(GetMsg(msgid)),data(value){}
 };
 
 using MenuList = std::list<MI>;
@@ -585,35 +585,25 @@ using MenuList = std::list<MI>;
 #define MF_LABELS 1
 #define MF_SHOWCOUNT 4
 
+//TODO: consider pass const& lst
 int Menu(const wchar_t *title,MenuList& lst,int sel,int flags=MF_LABELS,const void* param=NULL)
 {
   Vector<FarMenuItem> menu;
   size_t const lstSize = lst.size();
   menu.Init(lstSize);
-  static const char labels[]="1234567890ABCDEFGHIJKLMNOPQRSTUVWXYZ";
-  static const int labelsCount=sizeof(labels)-1;
-  char buf[256];
+  wchar_t const labels[]=L"1234567890ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+  int const labelsCount=sizeof(labels)-1;
   ZeroMemory(&menu[0],sizeof(FarMenuItem)*lst.size());
-    std::list<WideString> menuTexts;
     int i = 0;
     for (auto& lstItem : lst)
     {
       if((flags&MF_LABELS))
       {
-        if(i<labelsCount)
-        {
-          sprintf(buf,"&%c ",labels[i]);
-        }else
-        {
-          strcpy(buf, "  ");
-        }
-        strcat(buf,lstItem.item.Substr(0, MaxMenuWidth));
-      }else
-      {
-        strcpy(buf,lstItem.item.Substr(0, MaxMenuWidth));
+        WideString buf = i<labelsCount ? WideString(L"&") + labels[i] + L" " : L"  ";
+        lstItem.item = buf + lstItem.item;
       }
-      menuTexts.push_back(ToString(buf));
-      menu[i].Text = menuTexts.back().c_str();
+      lstItem.item = lstItem.item.substr(0, MaxMenuWidth);
+      menu[i].Text = lstItem.item.c_str();
       if(sel==i)menu[i].Flags |= MIF_SELECTED;
       ++i;
     }
@@ -646,7 +636,7 @@ HKL GetAsciiLayout()
   return 0;
 }
 
-int FilterMenu(const wchar_t *title,MenuList& lst,int sel,int flags=MF_LABELS,const void* param=NULL)
+int FilterMenu(const wchar_t *title,MenuList const& lst,int sel,int flags=MF_LABELS,const void* param=NULL)
 {
   Vector<FarMenuItem> menu;
   size_t const lstSize = lst.size();
@@ -676,20 +666,19 @@ int FilterMenu(const wchar_t *title,MenuList& lst,int sel,int flags=MF_LABELS,co
       std::multimap<int, MI const*> idx;
       for (auto& lstItem : lst)
       {
-        lstItem.item.SetNoCase(!config.casesens);
-        if(filter.Length() && (fnd=lstItem.item.Index(filter))==-1)continue;
+        String current = ToStdString(lstItem.item).c_str();
+        current.SetNoCase(!config.casesens);
+        if(filter.Length() && (fnd=current.Index(filter))==-1)continue;
         if(!minit && fnd!=-1)
         {
-          match=lstItem.item.Substr(fnd);
+          match=current.Substr(fnd);
           minit=1;
         }
         idx.insert(std::make_pair(fnd, &lstItem));
       }
-      std::list<WideString> menuTexts;
       for (auto const& i : idx)
       {
-        menuTexts.push_back(ToString(i.second->item.Substr(0, MaxMenuWidth).Str()));
-        menu[j++] = { MIF_NONE, menuTexts.back().c_str(), {}, i.second->data };
+        menu[j++] = { MIF_NONE, i.second->item.c_str(), {}, i.second->data };
       }
       intptr_t bkey;
       WideString ftitle = filter.Length() > 0 ? L"[Filter: " + ToString(filter.Str()) + L"]" : WideString(L" [") + title + L"]";
