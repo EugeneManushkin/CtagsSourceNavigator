@@ -583,7 +583,6 @@ struct MI{
 using MenuList = std::list<MI>;
 
 #define MF_LABELS 1
-#define MF_FILTER 2
 #define MF_SHOWCOUNT 4
 
 int Menu(const wchar_t *title,MenuList& lst,int sel,int flags=MF_LABELS,const void* param=NULL)
@@ -595,8 +594,6 @@ int Menu(const wchar_t *title,MenuList& lst,int sel,int flags=MF_LABELS,const vo
   static const int labelsCount=sizeof(labels)-1;
   char buf[256];
   ZeroMemory(&menu[0],sizeof(FarMenuItem)*lst.size());
-  if(!(flags&MF_FILTER))
-  {
     std::list<WideString> menuTexts;
     int i = 0;
     for (auto& lstItem : lst)
@@ -629,8 +626,14 @@ int Menu(const wchar_t *title,MenuList& lst,int sel,int flags=MF_LABELS,const vo
     auto iter = lst.begin();
     std::advance(iter, res);
     return iter->data;
-  }else
-  {
+}
+
+int FilterMenu(const wchar_t *title,MenuList& lst,int sel,int flags=MF_LABELS,const void* param=NULL)
+{
+  Vector<FarMenuItem> menu;
+  size_t const lstSize = lst.size();
+  menu.Init(lstSize);
+
     String filter=param?(char*)param:"";
     Vector<FarKey> fk;
     std::string filterkeys = "1234567890abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_$\\\x08-_=|;':\",./<>?[]*&^%#@!~";
@@ -687,7 +690,7 @@ int Menu(const wchar_t *title,MenuList& lst,int sel,int flags=MF_LABELS,const vo
       filter+=(char)key;
       sel=res;
     }
-  }
+
   return -1;
 }
 
@@ -994,7 +997,7 @@ static TagInfo* TagsMenu(PTagArray pta)
     );
     sm.push_back(MI(s.Str(), i));
   }
-  int sel=Menu(GetMsg(MSelectSymbol),sm,0,MF_FILTER|MF_SHOWCOUNT);
+  int sel=FilterMenu(GetMsg(MSelectSymbol),sm,0,MF_SHOWCOUNT);
   if(sel==-1)return NULL;
   return ta[sel];
 }
@@ -1123,7 +1126,7 @@ HANDLE WINAPI OpenW(const struct OpenInfo *info)
           {
             ml.push_back(MI(lst[i],i));
           }
-          res=Menu(GetMsg(MSelectSymbol),ml,0,MF_FILTER|MF_SHOWCOUNT,(void*)word.Str());
+          res=FilterMenu(GetMsg(MSelectSymbol),ml,0,MF_SHOWCOUNT,(void*)word.Str());
           if(res==-1)return nullptr;
         }else
         {
