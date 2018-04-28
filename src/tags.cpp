@@ -25,6 +25,7 @@
 #include <string.h>
 #include <vector>
 #include <memory>
+#define NOMINMAX
 #include <windows.h>
 #include "Hash.hpp"
 #include "String.hpp"
@@ -981,26 +982,19 @@ PTagArray Find(const char* symbol,const char* file)
   return ta;
 }
 
-static void FindPartsInFile(TagFileInfo* fi,const char* str,StrList& dst)
+//TODO: support case insensitive search
+static std::pair<size_t, size_t> GetMatchedOffsetRange(FILE* f, TagFileInfo* fi,const char* str, size_t maxCount)
 {
-  FILE *f=fopen(fi->filename,"rt");
-  if(!f)return;
-  struct stat st;
-  fstat(fileno(f),&st);
-  String name,base=fi->filename;
-  int ri=base.RIndex("\\");
-  if(ri!=-1)
-  {
-    base.Delete(ri+1);
-  }
-  if(fi->modtm!=st.st_mtime)
-  {
-    Load(fi->filename,base);
-  }
-  int len=strlen(str);
-  int pos;
-  int left=0;
-  int right=fi->offsets.Count()-1;
+  if (!fi->offsets.Count())
+    return std::make_pair(0, 0);
+
+  if (!str || str[0] == 0)
+    return std::make_pair(0, maxCount);
+
+  size_t len=strlen(str);
+  size_t pos;
+  size_t left=0;
+  size_t right=fi->offsets.Count()-1;
   int cmp;
   while(left<=right)
   {
@@ -1021,7 +1015,7 @@ static void FindPartsInFile(TagFileInfo* fi,const char* str,StrList& dst)
   }
   if(!cmp)
   {
-    int endpos=pos;
+    size_t endpos=pos;
     while(pos>0)
     {
       fseek(f,fi->offsets[pos-1],SEEK_SET);
@@ -1046,7 +1040,32 @@ static void FindPartsInFile(TagFileInfo* fi,const char* str,StrList& dst)
         break;
       }
     }
-    for(int i=pos;i<=endpos;i++)
+    ++endpos;
+    return std::make_pair(pos, maxCount > 0 ? std::min(pos + maxCount, endpos) : endpos);
+  }
+  return std::make_pair(0, 0);
+}
+
+static void FindPartsInFile(TagFileInfo* fi,const char* str,StrList& dst)
+{
+  FILE *f=fopen(fi->filename,"rt");
+  if(!f)return;
+  struct stat st;
+  fstat(fileno(f),&st);
+  String name,base=fi->filename;
+  int ri=base.RIndex("\\");
+  if(ri!=-1)
+  {
+    base.Delete(ri+1);
+  }
+  if(fi->modtm!=st.st_mtime)
+  {
+    Load(fi->filename,base);
+  }
+  auto range = GetMatchedOffsetRange(f, fi, str, 0);
+  if (range.second > range.first)
+  {
+    for(int i=range.first;i<range.second;i++)
     {
       fseek(f,fi->offsets[i],SEEK_SET);
       fgets(strbuf,sizeof(strbuf),f);
@@ -1061,6 +1080,55 @@ static void FindPartsInFile(TagFileInfo* fi,const char* str,StrList& dst)
   fclose(f);
 }
 
+static std::vector<TagInfo> FindPartiallyMatchedTags(TagFileInfo* fi, const char* part, size_t maxCount)
+{
+  std::vector<TagInfo> result;
+  //TODO: refactor duplicated code
+  FILE *f=fopen(fi->filename,"rt");
+  if(!f)return result;
+  struct stat st;
+  fstat(fileno(f),&st);
+  String name,base=fi->filename;
+  int ri=base.RIndex("\\");
+  if(ri!=-1)
+  {
+    base.Delete(ri+1);
+  }
+  if(fi->modtm!=st.st_mtime)
+  {
+    Load(fi->filename,base);
+  }
+  auto range = GetMatchedOffsetRange(f, fi, part, maxCount);
+  if (range.second > range.first)
+  {
+    //TODO: refactor to std::string GetBase(TagFileInfo const& fi)
+    String base=fi->filename;
+    int ri=base.RIndex("\\");
+    if(ri!=-1)
+    {
+      base.Delete(ri+1);
+    }
+
+    char const* tmp = 0;
+    for(int i=range.first;i<range.second;i++)
+    {
+      fseek(f,fi->offsets[i],SEEK_SET);
+      std::string line;
+      //TODO: refactor getline
+      GetLine(tmp, line, f);
+      std::unique_ptr<TagInfo> tag(ParseLine(line.c_str(), base));
+      result.push_back(*tag);
+    }
+  }
+  fclose(f);
+  return result;
+}
+
+std::vector<TagInfo> FindPartiallyMatchedTags(const char* file, const char* part, size_t maxCount)
+{
+  auto fi = std::find_if(files.begin(), files.end(), [&](TagFileInfoPtr const& tag){ return tag->filename.CmpNoCase(file); });
+  return fi != files.end() ? FindPartiallyMatchedTags(fi->get(), part, maxCount) : std::vector<TagInfo>();
+}
 
 void FindParts(const char* file, const char* part,StrList& dst)
 {

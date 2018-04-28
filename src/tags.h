@@ -25,6 +25,7 @@
 #include "XTools.hpp"
 #include <string>
 #include <bitset>
+#include <vector>
 
 using namespace XClasses;
 
@@ -73,6 +74,7 @@ enum{
   MLoadFromHistory,
   MHistoryEmpty,
   MTitleHistory,
+  MLookupSymbol,
 };
 
 struct Config{
@@ -105,14 +107,6 @@ struct TagInfo{
   String info;
 
   TagInfo():lineno(-1){}
-  TagInfo(const TagInfo& src)
-  {
-    file=src.file;
-    re=src.re;
-    lineno=src.lineno;
-    type=src.type;
-    info=src.info;
-  }
 };
 
 typedef Vector<TagInfo*> TagArray;
@@ -127,6 +121,7 @@ PTagArray Find(const char* symbol,const char* filename);
 int Count();
 int Count(char const* fname);
 void FindParts(const char* file,const char* part,StrList& dst);
+std::vector<TagInfo> FindPartiallyMatchedTags(const char* file, const char* part, size_t maxCount);
 PTagArray FindFileSymbols(const char* file);
 PTagArray FindClassSymbols(const char* file,const char* classname);
 void Autoload(const char* fn);

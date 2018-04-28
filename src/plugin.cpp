@@ -636,6 +636,21 @@ HKL GetAsciiLayout()
   return 0;
 }
 
+std::vector<FarKey> GetFarKeys(std::string const& filterkeys)
+{
+  std::vector<FarKey> fk;
+  auto const asciiLayout = GetAsciiLayout();
+  //TODO: consider using static virtual key code array
+  for(auto filterKey : filterkeys)
+  {
+    auto virtualKey = VkKeyScanExA(filterKey, asciiLayout);
+    if (virtualKey != 0xffff)
+      fk.push_back(ToFarKey(virtualKey));
+  }
+  fk.push_back(FarKey());
+  return fk;
+}
+
 int FilterMenu(const wchar_t *title,MenuList const& lst,int sel,int flags=MF_LABELS,const void* param=NULL)
 {
   Vector<FarMenuItem> menu;
@@ -643,17 +658,8 @@ int FilterMenu(const wchar_t *title,MenuList const& lst,int sel,int flags=MF_LAB
   menu.Init(lstSize);
 
     String filter=param?(char*)param:"";
-    Vector<FarKey> fk;
     std::string filterkeys = "1234567890abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_$\\\x08-_=|;':\",./<>?[]*&^%#@!~";
-    auto const asciiLayout = GetAsciiLayout();
-    //TODO: consider using static virtual code array
-    for(auto filterKey : filterkeys)
-    {
-      auto virtualKey = VkKeyScanExA(filterKey, asciiLayout);
-      if (virtualKey != 0xffff)
-        fk.Push(ToFarKey(virtualKey));
-    }
-    fk.Push(FarKey());
+    std::vector<FarKey> fk = GetFarKeys(filterkeys);
 #ifdef DEBUG
     //DebugBreak();
 #endif
@@ -701,6 +707,44 @@ int FilterMenu(const wchar_t *title,MenuList const& lst,int sel,int flags=MF_LAB
     }
 
   return -1;
+}
+
+bool LookupTagsMenu(char const* tagsFile, size_t maxCount, TagInfo& tag)
+{
+  String filter;
+  std::string filterkeys = "1234567890abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_$\\\x08-_=|;':\",./<>?[]*&^%#@!~";
+  std::vector<FarKey> fk = GetFarKeys(filterkeys);
+  while(true)
+  {
+    auto tags = FindPartiallyMatchedTags(tagsFile, filter.Str(), maxCount);
+    std::vector<FarMenuItem> menu;
+    std::list<WideString> menuStrings;
+    for (auto const& i : tags)
+    {
+      menuStrings.push_back(ToString(i.name.Str()));
+      FarMenuItem item = {MIF_NONE,menuStrings.back().c_str()};
+      menu.push_back(item);
+    }
+    intptr_t bkey;
+    WideString ftitle = L"[Search: " + ToString(filter.Length() ? filter.Str() : "") + L"]";
+    WideString bottomText = L"";
+    int res = I.Menu(&PluginGuid, &CtagsMenuGuid,-1,-1,0,FMENU_WRAPMODE|FMENU_SHOWAMPERSAND,ftitle.c_str(),
+                     bottomText.c_str(),L"content",&fk[0],&bkey, menu.empty() ? nullptr : &menu[0],menu.size());
+    if(res==-1 && bkey==-1)return false;
+    if(bkey==-1)
+    {
+      tag = tags[res];
+      return true;
+    }
+    int key=filterkeys[bkey];
+    if(key==8)
+    {
+      filter.Delete(-1);
+      continue;
+    }
+    filter+=(char)key;
+  }
+  return false;
 }
 
 void WINAPI SetStartupInfoW(const struct PluginStartupInfo *Info)
@@ -1036,6 +1080,34 @@ static WideString SelectFromHistory()
   return *selected;
 }
 
+void LookupSymbolImpl(WideString const& tags)
+{
+  auto strTags = ToStdString(tags);
+  if (!IsTagFile(strTags.c_str()))
+    throw MNotTagFile;
+
+  int rc=Load(strTags.c_str(),"",true);
+  if(rc>1)
+    throw rc;
+
+  size_t const maxMenuItems = 10;
+  TagInfo selectedTag;
+  if (LookupTagsMenu(ToStdString(tags).c_str(), maxMenuItems, selectedTag))
+    NavigateTo(&selectedTag);
+}
+
+void LookupSymbol(WideString const& tags)
+{
+  try
+  {
+    LookupSymbolImpl(tags);
+  }
+  catch(int err)
+  {
+    Msg(err);
+  }
+}
+
 static void FreeTagsArray(PTagArray ta)
 {
   for(int i=0;i<ta->Count();i++)
@@ -1199,13 +1271,14 @@ HANDLE WINAPI OpenW(const struct OpenInfo *info)
     if(OpenFrom==OPEN_PLUGINSMENU)
     {
       enum {miLoadFromHistory,miLoadTagsFile,miUnloadTagsFile,
-            miCreateTagsFile,miAddTagsToAutoload, miUpdateTagsFile};
+            miCreateTagsFile,miAddTagsToAutoload, miUpdateTagsFile, miLookupSymbol};
       MenuList ml = {
            MI(MLoadTagsFile, miLoadTagsFile)
          , MI(MLoadFromHistory, miLoadFromHistory)
          , MI(MCreateTagsFile, miCreateTagsFile)
          , MI(MAddTagsToAutoload, miAddTagsToAutoload)
          , MI(MUnloadTagsFile, miUnloadTagsFile)
+         , MI(MLookupSymbol, miLookupSymbol)
       };
       //TODO: fix UpdateTagsFile operation and include in menu
       int rc=Menu(GetMsg(MPlugin),ml,0);
@@ -1273,6 +1346,10 @@ HANDLE WINAPI OpenW(const struct OpenInfo *info)
           {
             Msg(err);
           }
+        }break;
+        case miLookupSymbol:
+        {
+          LookupSymbol(JoinPath(GetPanelDir(), GetCurFile()));
         }break;
       }
     }
