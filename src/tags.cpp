@@ -766,8 +766,13 @@ void FindClass(TagFileInfo* fi,const char* str,PTagArray ta)
   FILE *g=fopen(fi->indexFile,"rb");
   if(!g)return;
   int sz;
+  if (ReadSignature(g))
+  {
+    fseek(g, 1, SEEK_CUR);
+  }
+
   fread(&sz,4,1,g);
-  fseek(g,4+sz*4*2,SEEK_SET);
+  fseek(g,4+sz*4*2+sizeof(IndexFileSignature)+1,SEEK_SET);
   fread(&sz,4,1,g);
   Vector<int> offsets;
   offsets.Init(sz);
