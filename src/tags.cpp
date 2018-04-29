@@ -93,6 +93,16 @@ struct TagFileInfo{
     }
     return false;
   }
+
+  String GetRepoRoot()
+  {
+    String root=filename;
+    int ri=root.RIndex("\\");
+    if(ri!=-1)
+      root.Delete(ri+1);
+
+    return root;
+  }
 };
 
 using TagFileInfoPtr = std::shared_ptr<TagFileInfo>;
@@ -1401,6 +1411,6 @@ std::string GetTagsFile(std::string const& fileFullPath)
 {
   String path(fileFullPath.c_str());
   path.ToLower();
-  auto i = std::find_if(files.begin(), files.end(), [&](TagFileInfoPtr const& file) {return file->isLoadBase(path);} );
+  auto i = std::find_if(files.begin(), files.end(), [&](TagFileInfoPtr const& file) {return path.StartWith(file->GetRepoRoot());} );
   return i == files.end() ? std::string() : (*i)->filename.Str();
 }
