@@ -608,7 +608,7 @@ int Menu(const wchar_t *title,MenuList& lst,int sel,int flags=MF_LABELS,const vo
       if(sel==i)menu[i].Flags |= MIF_SELECTED;
       ++i;
     }
-    WideString bottomText = flags&MF_SHOWCOUNT ? GetMsg(MItemsCount) + std::to_wstring(lstSize) : L"";
+    WideString bottomText = flags&MF_SHOWCOUNT ? GetMsg(MItemsCount) + ToString(std::to_string(lstSize)) : L"";
     int res=I.Menu(&PluginGuid, &CtagsMenuGuid, -1, -1, 0, FMENU_WRAPMODE, title, bottomText.c_str(),
                    L"content",NULL,NULL,&menu[0],lstSize);
     if (res == -1)
@@ -689,7 +689,7 @@ int FilterMenu(const wchar_t *title,MenuList const& lst,int sel,int flags=MF_LAB
       }
       intptr_t bkey;
       WideString ftitle = filter.Length() > 0 ? L"[Filter: " + ToString(filter.Str()) + L"]" : WideString(L" [") + title + L"]";
-      WideString bottomText = flags&MF_SHOWCOUNT ? GetMsg(MItemsCount) + std::to_wstring(j) : L"";
+      WideString bottomText = flags&MF_SHOWCOUNT ? GetMsg(MItemsCount) + ToString(std::to_string(j)) : L"";
       int res = I.Menu(&PluginGuid, &CtagsMenuGuid,-1,-1,0,FMENU_WRAPMODE|FMENU_SHOWAMPERSAND,ftitle.c_str(),
                        bottomText.c_str(),L"content",&fk[0],&bkey,&menu[0],j);
       if(res==-1 && bkey==-1)return -1;
@@ -724,7 +724,7 @@ String TrimFilename(const String& file,int maxlength)
 //TODO: rework
 WideString FormatTagInfo(TagInfo const& ti, int maxid, int maxinfo, int maxfile)
 {
-  std::string info = ti.info.Substr(0, maxinfo);
+  std::string info = ti.info.Substr(0, maxinfo).Str();
   String s;
   s.Sprintf("%c:%s%*s %s%*s %s",ti.type,ti.name.Str(),maxid-ti.name.Length(),"",
     info.c_str(),maxinfo-info.length(),"",
@@ -1409,7 +1409,7 @@ HANDLE WINAPI OpenW(const struct OpenInfo *info)
         Msg(GetMsg(rc));
         return nullptr;
       }
-      InfoMessage(GetMsg(MLoadOk) + WideString(L":") + std::to_wstring(Count(strTagFile.c_str())));
+      InfoMessage(GetMsg(MLoadOk) + WideString(L":") + ToString(std::to_string(Count(strTagFile.c_str()))));
       VisitedTags.Access(tagfile);
     }
   }
@@ -1551,7 +1551,7 @@ intptr_t WINAPI ConfigureW(const struct ConfigureInfo *Info)
     DI_TEXT,      5, 10, 0, 0, 0,0,              0,0,MHistoryFile,L"",{},
     DI_EDIT,      5, 11,62, 9, 1,0,              0,0,-1,ToString(config.history_file.Str()),{"historyfile"},
     DI_TEXT,      5, 12, 0, 0, 0,0,              0,0,MHistoryLength,L"",{},
-    DI_EDIT,      5, 13,62, 9, 1,0,              0,0,-1,std::to_wstring(config.history_len),{"historylen", true},
+    DI_EDIT,      5, 13,62, 9, 1,0,              0,0,-1,ToString(std::to_string(config.history_len)),{"historylen", true},
     DI_TEXT,      5, 14, 0, 0, 0,0,              0,0,MAutoloadFile,L"",{},
     DI_EDIT,      5, 15,62, 7, 1,0,              0,0,-1,ToString(config.autoload.Str()),{"autoload"},
     DI_TEXT,      5, 16,62,10, 1,0,DIF_SEPARATOR|DIF_BOXCOLOR,0,-1,L"",{},

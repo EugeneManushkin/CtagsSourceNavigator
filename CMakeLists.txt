@@ -1,12 +1,15 @@
 cmake_minimum_required(VERSION 3.0)
 include_directories(Far)
 file(GLOB SOURCES
-     "src/*.hpp"
-     "src/*.h"
-     "src/*.cpp"
-     "src/resource.rc"
-     "src/exported_calls.def"
+    "src/*.hpp"
+    "src/*.h"
+    "src/*.cpp"
+    "src/exported_calls.def"
 )
+
+if (MSVC)
+    set(SOURCES ${SOURCES} "src/resource.rc")
+endif(MSVC)
 
 add_library(ctags SHARED ${SOURCES})
 set(PLUGIN_DIR ${CMAKE_BINARY_DIR}/$<CONFIG>/ctags)

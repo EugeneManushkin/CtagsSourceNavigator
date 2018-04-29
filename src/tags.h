@@ -81,7 +81,7 @@ struct Config{
   Config();
   void SetWordchars(std::string const& str);
   std::string GetWordchars() const;
-  bool Config::isident(int chr) const;
+  bool isident(int chr) const;
   String exe;
   String opt;
   String autoload;
@@ -89,7 +89,7 @@ struct Config{
   size_t history_len;
   bool casesens;
   bool autoload_changed;
-  static const size_t max_history_len = 100;
+  static const size_t max_history_len;
 
 private:
   String wordchars;

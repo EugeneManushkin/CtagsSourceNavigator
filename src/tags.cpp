@@ -32,6 +32,8 @@
 #include "Array.hpp"
 #include "tags.h"
 
+const size_t Config::max_history_len = 100;
+
 Config::Config()
   : exe("ctags.exe")
   , opt("--c++-types=+px --c-types=+px --fields=+n -R *")
