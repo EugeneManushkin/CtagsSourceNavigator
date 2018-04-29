@@ -129,4 +129,5 @@ void GetFiles(StrList& dst);
 int SaveChangedFiles(const char* file, const char* outputFilename);
 int MergeFiles(const char* target,const char* mfile);
 bool IsTagFile(const char* file);
+std::string GetTagsFile(std::string const& fileFullPath);
 #endif

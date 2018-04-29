@@ -1128,27 +1128,27 @@ static WideString SelectFromHistory()
   return *selected;
 }
 
-void LookupSymbolImpl(WideString const& tags)
+static void LookupSymbolImpl(std::string const& file)
 {
-  auto strTags = ToStdString(tags);
-  if (!IsTagFile(strTags.c_str()))
-    throw Error(MNotTagFile);
+  auto tagsFile = IsTagFile(file.c_str()) ? file : GetTagsFile(file);
+  if (tagsFile.empty())
+    throw Error(MENotLoaded);
 
-  int rc=Load(strTags.c_str(),"",true);
+  int rc=Load(tagsFile.c_str(),"",true);
   if(rc>1)
     throw Error(rc);
 
   size_t const maxMenuItems = 10;
   TagInfo selectedTag;
-  if (LookupTagsMenu(ToStdString(tags).c_str(), maxMenuItems, selectedTag))
+  if (LookupTagsMenu(tagsFile.c_str(), maxMenuItems, selectedTag))
     NavigateTo(&selectedTag);
 }
 
-void LookupSymbol(WideString const& tags)
+static void LookupSymbol(std::string const& file)
 {
   try
   {
-    LookupSymbolImpl(tags);
+    LookupSymbolImpl(file);
   }
   catch(Error const& err)
   {
@@ -1181,15 +1181,16 @@ HANDLE WINAPI OpenW(const struct OpenInfo *info)
     }
     enum{
       miFindSymbol,miUndo,miResetUndo,
-      miComplete,miBrowseFile,miBrowseClass,
+      miComplete,miBrowseClass,miBrowseFile,miLookupSymbol,
     };
     MenuList ml = {
         MI(MFindSymbol,miFindSymbol)
       , MI(MCompleteSymbol,miComplete)
       , MI(MUndoNavigation,miUndo)
       , MI(MResetUndo,miResetUndo)
-      , MI(MBrowseSymbolsInFile,miBrowseFile)
       , MI(MBrowseClass,miBrowseClass)
+      , MI(MBrowseSymbolsInFile,miBrowseFile)
+      , MI(MLookupSymbol,miLookupSymbol)
     };
     int res=Menu(GetMsg(MPlugin),ml,0);
     if(res==-1)return nullptr;
@@ -1311,6 +1312,10 @@ HANDLE WINAPI OpenW(const struct OpenInfo *info)
         if(ti)NavigateTo(ti);
         FreeTagsArray(ta);
       }break;
+      case miLookupSymbol:
+      {
+        LookupSymbol(fileName);
+      }break;
     }
   }
   else
@@ -1397,7 +1402,7 @@ HANDLE WINAPI OpenW(const struct OpenInfo *info)
         }break;
         case miLookupSymbol:
         {
-          LookupSymbol(JoinPath(GetPanelDir(), GetCurFile()));
+          LookupSymbol(ToStdString(JoinPath(GetPanelDir(), GetCurFile())));
         }break;
       }
     }

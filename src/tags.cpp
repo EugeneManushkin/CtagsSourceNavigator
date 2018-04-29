@@ -1396,3 +1396,11 @@ bool IsTagFile(const char* file)
   fclose(f);
   return result && !pattern.compare(0, std::string::npos, result, pattern.length());
 };
+
+std::string GetTagsFile(std::string const& fileFullPath)
+{
+  String path(fileFullPath.c_str());
+  path.ToLower();
+  auto i = std::find_if(files.begin(), files.end(), [&](TagFileInfoPtr const& file) {return file->isLoadBase(path);} );
+  return i == files.end() ? std::string() : (*i)->filename.Str();
+}
