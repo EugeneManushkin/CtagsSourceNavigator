@@ -140,6 +140,24 @@ private:
 
 VisitedTagsLru VisitedTags(0);
 
+//TODO: Make additional fields, replace throw std::exception with throw Error(code)
+class Error
+{
+public:
+  Error(int code)
+    : Code(code)
+  {
+  }
+
+  int GetCode() const
+  {
+    return Code;
+  }
+
+private:
+  int Code;
+};
+
 GUID StringToGuid(const std::string& str)
 {
   GUID guid;
@@ -1114,11 +1132,11 @@ void LookupSymbolImpl(WideString const& tags)
 {
   auto strTags = ToStdString(tags);
   if (!IsTagFile(strTags.c_str()))
-    throw MNotTagFile;
+    throw Error(MNotTagFile);
 
   int rc=Load(strTags.c_str(),"",true);
   if(rc>1)
-    throw rc;
+    throw Error(rc);
 
   size_t const maxMenuItems = 10;
   TagInfo selectedTag;
@@ -1132,9 +1150,9 @@ void LookupSymbol(WideString const& tags)
   {
     LookupSymbolImpl(tags);
   }
-  catch(int err)
+  catch(Error const& err)
   {
-    Msg(err);
+    Msg(err.GetCode());
   }
 }
 
