@@ -224,9 +224,9 @@ enum class YesNoCancel
   Cancel = 2
 };
 
-YesNoCancel YesNoCalncelDialog(WideString const& title, WideString const& what)
+YesNoCancel YesNoCalncelDialog(WideString const& what)
 {
-  WideString msg(title + L"\n" + what);
+  WideString msg(WideString(APPNAME) + L"\n" + what);
   auto result = I.Message(&PluginGuid, &InfoMessageGuid, FMSG_MB_YESNOCANCEL | FMSG_ALLINONE, nullptr, reinterpret_cast<const wchar_t* const*>(msg.c_str()), 0, 1);
   return static_cast<YesNoCancel>(result);
 }
@@ -881,7 +881,7 @@ int SetPos(const char *filename,int line,int col,int top,int left);
 
 static void NotFound(const char* fn,int line)
 {
-  if(YesNoCalncelDialog(APPNAME, GetMsg(MNotFoundAsk)) == YesNoCancel::Yes)
+  if(YesNoCalncelDialog(GetMsg(MNotFoundAsk)) == YesNoCancel::Yes)
   SetPos(fn,line,0,-1,-1);
 }
 
@@ -1128,9 +1128,41 @@ static WideString SelectFromHistory()
   return *selected;
 }
 
+static std::string SearchTagsFile(std::string const& fileName)
+{
+  if(YesNoCalncelDialog(GetMsg(MAskSearchTags)) != YesNoCancel::Yes)
+    return std::string();
+
+  auto str = fileName;
+  std::string tagsFile;
+  while(tagsFile.empty() && !str.empty())
+  {
+    auto pos = str.rfind('\\');
+    if (pos == std::string::npos)
+      break;
+
+    str = str.substr(0, pos);
+    auto tags = str + "\\tags";
+    if (GetFileAttributesA(tags.c_str()) != INVALID_FILE_ATTRIBUTES)
+      tagsFile.swap(tags);
+  }
+
+  return !IsTagFile(tagsFile.c_str()) ? std::string() : tagsFile;
+}
+
+static bool EnsureTagsLoaded(std::string const& fileName)
+{
+  if (!GetTagsFile(fileName).empty())
+    return true;
+
+  auto tagsFile = SearchTagsFile(fileName);
+  return !tagsFile.empty() && !Load(tagsFile.c_str(),"",true);
+}
+
 static void LookupSymbolImpl(std::string const& file)
 {
   auto tagsFile = IsTagFile(file.c_str()) ? file : GetTagsFile(file);
+  tagsFile = tagsFile.empty() ? SearchTagsFile(file) : tagsFile;
   if (tagsFile.empty())
     throw Error(MENotLoaded);
 
@@ -1174,11 +1206,6 @@ HANDLE WINAPI OpenW(const struct OpenInfo *info)
     auto ei = GetCurrentEditorInfo();
     std::string fileName = GetFileNameFromEditor(ei.EditorID); // TODO: auto
     LazyAutoload();
-    if(Count()==0)
-    {
-      Msg(MENotLoaded);
-      return nullptr;
-    }
     enum{
       miFindSymbol,miUndo,miResetUndo,
       miComplete,miBrowseClass,miBrowseFile,miLookupSymbol,
@@ -1194,6 +1221,16 @@ HANDLE WINAPI OpenW(const struct OpenInfo *info)
     };
     int res=Menu(GetMsg(MPlugin),ml,0);
     if(res==-1)return nullptr;
+    if ((res == miFindSymbol
+      || res == miComplete
+      || res == miBrowseClass
+      || res == miBrowseFile
+        ) && !EnsureTagsLoaded(fileName))
+    {
+      Msg(MENotLoaded);
+      return nullptr;
+    }
+
     switch(res)
     {
       case miFindSymbol:

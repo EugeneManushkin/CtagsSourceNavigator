@@ -75,6 +75,7 @@ enum{
   MHistoryEmpty,
   MTitleHistory,
   MLookupSymbol,
+  MAskSearchTags,
 };
 
 struct Config{
