@@ -102,6 +102,7 @@ extern Config config;
 struct TagInfo{
   String name;
   String file;
+  String declaration;
   String re;
   int lineno;
   char type;

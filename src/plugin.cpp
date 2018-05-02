@@ -740,12 +740,12 @@ String TrimFilename(const String& file,int maxlength)
 }
 
 //TODO: rework
-WideString FormatTagInfo(TagInfo const& ti, int maxid, int maxinfo, int maxfile)
+WideString FormatTagInfo(TagInfo const& ti, int maxid, int maxDeclaration, int maxfile)
 {
-  std::string info = ti.info.Substr(0, maxinfo).Str();
+  std::string declaration = ti.declaration.Substr(0, maxDeclaration).Str();
   String s;
   s.Sprintf("%c:%s%*s %s%*s %s",ti.type,ti.name.Str(),maxid-ti.name.Length(),"",
-    info.c_str(),maxinfo-info.length(),"",
+    declaration.c_str(),maxDeclaration-declaration.length(),"",
     TrimFilename(ti.file,maxfile).Str()
   );
 
@@ -753,14 +753,14 @@ WideString FormatTagInfo(TagInfo const& ti, int maxid, int maxinfo, int maxfile)
 }
 
 //TODO: rework this awful stuff
-void GetMaxParams(std::vector<TagInfo> const& ta, int& maxid, int& maxinfo)
+void GetMaxParams(std::vector<TagInfo> const& ta, int& maxid, int& maxDeclaration)
 {
   maxid=0;
-  maxinfo=0;
+  maxDeclaration=0;
   for (auto const& ti : ta)
   {
     if(ti.name.Length()>maxid)maxid=ti.name.Length();
-    if(ti.info.Length()>maxinfo)maxinfo=ti.info.Length();
+    if(ti.declaration.Length()>maxDeclaration)maxDeclaration=ti.declaration.Length();
     //if(ti->file.Length()>maxfile)
   }
 }
@@ -1081,22 +1081,22 @@ static TagInfo* TagsMenu(PTagArray pta)
   MenuList sm;
   String s;
   TagArray& ta=*pta;
-  int maxid=0,maxinfo=0;
+  int maxid=0,maxDeclaration=0;
   int i;
   const int currentWidth = std::min(GetCurrentEditorInfo().WindowSizeX, MaxMenuWidth);
-  const int maxInfoWidth = currentWidth / 5;
+  const int maxDeclarationWidth = currentWidth / 5;
   for(i=0;i<ta.Count();i++)
   {
     TagInfo *ti=ta[i];
     if(ti->name.Length()>maxid)maxid=ti->name.Length();
-    if(ti->info.Length()>maxinfo)maxinfo=ti->info.Length();
+    if(ti->declaration.Length()>maxDeclaration)maxDeclaration=ti->declaration.Length();
     //if(ti->file.Length()>maxfile)
   }
-  maxinfo = std::min(maxinfo, maxInfoWidth);
-  int maxfile=currentWidth-8-maxid-maxinfo-1-1-1;
+  maxDeclaration = std::min(maxDeclaration, maxDeclarationWidth);
+  int maxfile=currentWidth-8-maxid-maxDeclaration-1-1-1;
   for(i=0;i<ta.Count();i++)
   {
-    sm.push_back(MI(FormatTagInfo(*ta[i], maxid, maxinfo, maxfile), i));
+    sm.push_back(MI(FormatTagInfo(*ta[i], maxid, maxDeclaration, maxfile), i));
   }
   int sel=FilterMenu(GetMsg(MSelectSymbol),sm,0,MF_SHOWCOUNT);
   if(sel==-1)return NULL;

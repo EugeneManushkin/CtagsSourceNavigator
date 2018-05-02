@@ -205,6 +205,18 @@ static void ReplaceSpaces(String& str)
   str=dst;
 }
 
+//TODO: consider optimization
+static std::string MakeDeclaration(std::string const& str)
+{
+  std::string declaration = str;
+  declaration = declaration.length() > 5 ? declaration.substr(2, declaration.length() - 5) : declaration;
+  std::replace(declaration.begin(), declaration.end(), '\t', ' ');
+  declaration.resize(std::unique(declaration.begin(), declaration.end(), [](char a, char b) {return a == ' ' && a == b;}) - declaration.begin());
+  declaration = !declaration.empty() && *declaration.begin() == ' ' ? declaration.substr(1) : declaration;
+  declaration = !declaration.empty() && *declaration.rbegin() == ' ' ? declaration.substr(0, declaration.length() - 1) : declaration;
+  return declaration;
+}
+
 RegExp reParse("/(.+?)\\t(.*?)\\t(\\d+|\\/.*?\\/(?<=[^\\\\]\\/));\"\\t(\\w)(?:\\tline:(\\d+))?(?:\\t(\\S*))?/");
 
 TagInfo* ParseLine(const char* buf,const String& base)
@@ -226,6 +238,7 @@ TagInfo* ParseLine(const char* buf,const String& base)
     SetStr(pos,buf,m[3]);
     if(pos[0]=='/')
     {
+      i->declaration = MakeDeclaration(pos.Str()).c_str();
       QuoteMeta(pos);
       ReplaceSpaces(pos);
       i->re=pos;
