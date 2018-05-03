@@ -1015,6 +1015,7 @@ static void NavigateTo(TagInfo* info)
 
 
   int line=info->lineno-1;
+  line = line >= ei.TotalLines ? -1 : line;
   if(line!=-1)
   {
     EditorGetString egs = {sizeof(EditorGetString)};
