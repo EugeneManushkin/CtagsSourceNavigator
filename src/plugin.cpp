@@ -765,10 +765,12 @@ WideString FormatTagInfo(TagInfo const& ti, int maxid, int maxDeclaration, int m
 {
   std::string declaration = ti.declaration.Substr(0, maxDeclaration).Str();
   String s;
-  s.Sprintf("%c:%s%*s %s%*s %s",ti.type,ti.name.Str(),maxid-ti.name.Length(),"",
-    declaration.c_str(),maxDeclaration-declaration.length(),"",
-    TrimFilename(ti.file,maxfile).Str()
+  s.Sprintf("%c:%s%*s %s%*s",ti.type,ti.name.Str(),maxid-ti.name.Length(),"",
+    declaration.c_str(),maxDeclaration-declaration.length(),""
   );
+
+  if (maxfile > 0)
+    s += String(" ") + TrimFilename(ti.file,maxfile);
 
   return ToString(s.Str());
 }
@@ -1098,7 +1100,7 @@ int SetPos(const char *filename,int line,int col,int top,int left)
   return 1;
 }
 
-static TagInfo* TagsMenu(PTagArray pta)
+static TagInfo* TagsMenu(PTagArray pta, bool displayFile = true)
 {
   MenuList sm;
   String s;
@@ -1114,8 +1116,8 @@ static TagInfo* TagsMenu(PTagArray pta)
     if(ti->declaration.Length()>maxDeclaration)maxDeclaration=ti->declaration.Length();
     //if(ti->file.Length()>maxfile)
   }
-  maxDeclaration = std::min(maxDeclaration, maxDeclarationWidth);
-  int maxfile=currentWidth-8-maxid-maxDeclaration-1-1-1;
+  maxDeclaration = displayFile ? std::min(maxDeclaration, maxDeclarationWidth) : currentWidth-8-maxid-1-1-1;
+  int maxfile=displayFile ? currentWidth-8-maxid-maxDeclaration-1-1-1 : 0;
   for(i=0;i<ta.Count();i++)
   {
     sm.push_back(MI(FormatTagInfo(*ta[i], maxid, maxDeclaration, maxfile), i));
@@ -1344,7 +1346,7 @@ HANDLE WINAPI OpenW(const struct OpenInfo *info)
           Msg(MNothingFound);
           return nullptr;
         }
-        TagInfo *ti=TagsMenu(ta);
+        TagInfo *ti=TagsMenu(ta, false);
         if(ti)NavigateTo(ti);
         FreeTagsArray(ta);
       }break;
@@ -1367,7 +1369,7 @@ HANDLE WINAPI OpenW(const struct OpenInfo *info)
           Msg(MNothingFound);
           return nullptr;
         }
-        TagInfo *ti=TagsMenu(ta);
+        TagInfo *ti=TagsMenu(ta, false);
         if(ti)NavigateTo(ti);
         FreeTagsArray(ta);
       }break;
