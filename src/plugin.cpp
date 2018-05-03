@@ -597,6 +597,14 @@ struct MI{
   MI(WideString const& str,int value):item(str),data(value){}
   MI(const char* str,int value):item(ToString(str)),data(value){}
   MI(int msgid,int value):item(GetMsg(msgid)),data(value){}
+  bool IsSeparator() const
+  {
+    return item.empty();
+  }
+  static MI Separator()
+  {
+    return MI(L"", -1);
+  }
 };
 
 using MenuList = std::list<MI>;
@@ -613,19 +621,25 @@ int Menu(const wchar_t *title,MenuList& lst,int sel,int flags=MF_LABELS,const vo
   wchar_t const labels[]=L"1234567890ABCDEFGHIJKLMNOPQRSTUVWXYZ";
   int const labelsCount=sizeof(labels)-1;
   ZeroMemory(&menu[0],sizeof(FarMenuItem)*lst.size());
-    int i = 0;
-    for (auto& lstItem : lst)
+  int i = 0;
+  int curLabel = 0;
+  for (auto& lstItem : lst)
+  {
+    if (!lstItem.IsSeparator())
     {
       if((flags&MF_LABELS))
       {
-        WideString buf = i<labelsCount ? WideString(L"&") + labels[i] + L" " : L"  ";
+        WideString buf = curLabel<labelsCount ? WideString(L"&") + labels[curLabel] + L" " : L"  ";
         lstItem.item = buf + lstItem.item;
       }
       lstItem.item = lstItem.item.substr(0, MaxMenuWidth);
       menu[i].Text = lstItem.item.c_str();
       if(sel==i)menu[i].Flags |= MIF_SELECTED;
-      ++i;
+      ++curLabel;
     }
+    menu[i].Flags |= lstItem.IsSeparator() ? MIF_SEPARATOR : 0;
+    ++i;
+  }
     WideString bottomText = flags&MF_SHOWCOUNT ? GetMsg(MItemsCount) + ToString(std::to_string(lstSize)) : L"";
     int res=I.Menu(&PluginGuid, &CtagsMenuGuid, -1, -1, 0, FMENU_WRAPMODE, title, bottomText.c_str(),
                    L"content",NULL,NULL,&menu[0],lstSize);
@@ -1214,7 +1228,7 @@ HANDLE WINAPI OpenW(const struct OpenInfo *info)
         MI(MFindSymbol,miFindSymbol)
       , MI(MCompleteSymbol,miComplete)
       , MI(MUndoNavigation,miUndo)
-      , MI(MResetUndo,miResetUndo)
+      , MI::Separator()
       , MI(MBrowseClass,miBrowseClass)
       , MI(MBrowseSymbolsInFile,miBrowseFile)
       , MI(MLookupSymbol,miLookupSymbol)
@@ -1363,12 +1377,13 @@ HANDLE WINAPI OpenW(const struct OpenInfo *info)
       enum {miLoadFromHistory,miLoadTagsFile,miUnloadTagsFile,
             miCreateTagsFile,miAddTagsToAutoload, miUpdateTagsFile, miLookupSymbol};
       MenuList ml = {
-           MI(MLoadTagsFile, miLoadTagsFile)
+           MI(MLookupSymbol, miLookupSymbol)
+         , MI::Separator()
          , MI(MLoadFromHistory, miLoadFromHistory)
+         , MI(MLoadTagsFile, miLoadTagsFile)
+         , MI(MUnloadTagsFile, miUnloadTagsFile)
          , MI(MCreateTagsFile, miCreateTagsFile)
          , MI(MAddTagsToAutoload, miAddTagsToAutoload)
-         , MI(MUnloadTagsFile, miUnloadTagsFile)
-         , MI(MLookupSymbol, miLookupSymbol)
       };
       //TODO: fix UpdateTagsFile operation and include in menu
       int rc=Menu(GetMsg(MPlugin),ml,0);
