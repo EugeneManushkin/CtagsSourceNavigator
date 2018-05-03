@@ -590,16 +590,22 @@ static int AddToAutoload(std::string const& fname)
 struct MI{
   WideString item;
   int data;
+  bool Disabled;
   MI()
+    : data(-1)
+    , Disabled(false)
   {
-    data=-1;
   }
-  MI(WideString const& str,int value):item(str),data(value){}
-  MI(const char* str,int value):item(ToString(str)),data(value){}
-  MI(int msgid,int value):item(GetMsg(msgid)),data(value){}
+  MI(WideString const& str,int value,bool disabled=false):item(str),data(value),Disabled(disabled){}
+  MI(const char* str,int value,bool disabled=false):item(ToString(str)),data(value),Disabled(disabled){}
+  MI(int msgid,int value,bool disabled=false):item(GetMsg(msgid)),data(value),Disabled(disabled){}
   bool IsSeparator() const
   {
     return item.empty();
+  }
+  bool IsDisabled() const
+  {
+    return Disabled;
   }
   static MI Separator()
   {
@@ -638,6 +644,7 @@ int Menu(const wchar_t *title,MenuList& lst,int sel,int flags=MF_LABELS,const vo
       ++curLabel;
     }
     menu[i].Flags |= lstItem.IsSeparator() ? MIF_SEPARATOR : 0;
+    menu[i].Flags |= lstItem.IsDisabled() ? MIF_DISABLE | MIF_GRAYED : 0;
     ++i;
   }
     WideString bottomText = flags&MF_SHOWCOUNT ? GetMsg(MItemsCount) + ToString(std::to_string(lstSize)) : L"";
@@ -1227,7 +1234,7 @@ HANDLE WINAPI OpenW(const struct OpenInfo *info)
     MenuList ml = {
         MI(MFindSymbol,miFindSymbol)
       , MI(MCompleteSymbol,miComplete)
-      , MI(MUndoNavigation,miUndo)
+      , MI(MUndoNavigation,miUndo,UndoArray.Count() == 0)
       , MI::Separator()
       , MI(MBrowseClass,miBrowseClass)
       , MI(MBrowseSymbolsInFile,miBrowseFile)
