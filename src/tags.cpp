@@ -1384,14 +1384,16 @@ std::string GetTagsFile(std::string const& fileFullPath)
 {
   String path(fileFullPath.c_str());
   path.ToLower();
-  auto found = files.end();
-  for (auto i = files.begin(); i != files.end(); ++i)
+  TagFileInfoPtr found;
+  size_t foundRootLen = 0;
+  for (auto const& i : files)
   {
-    if (path.StartWith((*i)->GetRepoRoot()) &&
-       (found == files.end() || (*i)->GetRepoRoot().Length() > (*found)->GetRepoRoot().Length()))
+    auto currentRoot = i->GetRepoRoot();
+    if (currentRoot.Length() > foundRootLen && path.StartWith(currentRoot))
     {
       found = i;
+      foundRootLen = currentRoot.Length();
     }
   }
-  return found == files.end() ? std::string() : (*found)->filename.Str();
+  return !found ? std::string() : found->filename.Str();
 }
