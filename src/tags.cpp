@@ -188,7 +188,7 @@ static void ReplaceSpaces(String& str)
 static std::string MakeDeclaration(std::string const& str)
 {
   std::string declaration = str;
-  declaration = declaration.length() > 5 ? declaration.substr(2, declaration.length() - 5) : declaration;
+  declaration = declaration.length() > 4 ? declaration.substr(2, declaration.length() - 4) : declaration;
   std::replace(declaration.begin(), declaration.end(), '\t', ' ');
   declaration.resize(std::unique(declaration.begin(), declaration.end(), [](char a, char b) {return a == ' ' && a == b;}) - declaration.begin());
   declaration = !declaration.empty() && *declaration.begin() == ' ' ? declaration.substr(1) : declaration;
