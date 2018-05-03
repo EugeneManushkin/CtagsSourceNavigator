@@ -71,28 +71,7 @@ struct TagFileInfo{
   String indexFile;
   Array<String> loadBases;
   time_t modtm;
-  bool mainaload;
   Vector<int> offsets;
-
-  void addToLoadBases(const String& base)
-  {
-    String path=base;
-    path.ToLower();
-    for(int i=0;i<loadBases.Count();i++)
-    {
-      if(loadBases[i]==path)return;
-    }
-    loadBases.Push(path);
-  }
-
-  bool isLoadBase(const String& path)
-  {
-    for(int i=0;i<loadBases.Count();i++)
-    {
-      if(path.StartWith(loadBases[i]))return true;
-    }
-    return false;
-  }
 
   String GetRepoRoot()
   {
@@ -571,7 +550,7 @@ static bool FindAndLoadIndex(TagFileInfo *fi, time_t tagsTimeStamp)
   return false;
 }
 
-int Load(const char* _filename,const char *base,bool mainaload)
+int Load(const char* _filename)
 {
   String filename=_filename;
   struct stat st;
@@ -584,11 +563,8 @@ int Load(const char* _filename,const char *base,bool mainaload)
     fi= std::shared_ptr<TagFileInfo>(new TagFileInfo);
     fi->filename=filename;
     fi->modtm=st.st_mtime;
-    fi->mainaload=mainaload;
-    fi->addToLoadBases(base);
   }else
   {
-    fi->addToLoadBases(base);
     if(fi->modtm==st.st_mtime)
     {
       return 1;
@@ -617,15 +593,9 @@ static void FindInFile(TagFileInfo* fi,const char* str,PTagArray ta)
   if(!f)return;
   struct stat st;
   fstat(fileno(f),&st);
-  String name,base=fi->filename;
-  int ri=base.RIndex("\\");
-  if(ri!=-1)
-  {
-    base.Delete(ri+1);
-  }
   if(fi->modtm!=st.st_mtime)
   {
-    Load(fi->filename,base);
+    Load(fi->filename);
   }
   int len=strlen(str);
   int pos;
@@ -675,6 +645,12 @@ static void FindInFile(TagFileInfo* fi,const char* str,PTagArray ta)
       {
         break;
       }
+    }
+    String base=fi->filename;
+    int ri=base.RIndex("\\");
+    if(ri!=-1)
+    {
+      base.Delete(ri+1);
     }
     for(int i=pos;i<=endpos;i++)
     {
@@ -993,8 +969,7 @@ PTagArray Find(const char* symbol,const char* file)
   filename.ToLower();
   for(int i=0;i<files.size();i++)
   {
-    if(files[i]->mainaload ||
-       files[i]->isLoadBase(filename))
+    if (filename.StartWith(files[i]->GetRepoRoot()))
     {
       FindInFile(files[i].get(),symbol,ta);
     }
@@ -1077,15 +1052,9 @@ static void FindPartsInFile(TagFileInfo* fi,const char* str,StrList& dst)
   if(!f)return;
   struct stat st;
   fstat(fileno(f),&st);
-  String name,base=fi->filename;
-  int ri=base.RIndex("\\");
-  if(ri!=-1)
-  {
-    base.Delete(ri+1);
-  }
   if(fi->modtm!=st.st_mtime)
   {
-    Load(fi->filename,base);
+    Load(fi->filename);
   }
   auto range = GetMatchedOffsetRange(f, fi, str, 0);
   if (range.second > range.first)
@@ -1113,15 +1082,9 @@ static std::vector<TagInfo> FindPartiallyMatchedTags(TagFileInfo* fi, const char
   if(!f)return result;
   struct stat st;
   fstat(fileno(f),&st);
-  String name,base=fi->filename;
-  int ri=base.RIndex("\\");
-  if(ri!=-1)
-  {
-    base.Delete(ri+1);
-  }
   if(fi->modtm!=st.st_mtime)
   {
-    Load(fi->filename,base);
+    Load(fi->filename);
   }
   auto range = GetMatchedOffsetRange(f, fi, part, maxCount);
   if (range.second > range.first)
@@ -1164,8 +1127,7 @@ void FindParts(const char* file, const char* part,StrList& dst)
   int i;
   for(i=0;i<files.size();i++)
   {
-    if(files[i]->mainaload ||
-       files[i]->isLoadBase(filename))
+    if (filename.StartWith(files[i]->GetRepoRoot()))
     {
       FindPartsInFile(files[i].get(),part,tmp);
     }
@@ -1195,8 +1157,7 @@ PTagArray FindFileSymbols(const char* file)
   PTagArray ta=new TagArray;
   for(int i=0;i<files.size();i++)
   {
-    if(files[i]->mainaload ||
-       files[i]->isLoadBase(filename))
+    if (filename.StartWith(files[i]->GetRepoRoot()))
     {
       int j=0;
       while(filename[j]==files[i]->filename[j])j++;
@@ -1223,8 +1184,7 @@ PTagArray FindClassSymbols(const char* file,const char* classname)
   filename.ToLower();
   for(int i=0;i<files.size();i++)
   {
-    if(files[i]->mainaload ||
-       files[i]->isLoadBase(filename))
+    if (filename.StartWith(files[i]->GetRepoRoot()))
     {
       FindClass(files[i].get(),classname,ta);
     }
@@ -1249,7 +1209,7 @@ void Autoload(const char* fn)
     {
       String fn=sl[i];
       if(fn.Length()==0 || !IsFullPath(fn, fn.Length()))continue;
-      Load(fn, "", true);
+      Load(fn);
     }
   }
 }
@@ -1400,7 +1360,7 @@ int SaveChangedFiles(const char* file, const char* outputFilename)
     tfi.filename=filename;
     tfi.modtm=st.st_mtime;
     if(!FindIdx(&tfi))return 0;
-    if(Load(filename,"")!=1)return 0;
+    if(Load(filename)!=1)return 0;
   }
   StrList sl;
   if(!CheckChangedFiles(filename,sl))return 0;
@@ -1424,6 +1384,14 @@ std::string GetTagsFile(std::string const& fileFullPath)
 {
   String path(fileFullPath.c_str());
   path.ToLower();
-  auto i = std::find_if(files.begin(), files.end(), [&](TagFileInfoPtr const& file) {return path.StartWith(file->GetRepoRoot());} );
-  return i == files.end() ? std::string() : (*i)->filename.Str();
+  auto found = files.end();
+  for (auto i = files.begin(); i != files.end(); ++i)
+  {
+    if (path.StartWith((*i)->GetRepoRoot()) &&
+       (found == files.end() || (*i)->GetRepoRoot().Length() > (*found)->GetRepoRoot().Length()))
+    {
+      found = i;
+    }
+  }
+  return found == files.end() ? std::string() : (*found)->filename.Str();
 }

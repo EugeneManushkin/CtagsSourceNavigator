@@ -429,7 +429,7 @@ static bool UpdateTagsFile(const char* file)
   if (!MergeFiles(file, ToStdString(updateFile).c_str()))
     return false;
 
-  return !Load(file,"");
+  return !Load(file);
 }
 
 static void SetDefaultConfig()
@@ -1177,7 +1177,7 @@ static bool EnsureTagsLoaded(std::string const& fileName)
     return true;
 
   auto tagsFile = SearchTagsFile(fileName);
-  return !tagsFile.empty() && !Load(tagsFile.c_str(),"",true);
+  return !tagsFile.empty() && !Load(tagsFile.c_str());
 }
 
 static void LookupSymbolImpl(std::string const& file)
@@ -1187,7 +1187,7 @@ static void LookupSymbolImpl(std::string const& file)
   if (tagsFile.empty())
     throw Error(MENotLoaded);
 
-  int rc=Load(tagsFile.c_str(),"",true);
+  int rc=Load(tagsFile.c_str());
   if(rc>1)
     throw Error(rc);
 
@@ -1485,7 +1485,7 @@ HANDLE WINAPI OpenW(const struct OpenInfo *info)
     if(!tagfile.empty())
     {
       auto strTagFile = ToStdString(tagfile);
-      int rc=Load(strTagFile.c_str(),"",true);
+      int rc=Load(strTagFile.c_str());
       if(rc>1)
       {
         Msg(GetMsg(rc));

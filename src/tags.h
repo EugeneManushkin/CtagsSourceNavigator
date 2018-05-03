@@ -117,7 +117,7 @@ typedef TagArray* PTagArray;
 int isident(int chr);
 
 
-int Load(const char* filename,const char* base,bool mainaload=false);
+int Load(const char* filename);
 void UnloadTags(int idx);
 PTagArray Find(const char* symbol,const char* filename);
 int Count();
