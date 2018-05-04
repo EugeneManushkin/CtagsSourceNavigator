@@ -294,6 +294,12 @@ char const* GetLine(char const* &str, std::string& buffer, FILE *f)
   return str;
 }
 
+void GetLine(std::string& buffer, FILE *f)
+{
+  char const* tmp = 0;
+  GetLine(tmp, buffer, f);
+}
+
 static int CreateIndex(TagFileInfo* fi)
 {
   int pos=0;
@@ -989,19 +995,20 @@ static std::pair<size_t, size_t> GetMatchedOffsetRange(FILE* f, TagFileInfo* fi,
     return std::make_pair(0, 0);
 
   if (!str || str[0] == 0)
-    return std::make_pair(0, maxCount);
+    return std::make_pair(0, std::min(static_cast<size_t>(fi->offsets.Count()), maxCount));
 
   size_t len=strlen(str);
   size_t pos;
   size_t left=0;
   size_t right=fi->offsets.Count()-1;
   int cmp;
+  std::string strbuf;
   while(left<=right)
   {
     pos=(right+left)/2;
     fseek(f,fi->offsets[pos],SEEK_SET);
-    fgets(strbuf,sizeof(strbuf),f);
-    cmp=strncmp(str,strbuf,len);
+    GetLine(strbuf,f);
+    cmp=strncmp(str,strbuf.c_str(),len);
     if(!cmp)
     {
       break;
@@ -1016,13 +1023,15 @@ static std::pair<size_t, size_t> GetMatchedOffsetRange(FILE* f, TagFileInfo* fi,
   if(!cmp)
   {
     size_t endpos=pos;
+    size_t exactmatchend=strbuf.length() == len || strbuf[len] == '\t' ? pos + 1 : pos;
     while(pos>0)
     {
       fseek(f,fi->offsets[pos-1],SEEK_SET);
-      fgets(strbuf,sizeof(strbuf),f);
-      if(!strncmp(str,strbuf,len))
+      GetLine(strbuf,f);
+      if(!strncmp(str,strbuf.c_str(),len))
       {
         pos--;
+        exactmatchend = strbuf.length() > len && strbuf[len] != '\t' ? pos : exactmatchend;
       }else
       {
         break;
@@ -1031,17 +1040,18 @@ static std::pair<size_t, size_t> GetMatchedOffsetRange(FILE* f, TagFileInfo* fi,
     while(endpos<fi->offsets.Count()-1)
     {
       fseek(f,fi->offsets[endpos+1],SEEK_SET);
-      fgets(strbuf,sizeof(strbuf),f);
-      if(!strncmp(str,strbuf,len))
+      GetLine(strbuf, f);
+      if(!strncmp(str,strbuf.c_str(),len))
       {
         endpos++;
+        exactmatchend = strbuf.length() == len || strbuf[len] == '\t' ? endpos + 1 : exactmatchend;
       }else
       {
         break;
       }
     }
     ++endpos;
-    return std::make_pair(pos, maxCount > 0 ? std::min(pos + maxCount, endpos) : endpos);
+    return std::make_pair(pos, maxCount > 0 ? std::max(exactmatchend, std::min(pos + maxCount, endpos)) : endpos);
   }
   return std::make_pair(0, 0);
 }
@@ -1089,22 +1099,13 @@ static std::vector<TagInfo> FindPartiallyMatchedTags(TagFileInfo* fi, const char
   auto range = GetMatchedOffsetRange(f, fi, part, maxCount);
   if (range.second > range.first)
   {
-    //TODO: refactor to std::string GetBase(TagFileInfo const& fi)
-    String base=fi->filename;
-    int ri=base.RIndex("\\");
-    if(ri!=-1)
-    {
-      base.Delete(ri+1);
-    }
-
-    char const* tmp = 0;
+    String repoRoot=fi->GetRepoRoot();
     for(int i=range.first;i<range.second;i++)
     {
       fseek(f,fi->offsets[i],SEEK_SET);
       std::string line;
-      //TODO: refactor getline
-      GetLine(tmp, line, f);
-      std::unique_ptr<TagInfo> tag(ParseLine(line.c_str(), base));
+      GetLine(line, f);
+      std::unique_ptr<TagInfo> tag(ParseLine(line.c_str(), repoRoot));
       result.push_back(*tag);
     }
   }
