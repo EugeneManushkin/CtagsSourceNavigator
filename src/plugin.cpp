@@ -324,6 +324,31 @@ static std::string ExpandEnvString(std::string const& str)
   return std::string(buffer.begin(), buffer.end());
 }
 
+static std::string GetClipboardText()
+{
+  if (!OpenClipboard(nullptr))
+    return std::string();
+
+  std::shared_ptr<void> clipboardCloser(0, [](void*) {CloseClipboard();});
+  auto h = GetClipboardData(CF_TEXT);
+  if (h == nullptr)
+    return std::string();
+
+  auto text = static_cast<char const*>(GlobalLock(h));
+  std::shared_ptr<void> dataUnlocker(0, [&](void*) {GlobalUnlock(h);});
+  const size_t maxClipboardLen = 128;
+  size_t len = 0;
+  for (; len < maxClipboardLen && text[len]; ++len);
+  return text != nullptr ? std::string(text, text + len) : std::string();
+}
+
+static std::string GetNormalizedClipboardText()
+{
+  auto text = GetClipboardText();
+  text.resize(std::remove_if(text.begin(), text.end(), [](char c) {return !isident(c);}) - text.begin());
+  return text;
+}
+
 void ExecuteScript(WideString const& script, WideString const& args, WideString workingDirectory)
 {
   SHELLEXECUTEINFOW ShExecInfo = {};
@@ -687,6 +712,9 @@ std::vector<FarKey> GetFarKeys(std::string const& filterkeys)
     if (virtualKey != 0xffff)
       fk.push_back(ToFarKey(virtualKey));
   }
+  fk.push_back({VK_INSERT, SHIFT_PRESSED});
+  fk.push_back({0x56, LEFT_CTRL_PRESSED});
+  fk.push_back({0x56, RIGHT_CTRL_PRESSED});
   fk.push_back(FarKey());
   return fk;
 }
@@ -735,6 +763,11 @@ int FilterMenu(const wchar_t *title,MenuList const& lst,int sel,int flags=MF_LAB
       if(bkey==-1)
       {
         return menu[res].UserData;
+      }
+      if (bkey >= filterkeys.length())
+      {
+        filter += GetNormalizedClipboardText().c_str();
+        continue;
       }
       int key=filterkeys[bkey];
       if(key==8)
@@ -823,6 +856,11 @@ bool LookupTagsMenu(char const* tagsFile, size_t maxCount, TagInfo& tag)
     {
       tag = tags[res];
       return true;
+    }
+    if (bkey >= filterkeys.length())
+    {
+      filter += GetNormalizedClipboardText().c_str();
+      continue;
     }
     int key=filterkeys[bkey];
     if(key==8)
