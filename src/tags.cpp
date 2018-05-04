@@ -589,7 +589,9 @@ int Load(const char* _filename)
     }
   }
 
-  files.push_back(fi);
+  if (iter == files.end())
+    files.push_back(fi);
+
   return 0;
 }
 
