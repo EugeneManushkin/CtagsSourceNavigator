@@ -76,6 +76,7 @@ enum{
   MTitleHistory,
   MLookupSymbol,
   MAskSearchTags,
+  MTagsMask,
 };
 
 struct Config{
@@ -86,6 +87,7 @@ struct Config{
   String exe;
   String opt;
   String autoload;
+  String tagsmask;
   String history_file;
   size_t history_len;
   bool casesens;

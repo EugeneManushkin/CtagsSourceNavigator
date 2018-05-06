@@ -46,3 +46,4 @@
 "Recently loaded tags files"
 "Search name in entire repository"
 "Tags file not loaded for current repository.\nWould you like to search tags file?"
+"Tags files matching masks"

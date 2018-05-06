@@ -563,6 +563,10 @@ static void LoadConfig()
     {
       config.SetWordchars(val);
     }
+    else if(key == "tagsmask")
+    {
+      config.tagsmask = val.c_str();
+    }
     else if(key == "historyfile")
     {
       config.history_file = val.c_str();
@@ -1548,7 +1552,7 @@ HANDLE WINAPI OpenW(const struct OpenInfo *info)
 HANDLE WINAPI AnalyseW(const AnalyseInfo* info)
 {
   return info->FileName &&
-         FSF.ProcessName(L"tags", const_cast<wchar_t*>(info->FileName), 0, PN_CMPNAMELIST | PN_SKIPPATH) != 0 &&
+         FSF.ProcessName(ToString(config.tagsmask.Str()).c_str(), const_cast<wchar_t*>(info->FileName), 0, PN_CMPNAMELIST | PN_SKIPPATH) != 0 &&
          IsTagFile(ToStdString(info->FileName).c_str()) ? INVALID_HANDLE_VALUE : nullptr;
 }
 
@@ -1672,26 +1676,29 @@ intptr_t WINAPI ConfigureDlgProc(
 
 intptr_t WINAPI ConfigureW(const struct ConfigureInfo *Info)
 {
+  unsigned char y = 0;
   struct InitDialogItem initItems[]={
-//    Type        X1 Y2 X2 Y2  F S           Flags D Data
-    DI_DOUBLEBOX, 3, 1, 64,18, 0,0,              0,0,MPlugin,L"",{},
-    DI_TEXT,      5, 2,  0, 0, 0,0,              0,0,MPathToExe,L"",{},
-    DI_EDIT,      5, 3, 62, 3, 1,0,              0,0,-1,ToString(config.exe.Str()),{"pathtoexe", true},
-    DI_TEXT,      5, 4,  0, 0, 0,0,              0,0,MCmdLineOptions,L"",{},
-    DI_EDIT,      5, 5, 62, 5, 1,0,              0,0,-1,ToString(config.opt.Str()),{"commandline"},
-    DI_TEXT,      5, 6,  0, 0, 0,0,              0,0,MWordChars,L"",{},
-    DI_EDIT,      5, 7, 62, 9, 1,0,              0,0,-1,ToString(config.GetWordchars()),{"wordchars", true},
-    DI_CHECKBOX,  5, 8, 62,10,1,config.casesens, 0,0,MCaseSensFilt,L"",{"casesensfilt", false, true},
-    DI_TEXT,      5, 9, 62,10, 1,0,DIF_SEPARATOR|DIF_BOXCOLOR,0,-1,L"",{},
-    DI_TEXT,      5, 10, 0, 0, 0,0,              0,0,MHistoryFile,L"",{},
-    DI_EDIT,      5, 11,62, 9, 1,0,              0,0,-1,ToString(config.history_file.Str()),{"historyfile"},
-    DI_TEXT,      5, 12, 0, 0, 0,0,              0,0,MHistoryLength,L"",{},
-    DI_EDIT,      5, 13,62, 9, 1,0,              0,0,-1,ToString(std::to_string(config.history_len)),{"historylen", true},
-    DI_TEXT,      5, 14, 0, 0, 0,0,              0,0,MAutoloadFile,L"",{},
-    DI_EDIT,      5, 15,62, 7, 1,0,              0,0,-1,ToString(config.autoload.Str()),{"autoload"},
-    DI_TEXT,      5, 16,62,10, 1,0,DIF_SEPARATOR|DIF_BOXCOLOR,0,-1,L"",{},
-    DI_BUTTON,    0, 17, 0, 0, 0,0,DIF_CENTERGROUP,1,MOk,L"",{},
-    DI_BUTTON,    0, 17, 0, 0, 0,0,DIF_CENTERGROUP,0,MCancel,L"",{}
+//    Type        X1  Y2  X2 Y2  F S           Flags D Data
+    DI_DOUBLEBOX, 3, ++y, 64,20, 0,0,              0,0,MPlugin,L"",{},
+    DI_TEXT,      5, ++y,  0, 0, 0,0,              0,0,MPathToExe,L"",{},
+    DI_EDIT,      5, ++y, 62, 3, 1,0,              0,0,-1,ToString(config.exe.Str()),{"pathtoexe", true},
+    DI_TEXT,      5, ++y,  0, 0, 0,0,              0,0,MCmdLineOptions,L"",{},
+    DI_EDIT,      5, ++y, 62, 5, 1,0,              0,0,-1,ToString(config.opt.Str()),{"commandline"},
+    DI_TEXT,      5, ++y,  0, 0, 0,0,              0,0,MWordChars,L"",{},
+    DI_EDIT,      5, ++y, 62, 9, 1,0,              0,0,-1,ToString(config.GetWordchars()),{"wordchars", true},
+    DI_CHECKBOX,  5, ++y, 62,10, 1,config.casesens,0,0,MCaseSensFilt,L"",{"casesensfilt", false, true},
+    DI_TEXT,      5, ++y, 62,10, 1,0,DIF_SEPARATOR|DIF_BOXCOLOR,0,-1,L"",{},
+    DI_TEXT,      5, ++y,  0, 0, 0,0,              0,0,MTagsMask,L"",{},
+    DI_EDIT,      5, ++y, 62, 9, 1,0,              0,0,-1,ToString(config.tagsmask.Str()),{"tagsmask", true},
+    DI_TEXT,      5, ++y,  0, 0, 0,0,              0,0,MHistoryFile,L"",{},
+    DI_EDIT,      5, ++y, 62, 9, 1,0,              0,0,-1,ToString(config.history_file.Str()),{"historyfile"},
+    DI_TEXT,      5, ++y,  0, 0, 0,0,              0,0,MHistoryLength,L"",{},
+    DI_EDIT,      5, ++y, 62, 9, 1,0,              0,0,-1,ToString(std::to_string(config.history_len)),{"historylen", true},
+    DI_TEXT,      5, ++y,  0, 0, 0,0,              0,0,MAutoloadFile,L"",{},
+    DI_EDIT,      5, ++y, 62, 7, 1,0,              0,0,-1,ToString(config.autoload.Str()),{"autoload"},
+    DI_TEXT,      5, ++y, 62,10, 1,0,DIF_SEPARATOR|DIF_BOXCOLOR,0,-1,L"",{},
+    DI_BUTTON,    0, ++y,  0, 0, 0,0,DIF_CENTERGROUP,1,MOk,L"",{},
+    DI_BUTTON,    0,   y,  0, 0, 0,0,DIF_CENTERGROUP,0,MCancel,L"",{}
   };
 
   constexpr size_t itemsCount = sizeof(initItems)/sizeof(initItems[0]);
@@ -1704,7 +1711,7 @@ intptr_t WINAPI ConfigureW(const struct ConfigureInfo *Info)
                -1,
                -1,
                68,
-               20,
+               y + 3,
                L"ctagscfg",
                DialogItems,
                sizeof(DialogItems)/sizeof(DialogItems[0]),
@@ -1719,7 +1726,7 @@ intptr_t WINAPI ConfigureW(const struct ConfigureInfo *Info)
   ConfigureDialog = handle;
   std::shared_ptr<void> handleHolder(handle, [](void* h){I.DialogFree(h);});
   auto ExitCode = I.DialogRun(handle);
-  if(ExitCode!=16)return FALSE;
+  if(ExitCode!=18)return FALSE;
   if (SaveConfig(initItems, itemsCount))
     LoadConfig();
 
