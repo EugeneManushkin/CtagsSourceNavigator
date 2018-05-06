@@ -1523,6 +1523,11 @@ HANDLE WINAPI OpenW(const struct OpenInfo *info)
         tagfile = JoinPath(GetPanelDir(), cmd);
       }
     }
+    if (OpenFrom == OPEN_ANALYSE)
+    {
+      auto fileName = reinterpret_cast<const OpenAnalyseInfo*>(info->Data)->Info->FileName;
+      tagfile = fileName ? fileName : L"";
+    }
     if(!tagfile.empty())
     {
       auto strTagFile = ToStdString(tagfile);
@@ -1534,11 +1539,18 @@ HANDLE WINAPI OpenW(const struct OpenInfo *info)
       }
       InfoMessage(GetMsg(MLoadOk) + WideString(L":") + ToString(std::to_string(Count(strTagFile.c_str()))));
       VisitedTags.Access(tagfile);
+      return OpenFrom == OPEN_ANALYSE ? PANEL_STOP : nullptr;
     }
   }
   return nullptr;
 }
 
+HANDLE WINAPI AnalyseW(const AnalyseInfo* info)
+{
+  return info->FileName &&
+         FSF.ProcessName(L"tags", const_cast<wchar_t*>(info->FileName), 0, PN_CMPNAMELIST | PN_SKIPPATH) != 0 &&
+         IsTagFile(ToStdString(info->FileName).c_str()) ? INVALID_HANDLE_VALUE : nullptr;
+}
 
 void WINAPI GetPluginInfoW(struct PluginInfo *pi)
 {
