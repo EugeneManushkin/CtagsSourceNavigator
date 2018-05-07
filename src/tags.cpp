@@ -68,9 +68,15 @@ bool Config::isident(int chr) const
 }
 
 struct TagFileInfo{
+  TagFileInfo(char const* fname)
+    : filename(fname)
+    , indexFile(filename + ".idx")
+    , modtm(0)
+  {    
+  }
+
   String filename;
   String indexFile;
-  Array<String> loadBases;
   time_t modtm;
   Vector<int> offsets;
 
@@ -112,7 +118,7 @@ static char GetPathSeparator(char const* str)
   return IsPathSeparator(*str) ? *str : defaultPathSeparator;
 }
 
-char const IndexFileSignature[] = "tags.idx";
+char const IndexFileSignature[] = "tags.idx.v1";
 
 static bool ReadSignature(FILE* f)
 {
@@ -301,7 +307,7 @@ void GetLine(std::string& buffer, FILE *f)
   GetLine(tmp, buffer, f);
 }
 
-static int CreateIndex(TagFileInfo* fi)
+static int CreateIndex(TagFileInfo* fi, time_t tagsModTime)
 {
   int pos=0;
   String file;
@@ -429,6 +435,7 @@ static int CreateIndex(TagFileInfo* fi)
   int cnt=fi->offsets.Count();
   fwrite(IndexFileSignature, 1, sizeof(IndexFileSignature), g);
   fwrite(&pathSeparator, 1, 1, g);
+  fwrite(&tagsModTime,sizeof(tagsModTime),1,g);
   fwrite(&cnt,4,1,g);
   fwrite(&fi->offsets[0],4,fi->offsets.Count(),g);
   if(lines.Count())
@@ -483,112 +490,59 @@ static int CreateIndex(TagFileInfo* fi)
   return 1;
 }
 
-void LoadIndex(TagFileInfo* fi)
+bool LoadIndex(TagFileInfo* fi, time_t tagsModTime)
 {
   FILE *f=fopen(fi->indexFile,"rb");
+  if (!f)
+    return false;
+
+  std::shared_ptr<void> fileCloser(0, [&](void*){ fclose(f); });
   int sz;
-  if(ReadSignature(f))
-  {
-    fseek(f, 1, SEEK_CUR);
-  }
+  if(!ReadSignature(f))
+    return false;
+
+  fseek(f, 1, SEEK_CUR);
+  time_t storedTagsModTime = 0;
+  fread(&storedTagsModTime,sizeof(storedTagsModTime),1,f);
+  if (storedTagsModTime != tagsModTime)
+    return false;
+
   fread(&sz,4,1,f);
   fi->offsets.Clean();
   fi->offsets.Init(sz);
   fread(&fi->offsets[0],4,sz,f);
   fclose(f);
+  return true;
 }
 
-bool FindIdx(TagFileInfo* fi)
+static int Load(TagFileInfo* fi)
 {
-  fi->indexFile=fi->filename+".idx";
-  struct stat sti;
-  if(stat(fi->indexFile,&sti)!=-1 && sti.st_mtime==fi->modtm)
+  struct stat st;
+  if (stat(fi->filename, &st) == -1)
+    return MEFailedToOpen;
+
+  if (fi->modtm == st.st_mtime)
+    return 0;
+
+  if (!LoadIndex(fi, st.st_mtime) && !CreateIndex(fi, st.st_mtime))
   {
-    return true;
+    remove(fi->indexFile);
+    return MFailedToWriteIndex;
   }
-  char idxdir[512];
-  const char *dirs[]={"TAGS_INDEX","TEMP","TMP",NULL};
-  const char **dir=dirs;
-  for(;*dir;dir++)
-  {
-    fi->indexFile="";
-    if(GetEnvironmentVariable(*dir,idxdir,sizeof(idxdir)))
-    {
-      fi->indexFile=fi->filename+".idx";
-      fi->indexFile.Replace('\\','_');
-      fi->indexFile.Replace(':','_');
-      if(idxdir[strlen(idxdir)-1]!='\\')
-      {
-        fi->indexFile.Insert(0,"\\");
-      }
-      fi->indexFile.Insert(0,idxdir);
-      if(stat(fi->indexFile,&sti)!=-1 && sti.st_mtime==fi->modtm)
-      {
-        return true;
-      }
-    }
-  }
-  fi->indexFile="";
-  return false;
+
+  fi->modtm = st.st_mtime;
+  return 0;
 }
 
-//TODO: add check if index file is consistent
-static bool FindAndLoadIndex(TagFileInfo *fi, time_t tagsTimeStamp)
-{
-  struct stat sti;
-  if (fi->indexFile.Length()>0)
-  {
-    if (stat(fi->indexFile, &sti) != -1 && sti.st_mtime == tagsTimeStamp)
-    {
-      LoadIndex(fi);
-      return 1;
-    }
-  }
-  else
-  if (FindIdx(fi))
-  {
-    if (stat(fi->indexFile, &sti) != -1 && sti.st_mtime == tagsTimeStamp)
-    {
-      LoadIndex(fi);
-      return 1;
-    }
-  }
-
-  return false;
-}
-
+//TODO: rework: must return error instead of message id (message id coud be zero)
 int Load(const char* _filename)
 {
   String filename=_filename;
-  struct stat st;
   filename.ToLower();
-  if(stat(filename,&st)==-1)return MEFailedToOpen;
   auto iter = std::find_if(files.begin(), files.end(), [&](TagFileInfoPtr const& file) {return file->filename == filename;});
-  TagFileInfoPtr fi = iter == files.end() ? TagFileInfoPtr() : *iter;
-  if(!fi)
-  {
-    fi= std::shared_ptr<TagFileInfo>(new TagFileInfo);
-    fi->filename=filename;
-    fi->modtm=st.st_mtime;
-  }else
-  {
-    if(fi->modtm==st.st_mtime)
-    {
-      return 1;
-    }
-  }
-  if (!FindAndLoadIndex(fi.get(), st.st_mtime))
-  {
-    fi->indexFile = fi->filename;
-    fi->indexFile += ".idx";
-    fi->modtm = st.st_mtime;
-    remove(fi->indexFile);
-    if (!CreateIndex(fi.get()))
-    {
-      remove(fi->indexFile);
-      return MFailedToWriteIndex;
-    }
-  }
+  TagFileInfoPtr fi = iter == files.end() ? std::shared_ptr<TagFileInfo>(new TagFileInfo(filename)) : *iter;
+  if (auto err = Load(fi.get()))
+    return err;
 
   if (iter == files.end())
     files.push_back(fi);
@@ -598,14 +552,9 @@ int Load(const char* _filename)
 
 static void FindInFile(TagFileInfo* fi,const char* str,PTagArray ta)
 {
+  if (!!Load(fi))return;
   FILE *f=fopen(fi->filename,"rt");
   if(!f)return;
-  struct stat st;
-  fstat(fileno(f),&st);
-  if(fi->modtm!=st.st_mtime)
-  {
-    Load(fi->filename);
-  }
   int len=strlen(str);
   int pos;
   int left=0;
@@ -674,17 +623,18 @@ static void FindInFile(TagFileInfo* fi,const char* str,PTagArray ta)
 
 void FindFile(TagFileInfo* fi,const char* filename,PTagArray ta)
 {
+  if (!!Load(fi))return;
   FILE *g=fopen(fi->indexFile,"rb");
   if(!g)return;
   char filePathSeparator = '\\';
-  if (ReadSignature(g))
-  {
-    fread(&filePathSeparator, 1, 1, g);
-  }
+  if (!ReadSignature(g))
+    throw std::logic_error("Signature must be valid");
 
+  fread(&filePathSeparator, 1, 1, g);
+  fseek(g, sizeof(time_t), SEEK_CUR);
   int sz;
   fread(&sz,4,1,g);
-  fseek(g,4+sz*4+sizeof(IndexFileSignature)+1,SEEK_SET);
+  fseek(g,4+sz*4+sizeof(IndexFileSignature)+1+sizeof(time_t),SEEK_SET);
   Vector<int> offsets;
   offsets.Init(sz);
   if(sz)fread(&offsets[0],4,sz,g);
@@ -774,16 +724,16 @@ void FindFile(TagFileInfo* fi,const char* filename,PTagArray ta)
 
 void FindClass(TagFileInfo* fi,const char* str,PTagArray ta)
 {
+  if (!!Load(fi))return;
   FILE *g=fopen(fi->indexFile,"rb");
   if(!g)return;
   int sz;
-  if (ReadSignature(g))
-  {
-    fseek(g, 1, SEEK_CUR);
-  }
+  if (!ReadSignature(g))
+    throw std::logic_error("Signature must be valid");
 
+  fseek(g,1+sizeof(time_t),SEEK_CUR);
   fread(&sz,4,1,g);
-  fseek(g,4+sz*4*2+sizeof(IndexFileSignature)+1,SEEK_SET);
+  fseek(g,4+sz*4*2+sizeof(IndexFileSignature)+1+sizeof(time_t),SEEK_SET);
   fread(&sz,4,1,g);
   Vector<int> offsets;
   offsets.Init(sz);
@@ -915,10 +865,9 @@ static void CheckFiles(std::string const& projectRoot, TagFileInfo* fi,StrList& 
 {
   FILE *g=fopen(fi->indexFile,"rb");
   if (ReadSignature(g))
-  {
-    fseek(g, 1, SEEK_CUR);
-  }
+    throw std::logic_error("Signature must be valid");
 
+  fseek(g, 1 + sizeof(time_t), SEEK_CUR);
   int sz;
   fread(&sz,4,1,g);
   fseek(g,sz*4*2,SEEK_CUR);
@@ -1061,14 +1010,9 @@ static std::pair<size_t, size_t> GetMatchedOffsetRange(FILE* f, TagFileInfo* fi,
 
 static void FindPartsInFile(TagFileInfo* fi,const char* str,StrList& dst)
 {
+  if (!!Load(fi)) return;
   FILE *f=fopen(fi->filename,"rt");
   if(!f)return;
-  struct stat st;
-  fstat(fileno(f),&st);
-  if(fi->modtm!=st.st_mtime)
-  {
-    Load(fi->filename);
-  }
   auto range = GetMatchedOffsetRange(f, fi, str, 0);
   if (range.second > range.first)
   {
@@ -1090,15 +1034,9 @@ static void FindPartsInFile(TagFileInfo* fi,const char* str,StrList& dst)
 static std::vector<TagInfo> FindPartiallyMatchedTags(TagFileInfo* fi, const char* part, size_t maxCount)
 {
   std::vector<TagInfo> result;
-  //TODO: refactor duplicated code
+  if (!!Load(fi)) return result;
   FILE *f=fopen(fi->filename,"rt");
   if(!f)return result;
-  struct stat st;
-  fstat(fileno(f),&st);
-  if(fi->modtm!=st.st_mtime)
-  {
-    Load(fi->filename);
-  }
   auto range = GetMatchedOffsetRange(f, fi, part, maxCount);
   if (range.second > range.first)
   {
@@ -1356,15 +1294,9 @@ int SaveChangedFiles(const char* file, const char* outputFilename)
       break;
     }
   }
-  if(!fi)
+  if(!fi && Load(filename) > 1)
   {
-    struct stat st;
-    if(stat(filename,&st)==-1)return 0;
-    TagFileInfo tfi;
-    tfi.filename=filename;
-    tfi.modtm=st.st_mtime;
-    if(!FindIdx(&tfi))return 0;
-    if(Load(filename)!=1)return 0;
+    return 0;
   }
   StrList sl;
   if(!CheckChangedFiles(filename,sl))return 0;
