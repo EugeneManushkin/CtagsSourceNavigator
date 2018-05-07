@@ -118,6 +118,11 @@ static char GetPathSeparator(char const* str)
   return IsPathSeparator(*str) ? *str : defaultPathSeparator;
 }
 
+static bool FileExists(char const* filename)
+{
+  return GetFileAttributesA(filename) != INVALID_FILE_ATTRIBUTES;
+}
+
 char const IndexFileSignature[] = "tags.idx.v1";
 
 static bool ReadSignature(FILE* f)
@@ -521,7 +526,7 @@ static int Load(TagFileInfo* fi)
   if (stat(fi->filename, &st) == -1)
     return MEFailedToOpen;
 
-  if (fi->modtm == st.st_mtime)
+  if (fi->modtm == st.st_mtime && FileExists(fi->indexFile))
     return 0;
 
   if (!LoadIndex(fi, st.st_mtime) && !CreateIndex(fi, st.st_mtime))
@@ -1144,7 +1149,7 @@ void Autoload(const char* fn)
   String dir = fn;
   //DebugBreak();
   StrList sl;
-  if(GetFileAttributes(dir)!=0xFFFFFFFF)
+  if(FileExists(dir))
   {
     sl.LoadFromFile(dir);
     for(int i=0;i<sl.Count();i++)
