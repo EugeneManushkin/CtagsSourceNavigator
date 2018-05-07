@@ -1431,11 +1431,12 @@ HANDLE WINAPI OpenW(const struct OpenInfo *info)
       MenuList ml = {
            MI(MLookupSymbol, miLookupSymbol)
          , MI::Separator()
-         , MI(MLoadFromHistory, miLoadFromHistory)
          , MI(MLoadTagsFile, miLoadTagsFile)
+         , MI(MLoadFromHistory, miLoadFromHistory)
          , MI(MUnloadTagsFile, miUnloadTagsFile)
-         , MI(MCreateTagsFile, miCreateTagsFile)
          , MI(MAddTagsToAutoload, miAddTagsToAutoload)
+         , MI::Separator()
+         , MI(MCreateTagsFile, miCreateTagsFile)
       };
       //TODO: fix UpdateTagsFile operation and include in menu
       int rc=Menu(GetMsg(MPlugin),ml,0);
