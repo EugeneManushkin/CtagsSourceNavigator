@@ -241,6 +241,13 @@ static std::string MakeDeclaration(std::string const& str)
   return declaration;
 }
 
+static std::string MakeFilename(char const* str)
+{
+  std::string result = str;
+  result.resize(std::unique(result.begin(), result.end(), [](char a, char b) {return a == '\\' && a == b; }) - result.begin());
+  return result;
+}
+
 RegExp reParse("/(.+?)\\t(.*?)\\t(\\d+|\\/.*?\\/(?<=[^\\\\]\\/));\"\\t(\\w)(?:\\tline:(\\d+))?(?:\\t(\\S*))?/");
 
 TagInfo* ParseLine(const char* buf,const String& base)
@@ -258,7 +265,8 @@ TagInfo* ParseLine(const char* buf,const String& base)
     {
       file.Insert(0,base);
     }
-    i->file=file;
+
+    i->file = MakeFilename(file.Str()).c_str();
     SetStr(pos,buf,m[3]);
     if(pos[0]=='/')
     {
@@ -656,6 +664,25 @@ static void FindInFile(TagFileInfo* fi,const char* str,PTagArray ta)
   }
   fclose(f);
 }
+static int CompareFilenames(char const* left, char const* &right, size_t len)
+{
+  while (len > 0)
+  {
+    if (IsPathSeparator(*left) && IsPathSeparator(*right))
+    {
+      while (IsPathSeparator(*(right + 1)))
+        ++right;
+    }
+    else if (*left != *right)
+    {
+      return *left - *right;
+    }
+    --len;
+    ++left;
+    ++right;
+  }
+  return 0;
+}
 
 void FindFile(TagFileInfo* fi,const char* filename,PTagArray ta)
 {
@@ -676,17 +703,13 @@ void FindFile(TagFileInfo* fi,const char* filename,PTagArray ta)
   fclose(g);
   FILE *f=fi->OpenTags();
   if(!f)return;
-  String str(filename);
-  char separator = GetPathSeparator(str);
-  if (separator != filePathSeparator)
-    str.Replace(separator, filePathSeparator);
 
-  int len=strlen(str);
+  int len=strlen(filename);
   int left=0;
   int right=offsets.Count()-1;
   int cmp=1;
   int pos;
-  char *file;
+  char const*file;
   String base=fi->GetRepoRoot();
   while(left<=right)
   {
@@ -694,8 +717,8 @@ void FindFile(TagFileInfo* fi,const char* filename,PTagArray ta)
     fseek(f,offsets[pos],SEEK_SET);
     fgets(strbuf,sizeof(strbuf),f);
     file=strchr(strbuf,'\t')+1;
-    cmp=strnicmp(str,file,len);
-    if(!cmp && file[len]=='\t')
+    cmp=CompareFilenames(filename,file,len);
+    if(!cmp && *file=='\t')
     {
       break;
     }else if(cmp<=0)
@@ -706,7 +729,7 @@ void FindFile(TagFileInfo* fi,const char* filename,PTagArray ta)
       left=pos+1;
     }
   }
-  if(!cmp && file[len]=='\t')
+  if(!cmp && *file=='\t')
   {
     int endpos=pos;
     while(pos>0)
@@ -714,7 +737,7 @@ void FindFile(TagFileInfo* fi,const char* filename,PTagArray ta)
       fseek(f,offsets[pos-1],SEEK_SET);
       fgets(strbuf,sizeof(strbuf),f);
       file=strchr(strbuf,'\t')+1;
-      if(!strnicmp(str,file,len) && file[len]=='\t')
+      if(!CompareFilenames(filename,file,len) && *file=='\t')
       {
         pos--;
       }else
@@ -727,7 +750,7 @@ void FindFile(TagFileInfo* fi,const char* filename,PTagArray ta)
       fseek(f,offsets[endpos+1],SEEK_SET);
       fgets(strbuf,sizeof(strbuf),f);
       file=strchr(strbuf,'\t')+1;
-      if(!strnicmp(str,file,len) && file[len]=='\t')
+      if(!CompareFilenames(filename,file,len) && *file=='\t')
       {
         endpos++;
       }else
