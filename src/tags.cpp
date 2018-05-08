@@ -666,6 +666,7 @@ static void FindInFile(TagFileInfo* fi,const char* str,PTagArray ta)
 }
 static int CompareFilenames(char const* left, char const* &right, size_t len)
 {
+  int a = 0, b = 0;
   while (len > 0)
   {
     if (IsPathSeparator(*left) && IsPathSeparator(*right))
@@ -673,9 +674,9 @@ static int CompareFilenames(char const* left, char const* &right, size_t len)
       while (IsPathSeparator(*(right + 1)))
         ++right;
     }
-    else if (*left != *right)
+    else if ((a = tolower(*left)) != (b = tolower(*right)))
     {
-      return *left - *right;
+      return a - b;
     }
     --len;
     ++left;
@@ -1140,7 +1141,6 @@ void FindParts(const char* file, const char* part,StrList& dst)
 PTagArray FindFileSymbols(const char* file)
 {
   String filename=file;
-  filename.ToLower();
   PTagArray ta=new TagArray;
   for(int i=0;i<files.size();i++)
   {
