@@ -77,6 +77,7 @@ enum{
   MLookupSymbol,
   MAskSearchTags,
   MTagsMask,
+  MSelectTags,
 };
 
 struct Config{

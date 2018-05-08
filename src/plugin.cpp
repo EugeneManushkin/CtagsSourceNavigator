@@ -828,6 +828,7 @@ void GetMaxParams(std::vector<TagInfo> const& ta, int& maxid, int& maxDeclaratio
 bool LookupTagsMenu(char const* tagsFile, size_t maxCount, TagInfo& tag)
 {
   String filter;
+  auto title = GetMsg(MSelectSymbol);
   std::string filterkeys = "1234567890abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_$\\\x08-_=|;':\",./<>?[]*&^%#@!~";
   std::vector<FarKey> fk = GetFarKeys(filterkeys);
   //TODO: what if opened in editor?
@@ -851,7 +852,7 @@ bool LookupTagsMenu(char const* tagsFile, size_t maxCount, TagInfo& tag)
       menu.push_back(item);
     }
     intptr_t bkey;
-    WideString ftitle = L"[Search: " + ToString(filter.Length() ? filter.Str() : "") + L"]";
+    WideString ftitle = filter.Length() > 0 ? L"[Filter: " + ToString(filter.Str()) + L"]" : WideString(L" [") + title + L"]";
     WideString bottomText = L"";
     int res = I.Menu(&PluginGuid, &CtagsMenuGuid,-1,-1,0,FMENU_WRAPMODE|FMENU_SHOWAMPERSAND,ftitle.c_str(),
                      bottomText.c_str(),L"content",&fk[0],&bkey, menu.empty() ? nullptr : &menu[0],menu.size());
@@ -1194,26 +1195,53 @@ static WideString SelectFromHistory()
   return *selected;
 }
 
+static std::vector<WideString> GetDirectoryTags(WideString const& dir)
+{
+  std::vector<WideString> result;
+  WIN32_FIND_DATAW fileData;
+  auto pattern = JoinPath(dir, L"*");
+  std::shared_ptr<void> handle(::FindFirstFileW(pattern.c_str(), &fileData), ::FindClose);
+  if (handle.get() == INVALID_HANDLE_VALUE)
+    return result;
+
+  auto tagsMask = ToString(config.tagsmask.Str());
+  while (FindNextFileW(handle.get(), &fileData))
+  {
+    auto curFile = JoinPath(dir, fileData.cFileName);
+    auto test = FSF.ProcessName(tagsMask.c_str(), fileData.cFileName, 0, PN_CMPNAMELIST);
+    auto atts = GetFileAttributesW(curFile.c_str());
+    if (!(GetFileAttributesW(curFile.c_str()) & FILE_ATTRIBUTE_DIRECTORY) && !!FSF.ProcessName(tagsMask.c_str(), fileData.cFileName, 0, PN_CMPNAMELIST))
+      result.push_back(curFile);
+  }
+
+  return result;
+}
+
 static std::string SearchTagsFile(std::string const& fileName)
 {
-  if(YesNoCalncelDialog(GetMsg(MAskSearchTags)) != YesNoCancel::Yes)
-    return std::string();
-
   auto str = fileName;
-  std::string tagsFile;
-  while(tagsFile.empty() && !str.empty())
+  std::vector<WideString> foundTags;
+  while(!str.empty())
   {
     auto pos = str.rfind('\\');
     if (pos == std::string::npos)
       break;
 
     str = str.substr(0, pos);
-    auto tags = str + "\\tags";
-    if (GetFileAttributesA(tags.c_str()) != INVALID_FILE_ATTRIBUTES)
-      tagsFile.swap(tags);
+    auto tags = GetDirectoryTags(ToString(str));
+    foundTags.insert(foundTags.end(), tags.begin(), tags.end());
   }
 
-  return !IsTagFile(tagsFile.c_str()) ? std::string() : tagsFile;
+  if (foundTags.empty())
+    return std::string();
+
+  MenuList lst;
+  for (auto i = foundTags.begin(); i != foundTags.end(); ++i)
+    lst.push_back(MI(*i, std::distance(foundTags.begin(), i)));
+
+  auto res = Menu(GetMsg(MSelectTags), lst, 0, 0);
+  auto tagsFile = res >= 0 ? ToStdString(foundTags[res]) : std::string();
+  return tagsFile.empty() || !IsTagFile(tagsFile.c_str()) ? std::string() : tagsFile;
 }
 
 static bool EnsureTagsLoaded(std::string const& fileName)

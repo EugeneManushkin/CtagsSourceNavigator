@@ -6,7 +6,7 @@
 "Open declaration"
 "Reload tags file"
 "Name not found"
-"Select name"
+"Begin type or Ctrl+V"
 "Go back"
 "Reset undo buffer"
 "Tags file loaded"
@@ -47,3 +47,4 @@
 "Search name in entire repository"
 "Tags file not loaded for current repository.\nWould you like to search tags file?"
 "Tags files matching masks"
+"Select tags file to load"
