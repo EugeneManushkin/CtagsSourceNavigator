@@ -1535,14 +1535,14 @@ HANDLE WINAPI OpenW(const struct OpenInfo *info)
     }
     if(!tagfile.empty())
     {
-      auto strTagFile = ToStdString(tagfile);
-      int rc=Load(strTagFile.c_str());
+      size_t symbolsLoaded = 0;
+      int rc=Load(ToStdString(tagfile).c_str(), symbolsLoaded);
       if(rc>1)
       {
         Msg(GetMsg(rc));
         return nullptr;
       }
-      InfoMessage(GetMsg(MLoadOk) + WideString(L":") + ToString(std::to_string(Count(strTagFile.c_str()))));
+      InfoMessage(GetMsg(MLoadOk) + WideString(L":") + ToString(std::to_string(symbolsLoaded)));
       VisitedTags.Access(tagfile);
       return OpenFrom == OPEN_ANALYSE ? PANEL_STOP : nullptr;
     }

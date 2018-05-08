@@ -120,10 +120,9 @@ int isident(int chr);
 
 
 int Load(const char* filename);
+int Load(const char* filename, size_t& symbolsLoaded);
 void UnloadTags(int idx);
 PTagArray Find(const char* symbol,const char* filename);
-int Count();
-int Count(char const* fname);
 void FindParts(const char* file,const char* part,StrList& dst);
 std::vector<TagInfo> FindPartiallyMatchedTags(const char* file, const char* part, size_t maxCount);
 PTagArray FindFileSymbols(const char* file);

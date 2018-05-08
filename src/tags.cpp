@@ -587,7 +587,7 @@ int TagFileInfo::Load()
 }
 
 //TODO: rework: must return error instead of message id (message id coud be zero)
-int Load(const char* filename)
+int Load(const char* filename, size_t& symbolsLoaded)
 {
   auto iter = std::find_if(files.begin(), files.end(), [&](TagFileInfoPtr const& file) {return file->HasName(filename);});
   TagFileInfoPtr fi = iter == files.end() ? std::shared_ptr<TagFileInfo>(new TagFileInfo(filename)) : *iter;
@@ -597,7 +597,14 @@ int Load(const char* filename)
   if (iter == files.end())
     files.push_back(fi);
 
+  symbolsLoaded = fi->offsets.Count();
   return 0;
+}
+
+int Load(const char* filename)
+{
+  size_t symbolsLoaded = 0;
+  return Load(filename, symbolsLoaded);
 }
 
 static void FindInFile(TagFileInfo* fi,const char* str,PTagArray ta)
@@ -1200,23 +1207,6 @@ void Autoload(const char* fn)
       Load(fn);
     }
   }
-}
-
-int Count()
-{
-  int cnt=0;
-  for(int i=0;i<files.size();i++)
-  {
-    cnt+=files[i]->offsets.Count();
-  }
-  return cnt;
-}
-//TODO: refactor duplicated code
-int Count(char const* fname)
-{
-  auto iter = std::find_if(files.begin(), files.end(), [&](TagFileInfoPtr const& file) {return file->HasName(fname); });
-  TagFileInfoPtr fi = iter == files.end() ? TagFileInfoPtr() : *iter;
-  return iter == files.end() ? 0 : (*iter)->offsets.Count();
 }
 
 void GetFiles(StrList& dst)
