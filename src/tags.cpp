@@ -1141,6 +1141,7 @@ void FindParts(const char* file, const char* part,StrList& dst)
 PTagArray FindFileSymbols(const char* file)
 {
   String filename=file;
+  filename.ToLower();
   PTagArray ta=new TagArray;
   for(int i=0;i<files.size();i++)
   {
