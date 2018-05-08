@@ -1158,7 +1158,7 @@ static TagInfo* TagsMenu(PTagArray pta, bool displayFile = true)
     if(ti->declaration.Length()>maxDeclaration)maxDeclaration=ti->declaration.Length();
     //if(ti->file.Length()>maxfile)
   }
-  maxDeclaration = displayFile ? std::min(maxDeclaration, maxDeclarationWidth) : currentWidth-8-maxid-1-1-1;
+  maxDeclaration = std::min(maxDeclaration, displayFile ? maxDeclarationWidth : currentWidth-8-maxid-1-1-1);
   int maxfile=displayFile ? currentWidth-8-maxid-maxDeclaration-1-1-1 : 0;
   for(i=0;i<ta.Count();i++)
   {
