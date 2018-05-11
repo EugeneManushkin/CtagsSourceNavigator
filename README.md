@@ -1,5 +1,5 @@
 # Ctags Source Navigator
-This is a Far Manager plugin for browsing source code indexed by [Ctags](https://en.wikipedia.org/wiki/Ctags) utility.
+This is a [Far Manager](https://www.farmanager.com/) plugin for browsing source code indexed by [Ctags](https://en.wikipedia.org/wiki/Ctags) utility.
 ## Features
 + Jump to name declaration
 + Code completion
