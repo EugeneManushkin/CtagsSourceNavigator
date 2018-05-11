@@ -1,7 +1,14 @@
 cmake_minimum_required(VERSION 3.0)
-include_directories(googletest/googletest/include)
+include_directories(googletest/googletest/include
+                    ../src)
 file(GLOB TAGS_SOURCES
     "tags/*.cpp"
+    "../src/tags.cpp"
+    "../src/tags.h"
+    "../src/RegExp.cpp"
+    "../src/RegExp.hpp"
+    "../src/XTools.cpp"
+    "../src/XTools.hpp"
 )
 
 add_executable(tags_tests ${TAGS_SOURCES})
