@@ -78,7 +78,7 @@ enum{
   MAskSearchTags,
   MTagsMask,
   MSelectTags,
-  MReindexDir,
+  MReindexRepo,
   MAskReindex,
   MProceed,
   MTagsNotFound,

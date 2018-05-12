@@ -1279,7 +1279,7 @@ static bool EnsureTagsLoaded(std::string const& fileName)
   return true;
 }
 
-static WideString ReindexDirectory(std::string const& fileName)
+static WideString ReindexRepository(std::string const& fileName)
 {
   auto tagsFile = ToString(SearchTagsFile(fileName));
   if (tagsFile.empty())
@@ -1333,7 +1333,7 @@ HANDLE WINAPI OpenW(const struct OpenInfo *info)
     std::string fileName = GetFileNameFromEditor(ei.EditorID); // TODO: auto
     LazyAutoload();
     enum{
-      miFindSymbol,miUndo,miResetUndo,
+      miFindSymbol,miUndo,miResetUndo,miReindexRepo,
       miComplete,miBrowseClass,miBrowseFile,miLookupSymbol,
     };
     MenuList ml = {
@@ -1344,6 +1344,8 @@ HANDLE WINAPI OpenW(const struct OpenInfo *info)
       , MI(MBrowseClass,miBrowseClass)
       , MI(MBrowseSymbolsInFile,miBrowseFile)
       , MI(MLookupSymbol,miLookupSymbol)
+      , MI::Separator()
+      , MI(MReindexRepo, miReindexRepo)
     };
     int res=Menu(GetMsg(MPlugin),ml,0);
     if(res==-1)return nullptr;
@@ -1478,6 +1480,10 @@ HANDLE WINAPI OpenW(const struct OpenInfo *info)
       {
         SafeCall(std::bind(LookupSymbol, fileName));
       }break;
+      case miReindexRepo:
+      {
+        SafeCall(std::bind(ReindexRepository, fileName));
+      }break;
     }
   }
   else
@@ -1485,7 +1491,7 @@ HANDLE WINAPI OpenW(const struct OpenInfo *info)
     WideString tagfile;
     if(OpenFrom==OPEN_PLUGINSMENU)
     {
-      enum {miLoadFromHistory,miLoadTagsFile,miUnloadTagsFile, miReindexDir,
+      enum {miLoadFromHistory,miLoadTagsFile,miUnloadTagsFile, miReindexRepo,
             miCreateTagsFile,miAddTagsToAutoload, miUpdateTagsFile, miLookupSymbol};
       MenuList ml = {
            MI(MLookupSymbol, miLookupSymbol)
@@ -1496,7 +1502,7 @@ HANDLE WINAPI OpenW(const struct OpenInfo *info)
          , MI(MAddTagsToAutoload, miAddTagsToAutoload)
          , MI::Separator()
          , MI(MCreateTagsFile, miCreateTagsFile)
-         , MI(MReindexDir, miReindexDir)
+         , MI(MReindexRepo, miReindexRepo)
       };
       //TODO: fix UpdateTagsFile operation and include in menu
       int rc=Menu(GetMsg(MPlugin),ml,0);
@@ -1565,9 +1571,9 @@ HANDLE WINAPI OpenW(const struct OpenInfo *info)
         {
           SafeCall(std::bind(LookupSymbol, ToStdString(JoinPath(GetPanelDir(), GetCurFile()))));
         }break;
-        case miReindexDir:
+        case miReindexRepo:
         {
-          tagfile = SafeCall(std::bind(ReindexDirectory, ToStdString(JoinPath(GetPanelDir(), GetCurFile()))), WideString());
+          tagfile = SafeCall(std::bind(ReindexRepository, ToStdString(JoinPath(GetPanelDir(), GetCurFile()))), WideString());
         }break;
       }
     }
