@@ -78,6 +78,10 @@ enum{
   MAskSearchTags,
   MTagsMask,
   MSelectTags,
+  MReindexDir,
+  MAskReindex,
+  MProceed,
+  MTagsNotFound,
 };
 
 struct Config{

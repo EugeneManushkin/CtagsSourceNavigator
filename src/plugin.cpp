@@ -43,6 +43,7 @@
 #include "resource.h"
 
 #include <algorithm>
+#include <functional>
 #include <string>
 #include <vector>
 #include <list>
@@ -205,6 +206,31 @@ std::string ToStdString(WideString const& str, UINT codePage = CP_ACP)
   std::vector<char> buffer(sz);
   WideCharToMultiByte(codePage, 0, str.c_str(), str.length(), &buffer[0], sz, nullptr, nullptr);
   return std::string(buffer.begin(), buffer.end());
+}
+
+template <typename CallType>
+auto SafeCall(CallType call, decltype(call()) errorResult) ->decltype(call())
+{
+  try
+  {
+    return call();
+  }
+  catch (std::exception const& e)
+  {
+    Msg(ToString(e.what()).c_str());
+  }
+  catch(Error const& err)
+  {
+    Msg(err.GetCode());
+  }
+
+  return errorResult;
+}
+
+template <typename CallType>
+void SafeCall(CallType call)
+{
+  SafeCall([call]() { call(); return 0; }, 0);
 }
 
 bool IsPathSeparator(WideString::value_type c)
@@ -379,21 +405,12 @@ static WideString GetSelectedDirectory()
   return selected == L".." ? GetPanelDir() : JoinPath(GetPanelDir(), selected);
 }
 
-int TagDirectory(WideString const& dir, std::string& errorMessage)
+int TagDirectory(WideString const& dir)
 {
-  try
-  {
-    if (!(GetFileAttributesW(dir.c_str()) & FILE_ATTRIBUTE_DIRECTORY))
-      throw std::runtime_error("Selected item is not a direcory");
+  if (!(GetFileAttributesW(dir.c_str()) & FILE_ATTRIBUTE_DIRECTORY))
+    throw std::runtime_error("Selected item is not a direcory");
 
-    ExecuteScript(ToString(ExpandEnvString(config.exe.Str())), ToString(config.opt.Str()), dir);
-  }
-  catch(std::exception const& e)
-  {
-    errorMessage = e.what();
-    return 0;
-  }
-
+  ExecuteScript(ToString(ExpandEnvString(config.exe.Str())), ToString(config.opt.Str()), dir);
   return 1;
 }
 
@@ -1233,15 +1250,21 @@ static std::string SearchTagsFile(std::string const& fileName)
   }
 
   if (foundTags.empty())
-    return std::string();
+    throw Error(MTagsNotFound);
 
   MenuList lst;
   for (auto i = foundTags.begin(); i != foundTags.end(); ++i)
     lst.push_back(MI(*i, std::distance(foundTags.begin(), i)));
 
   auto res = Menu(GetMsg(MSelectTags), lst, 0, 0);
-  auto tagsFile = res >= 0 ? ToStdString(foundTags[res]) : std::string();
-  return tagsFile.empty() || !IsTagFile(tagsFile.c_str()) ? std::string() : tagsFile;
+  if (res < 0)
+    return std::string();
+
+  auto tagsFile = ToStdString(foundTags[res]);
+  if (tagsFile.empty() || !IsTagFile(tagsFile.c_str()))
+    throw Error(MNotTagFile);
+
+  return tagsFile;
 }
 
 static bool EnsureTagsLoaded(std::string const& fileName)
@@ -1250,10 +1273,31 @@ static bool EnsureTagsLoaded(std::string const& fileName)
     return true;
 
   auto tagsFile = SearchTagsFile(fileName);
-  return !tagsFile.empty() && !Load(tagsFile.c_str());
+  if (tagsFile.empty() || !!Load(tagsFile.c_str()))
+    throw Error(MENotLoaded);
+
+  return true;
 }
 
-static void LookupSymbolImpl(std::string const& file)
+static WideString ReindexDirectory(std::string const& fileName)
+{
+  auto tagsFile = ToString(SearchTagsFile(fileName));
+  if (tagsFile.empty())
+    return WideString();
+
+  auto pos = tagsFile.find_last_of('\\');
+  if (pos == WideString::npos)
+    throw Error(MNotTagFile);
+
+  auto reposDir = tagsFile.substr(0, pos);
+  if (YesNoCalncelDialog(WideString(GetMsg(MAskReindex)) + L"\n" + reposDir + L"\n" + GetMsg(MProceed)) != YesNoCancel::Yes)
+    return WideString();
+
+  TagDirectory(reposDir);
+  return tagsFile;
+}
+
+static void LookupSymbol(std::string const& file)
 {
   auto tagsFile = IsTagFile(file.c_str()) ? file : GetTagsFile(file);
   tagsFile = tagsFile.empty() ? SearchTagsFile(file) : tagsFile;
@@ -1268,18 +1312,6 @@ static void LookupSymbolImpl(std::string const& file)
   TagInfo selectedTag;
   if (LookupTagsMenu(tagsFile.c_str(), maxMenuItems, selectedTag))
     NavigateTo(&selectedTag);
-}
-
-static void LookupSymbol(std::string const& file)
-{
-  try
-  {
-    LookupSymbolImpl(file);
-  }
-  catch(Error const& err)
-  {
-    Msg(err.GetCode());
-  }
 }
 
 static void FreeTagsArray(PTagArray ta)
@@ -1319,9 +1351,8 @@ HANDLE WINAPI OpenW(const struct OpenInfo *info)
       || res == miComplete
       || res == miBrowseClass
       || res == miBrowseFile
-        ) && !EnsureTagsLoaded(fileName))
+        ) && !SafeCall(std::bind(EnsureTagsLoaded, fileName), false))
     {
-      Msg(MENotLoaded);
       return nullptr;
     }
 
@@ -1445,7 +1476,7 @@ HANDLE WINAPI OpenW(const struct OpenInfo *info)
       }break;
       case miLookupSymbol:
       {
-        LookupSymbol(fileName);
+        SafeCall(std::bind(LookupSymbol, fileName));
       }break;
     }
   }
@@ -1454,7 +1485,7 @@ HANDLE WINAPI OpenW(const struct OpenInfo *info)
     WideString tagfile;
     if(OpenFrom==OPEN_PLUGINSMENU)
     {
-      enum {miLoadFromHistory,miLoadTagsFile,miUnloadTagsFile,
+      enum {miLoadFromHistory,miLoadTagsFile,miUnloadTagsFile, miReindexDir,
             miCreateTagsFile,miAddTagsToAutoload, miUpdateTagsFile, miLookupSymbol};
       MenuList ml = {
            MI(MLookupSymbol, miLookupSymbol)
@@ -1465,6 +1496,7 @@ HANDLE WINAPI OpenW(const struct OpenInfo *info)
          , MI(MAddTagsToAutoload, miAddTagsToAutoload)
          , MI::Separator()
          , MI(MCreateTagsFile, miCreateTagsFile)
+         , MI(MReindexDir, miReindexDir)
       };
       //TODO: fix UpdateTagsFile operation and include in menu
       int rc=Menu(GetMsg(MPlugin),ml,0);
@@ -1499,13 +1531,9 @@ HANDLE WINAPI OpenW(const struct OpenInfo *info)
           WideString msg = WideString(GetMsg(MPlugin)) + L"\n" + GetMsg(MTagingCurrentDirectory);
           I.Message(&PluginGuid, &InfoMessageGuid, FMSG_LEFTALIGN | FMSG_ALLINONE, nullptr, reinterpret_cast<const wchar_t* const*>(msg.c_str()), 0, 0);
           std::string errorMessage;
-          int rc= TagDirectory(selectedDir, errorMessage);
+          int rc = SafeCall(std::bind(TagDirectory, selectedDir), 0);
           I.RestoreScreen(hScreen);
-          if (!rc)
-          {
-            Msg(ToString(errorMessage).c_str());
-          }
-          else
+          if (rc)
           {
             tagfile = JoinPath(selectedDir, L"tags");
           }
@@ -1535,7 +1563,11 @@ HANDLE WINAPI OpenW(const struct OpenInfo *info)
         }break;
         case miLookupSymbol:
         {
-          LookupSymbol(ToStdString(JoinPath(GetPanelDir(), GetCurFile())));
+          SafeCall(std::bind(LookupSymbol, ToStdString(JoinPath(GetPanelDir(), GetCurFile()))));
+        }break;
+        case miReindexDir:
+        {
+          tagfile = SafeCall(std::bind(ReindexDirectory, ToStdString(JoinPath(GetPanelDir(), GetCurFile()))), WideString());
         }break;
       }
     }
