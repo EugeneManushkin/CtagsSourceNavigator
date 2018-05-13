@@ -451,7 +451,7 @@ static void RenameFile(WideString const& originalFile, WideString const& newFile
                              "\nwith error: " + std::to_string(GetLastError()));
 }
 
-static void DeleteFile(WideString const& file)
+static void RemoveFile(WideString const& file)
 {
   if (!::DeleteFileW(file.c_str()))
     throw std::runtime_error("Failed to delete file:\n" + ToStdString(file) +
@@ -1333,7 +1333,7 @@ static WideString ReindexRepository(std::string const& fileName)
   if (!res)
     RenameFile(tempName, tagsFile);
   else
-    SafeCall(std::bind(DeleteFile, tempName));
+    SafeCall(std::bind(RemoveFile, tempName));
 
   return tagsFile;
 }
