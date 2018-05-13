@@ -436,6 +436,37 @@ static std::shared_ptr<void> MakeTemp(WideString const& dirPath)
   });
 }
 
+static WideString GetTempFilename()
+{
+  auto tempPath = GenerateTempPath();
+  auto pos = tempPath.rfind('\\');
+  return pos == WideString::npos ? tempPath : tempPath.substr(pos, WideString::npos);
+}
+
+static void RenameFile(WideString const& originalFile, WideString const& newFile)
+{
+  if (!::MoveFileW(originalFile.c_str(), newFile.c_str()))
+    throw std::runtime_error("Failed to rename file:\n" + ToStdString(originalFile) + 
+                             "\nto file:\n" + ToStdString(newFile) + 
+                             "\nwith error: " + std::to_string(GetLastError()));
+}
+
+static void DeleteFile(WideString const& file)
+{
+  if (!::DeleteFileW(file.c_str()))
+    throw std::runtime_error("Failed to delete file:\n" + ToStdString(file) +
+                             "\nwith error: " + std::to_string(GetLastError()));
+}
+
+static WideString RenameToTempFilename(WideString const& originalFile)
+{
+  auto pos = originalFile.rfind('\\');
+  auto dirOfFile = pos == WideString::npos ? WideString() : originalFile.substr(0, pos);
+  auto newName = JoinPath(dirOfFile, GetTempFilename());
+  RenameFile(originalFile, newName);
+  return newName;
+}
+
 static bool UpdateTagsFile(const char* file)
 {
   WideString tempPath = GenerateTempPath();
@@ -1293,7 +1324,17 @@ static WideString ReindexRepository(std::string const& fileName)
   if (YesNoCalncelDialog(WideString(GetMsg(MAskReindex)) + L"\n" + reposDir + L"\n" + GetMsg(MProceed)) != YesNoCancel::Yes)
     return WideString();
 
-  TagDirectory(reposDir);
+  auto tempName = RenameToTempFilename(tagsFile);
+  auto hScreen=I.SaveScreen(0,0,-1,-1);
+  WideString msg = WideString(GetMsg(MPlugin)) + L"\n" + GetMsg(MTagingCurrentDirectory) + L"\n" + reposDir;
+  I.Message(&PluginGuid, &InfoMessageGuid, FMSG_LEFTALIGN | FMSG_ALLINONE, nullptr, reinterpret_cast<const wchar_t* const*>(msg.c_str()), 0, 0);
+  auto res = SafeCall(std::bind(TagDirectory, reposDir), 0);
+  I.RestoreScreen(hScreen);
+  if (!res)
+    RenameFile(tempName, tagsFile);
+  else
+    SafeCall(std::bind(DeleteFile, tempName));
+
   return tagsFile;
 }
 
@@ -1326,6 +1367,7 @@ static void FreeTagsArray(PTagArray ta)
 HANDLE WINAPI OpenW(const struct OpenInfo *info)
 {
   OPENFROM OpenFrom = info->OpenFrom;
+  WideString tagfile;
   if(OpenFrom==OPEN_EDITOR)
   {
     //DebugBreak();
@@ -1482,13 +1524,12 @@ HANDLE WINAPI OpenW(const struct OpenInfo *info)
       }break;
       case miReindexRepo:
       {
-        SafeCall(std::bind(ReindexRepository, fileName));
+        tagfile = SafeCall(std::bind(ReindexRepository, fileName), WideString());
       }break;
     }
   }
   else
   {
-    WideString tagfile;
     if(OpenFrom==OPEN_PLUGINSMENU)
     {
       enum {miLoadFromHistory,miLoadTagsFile,miUnloadTagsFile, miReindexRepo,
@@ -1534,9 +1575,8 @@ HANDLE WINAPI OpenW(const struct OpenInfo *info)
         {
           WideString selectedDir = GetSelectedDirectory();
           HANDLE hScreen=I.SaveScreen(0,0,-1,-1);
-          WideString msg = WideString(GetMsg(MPlugin)) + L"\n" + GetMsg(MTagingCurrentDirectory);
+          WideString msg = WideString(GetMsg(MPlugin)) + L"\n" + GetMsg(MTagingCurrentDirectory) + L"\n" + selectedDir;
           I.Message(&PluginGuid, &InfoMessageGuid, FMSG_LEFTALIGN | FMSG_ALLINONE, nullptr, reinterpret_cast<const wchar_t* const*>(msg.c_str()), 0, 0);
-          std::string errorMessage;
           int rc = SafeCall(std::bind(TagDirectory, selectedDir), 0);
           I.RestoreScreen(hScreen);
           if (rc)
@@ -1599,20 +1639,22 @@ HANDLE WINAPI OpenW(const struct OpenInfo *info)
       auto fileName = reinterpret_cast<const OpenAnalyseInfo*>(info->Data)->Info->FileName;
       tagfile = fileName ? fileName : L"";
     }
-    if(!tagfile.empty())
+  }
+
+  if(!tagfile.empty())
+  {
+    size_t symbolsLoaded = 0;
+    int rc=Load(ToStdString(tagfile).c_str(), symbolsLoaded);
+    if(rc>1)
     {
-      size_t symbolsLoaded = 0;
-      int rc=Load(ToStdString(tagfile).c_str(), symbolsLoaded);
-      if(rc>1)
-      {
-        Msg(GetMsg(rc));
-        return OpenFrom == OPEN_ANALYSE ? PANEL_STOP : nullptr;
-      }
-      InfoMessage(GetMsg(MLoadOk) + WideString(L":") + ToString(std::to_string(symbolsLoaded)));
-      VisitedTags.Access(tagfile);
+      Msg(GetMsg(rc));
       return OpenFrom == OPEN_ANALYSE ? PANEL_STOP : nullptr;
     }
+    InfoMessage(GetMsg(MLoadOk) + WideString(L":") + ToString(std::to_string(symbolsLoaded)));
+    VisitedTags.Access(tagfile);
+    return OpenFrom == OPEN_ANALYSE ? PANEL_STOP : nullptr;
   }
+
   return nullptr;
 }
 
