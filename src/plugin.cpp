@@ -1606,7 +1606,7 @@ HANDLE WINAPI OpenW(const struct OpenInfo *info)
       if(rc>1)
       {
         Msg(GetMsg(rc));
-        return nullptr;
+        return OpenFrom == OPEN_ANALYSE ? PANEL_STOP : nullptr;
       }
       InfoMessage(GetMsg(MLoadOk) + WideString(L":") + ToString(std::to_string(symbolsLoaded)));
       VisitedTags.Access(tagfile);
