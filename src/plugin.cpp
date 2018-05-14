@@ -291,6 +291,16 @@ int Msg(int msgid)
   return 0;
 }
 
+std::shared_ptr<void> LongOperationMessage(WideString const& msg)
+{
+  auto hScreen=I.SaveScreen(0,0,-1,-1);
+  I.Message(&PluginGuid, &InfoMessageGuid, FMSG_LEFTALIGN | FMSG_ALLINONE, nullptr, reinterpret_cast<const wchar_t* const*>(msg.c_str()), 0, 0);
+  return std::shared_ptr<void>(hScreen, [](void* h)
+  { 
+     I.RestoreScreen(h); 
+  });
+}
+
 EditorInfo GetCurrentEditorInfo()
 {
   EditorInfo ei = {sizeof(EditorInfo)};
@@ -375,8 +385,10 @@ static std::string GetNormalizedClipboardText()
   return text;
 }
 
-void ExecuteScript(WideString const& script, WideString const& args, WideString workingDirectory)
+void ExecuteScript(WideString const& script, WideString const& args, WideString workingDirectory, WideString message = WideString())
 {
+  message = message.empty() ? L"Running: " + script + L"\nArgs:" + args : message;
+  auto messageHolder = LongOperationMessage(message);
   SHELLEXECUTEINFOW ShExecInfo = {};
   ShExecInfo.cbSize = sizeof(SHELLEXECUTEINFO);
   ShExecInfo.fMask = SEE_MASK_NOCLOSEPROCESS;
@@ -410,7 +422,7 @@ int TagDirectory(WideString const& dir)
   if (!(GetFileAttributesW(dir.c_str()) & FILE_ATTRIBUTE_DIRECTORY))
     throw std::runtime_error("Selected item is not a direcory");
 
-  ExecuteScript(ToString(ExpandEnvString(config.exe.Str())), ToString(config.opt.Str()), dir);
+  ExecuteScript(ToString(ExpandEnvString(config.exe.Str())), ToString(config.opt.Str()), dir, WideString(GetMsg(MPlugin)) + L"\n" + GetMsg(MTagingCurrentDirectory) + L"\n" + dir);
   return 1;
 }
 
@@ -1325,11 +1337,7 @@ static WideString ReindexRepository(std::string const& fileName)
     return WideString();
 
   auto tempName = RenameToTempFilename(tagsFile);
-  auto hScreen=I.SaveScreen(0,0,-1,-1);
-  WideString msg = WideString(GetMsg(MPlugin)) + L"\n" + GetMsg(MTagingCurrentDirectory) + L"\n" + reposDir;
-  I.Message(&PluginGuid, &InfoMessageGuid, FMSG_LEFTALIGN | FMSG_ALLINONE, nullptr, reinterpret_cast<const wchar_t* const*>(msg.c_str()), 0, 0);
   auto res = SafeCall(std::bind(TagDirectory, reposDir), 0);
-  I.RestoreScreen(hScreen);
   if (!res)
     RenameFile(tempName, tagsFile);
   else
@@ -1574,11 +1582,7 @@ HANDLE WINAPI OpenW(const struct OpenInfo *info)
         case miCreateTagsFile:
         {
           WideString selectedDir = GetSelectedDirectory();
-          HANDLE hScreen=I.SaveScreen(0,0,-1,-1);
-          WideString msg = WideString(GetMsg(MPlugin)) + L"\n" + GetMsg(MTagingCurrentDirectory) + L"\n" + selectedDir;
-          I.Message(&PluginGuid, &InfoMessageGuid, FMSG_LEFTALIGN | FMSG_ALLINONE, nullptr, reinterpret_cast<const wchar_t* const*>(msg.c_str()), 0, 0);
           int rc = SafeCall(std::bind(TagDirectory, selectedDir), 0);
-          I.RestoreScreen(hScreen);
           if (rc)
           {
             tagfile = JoinPath(selectedDir, L"tags");
