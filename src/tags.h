@@ -82,6 +82,10 @@ enum{
   MAskReindex,
   MProceed,
   MTagsNotFound,
+  MPressEscToCancel,
+  MAskCancel,
+  MCanceling,
+  MCanceled,
 };
 
 struct Config{

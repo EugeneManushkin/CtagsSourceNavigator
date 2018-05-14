@@ -52,3 +52,7 @@
 "You are about to index following directory:"
 "Proceed?"
 "Tags not found"
+"(Press Esc to cancel)"
+"Do you want to cancel current operation?"
+"Canceling operation..."
+"Operation canceled by user"

@@ -294,7 +294,8 @@ int Msg(int msgid)
 std::shared_ptr<void> LongOperationMessage(WideString const& msg)
 {
   auto hScreen=I.SaveScreen(0,0,-1,-1);
-  I.Message(&PluginGuid, &InfoMessageGuid, FMSG_LEFTALIGN | FMSG_ALLINONE, nullptr, reinterpret_cast<const wchar_t* const*>(msg.c_str()), 0, 0);
+  auto message = WideString(GetMsg(MPlugin)) + L"\n" + msg;
+  I.Message(&PluginGuid, &InfoMessageGuid, FMSG_LEFTALIGN | FMSG_ALLINONE, nullptr, reinterpret_cast<const wchar_t* const*>(message.c_str()), 0, 0);
   return std::shared_ptr<void>(hScreen, [](void* h)
   { 
      I.RestoreScreen(h); 
@@ -385,10 +386,51 @@ static std::string GetNormalizedClipboardText()
   return text;
 }
 
-void ExecuteScript(WideString const& script, WideString const& args, WideString workingDirectory, WideString message = WideString())
+static bool IsEscPressed()
 {
-  message = message.empty() ? L"Running: " + script + L"\nArgs:" + args : message;
-  auto messageHolder = LongOperationMessage(message);
+  HANDLE h_con = GetStdHandle(STD_INPUT_HANDLE);
+  INPUT_RECORD rec;
+  DWORD read_cnt;
+  while (true) 
+  {
+    PeekConsoleInputW(h_con, &rec, 1, &read_cnt);
+    if (read_cnt == 0)
+      break;
+
+    ReadConsoleInputW(h_con, &rec, 1, &read_cnt);
+    if (rec.EventType == KEY_EVENT)
+    {
+      const KEY_EVENT_RECORD& key_event = rec.Event.KeyEvent;
+      if (key_event.wVirtualKeyCode == VK_ESCAPE)
+        return true;
+    }
+  }
+
+  return false;
+}
+
+static bool InteractiveWaitProcess(void* hProcess, WideString const& message)
+{
+  DWORD const tick = 1000;
+  auto msg = message + L"\n" + GetMsg(MPressEscToCancel);
+  auto messageHolder = LongOperationMessage(msg);
+  while (WaitForSingleObject(hProcess, tick) == WAIT_TIMEOUT)
+  {
+    if (!IsEscPressed())
+      continue;
+
+    if (YesNoCalncelDialog(GetMsg(MAskCancel)) == YesNoCancel::Yes)
+      return true;
+
+    messageHolder.reset();
+    messageHolder = LongOperationMessage(msg);
+  }
+
+  return false;
+}
+
+static void ExecuteScript(WideString const& script, WideString const& args, WideString workingDirectory, WideString const& message = WideString())
+{
   SHELLEXECUTEINFOW ShExecInfo = {};
   ShExecInfo.cbSize = sizeof(SHELLEXECUTEINFO);
   ShExecInfo.fMask = SEE_MASK_NOCLOSEPROCESS;
@@ -402,10 +444,19 @@ void ExecuteScript(WideString const& script, WideString const& args, WideString 
   if (!::ShellExecuteExW(&ShExecInfo))
     throw std::runtime_error("Failed to run external utility: " + std::to_string(GetLastError()));
 
-  WaitForSingleObject(ShExecInfo.hProcess, INFINITE);
   DWORD exitCode = 0;
+  if (InteractiveWaitProcess(ShExecInfo.hProcess, message.empty() ? L"Running: " + script + L"\nArgs:" + args : message))
+  {
+    TerminateProcess(ShExecInfo.hProcess, ERROR_CANCELLED);
+    auto messageHolder = LongOperationMessage(GetMsg(MCanceling));
+    WaitForSingleObject(ShExecInfo.hProcess, INFINITE);
+  }
+
   if (!GetExitCodeProcess(ShExecInfo.hProcess, &exitCode))
     throw std::runtime_error("Failed to get exit code of process: " + std::to_string(GetLastError()));
+
+  if (exitCode == ERROR_CANCELLED)
+    throw Error(MCanceled);
 
   if (exitCode)
     throw std::runtime_error("External utility failed with code " + std::to_string(exitCode));
@@ -422,7 +473,7 @@ int TagDirectory(WideString const& dir)
   if (!(GetFileAttributesW(dir.c_str()) & FILE_ATTRIBUTE_DIRECTORY))
     throw std::runtime_error("Selected item is not a direcory");
 
-  ExecuteScript(ToString(ExpandEnvString(config.exe.Str())), ToString(config.opt.Str()), dir, WideString(GetMsg(MPlugin)) + L"\n" + GetMsg(MTagingCurrentDirectory) + L"\n" + dir);
+  ExecuteScript(ToString(ExpandEnvString(config.exe.Str())), ToString(config.opt.Str()), dir, WideString(GetMsg(MTagingCurrentDirectory)) + L"\n" + dir);
   return 1;
 }
 
@@ -457,7 +508,7 @@ static WideString GetTempFilename()
 
 static void RenameFile(WideString const& originalFile, WideString const& newFile)
 {
-  if (!::MoveFileW(originalFile.c_str(), newFile.c_str()))
+  if (!::MoveFileExW(originalFile.c_str(), newFile.c_str(), MOVEFILE_REPLACE_EXISTING))
     throw std::runtime_error("Failed to rename file:\n" + ToStdString(originalFile) + 
                              "\nto file:\n" + ToStdString(newFile) + 
                              "\nwith error: " + std::to_string(GetLastError()));
