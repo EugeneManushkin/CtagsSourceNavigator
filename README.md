@@ -36,7 +36,7 @@ This is a [Far Manager](https://www.farmanager.com/) plugin for browsing source 
 6. List all class members. Set cursor on class name and then press **F11->Ctags Source Navigator->Class members**
 7. Search names defined in current file. Press **F11->Ctags Source Navigator->Search name in opened file** and begin typing (or insert by Ctrl+V or Shift+Ins) a name you want to search.
 8. Search names defined in entire repository. This option works in plugin main menu and in editor menu. Press **F11->Ctags Source Navigator->Search name in entire repository** and begin typing (or insert by Ctrl+V or Shift+Ins)
-9. You may reindex your repository if current code database is outdated. Press **F11->Ctags Source Navigator->Reindex repository** in main menu or in editor menu ant then plugin will suggest you to select one of the tags files which you may reindex. **If something goes wrong while reindexing (e.g. reindexing is canceled) plugin will rollback on old tags file.**
+9. You may reindex your repository if current code database is outdated. Press **F11->Ctags Source Navigator->Reindex repository** in main menu or in editor menu and then plugin will suggest you to select one of the tags files which you may reindex. **If something goes wrong while reindexing (e.g. reindexing is canceled) plugin will rollback on old tags file.**
 ## Contribute
 If you have an idea of a cool new feature or you have found a bug please [create an issue](https://github.com/EugeneManushkin/CtagsSourceNavigator/issues/new). Mark this repository with a star if you like the plugin
 ## Source code
