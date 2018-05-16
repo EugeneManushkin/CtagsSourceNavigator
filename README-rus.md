@@ -1,9 +1,9 @@
 ﻿# Ctags Source Navigator
 Это [Far Manager](https://www.farmanager.com/) плагин для навигации по исходному коду, проиндексированному с помощью утилиты [Ctags](https://en.wikipedia.org/wiki/Ctags).
 ## Полезные ссылки
-[Домашняя страница плагина](https://github.com/EugeneManushkin/CtagsSourceNavigator)
-[Far PlugRing](https://plugring.farmanager.com/plugin.php?pid=478)
-[Обсуждение плагина](https://forum.farmanager.com/viewtopic.php?f=5&t=6394)
++ [Домашняя страница плагина](https://github.com/EugeneManushkin/CtagsSourceNavigator)
++ [Far PlugRing](https://plugring.farmanager.com/plugin.php?pid=478)
++ [Обсуждение плагина](https://forum.farmanager.com/viewtopic.php?f=5&t=6394)
 ## Фичи
 + Переход к объявлению имени
 + Автодополнение (code completion)
