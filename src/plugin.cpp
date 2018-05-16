@@ -415,6 +415,18 @@ static std::string GetClipboardText()
   return text != nullptr ? std::string(text, text + len) : std::string();
 }
 
+static void SetClipboardText(std::string const& text)
+{
+  const size_t len = text.length() + 1;
+  HGLOBAL hMem = GlobalAlloc(GMEM_MOVEABLE, len);
+  memcpy(GlobalLock(hMem), text.c_str(), len);
+  GlobalUnlock(hMem);
+  OpenClipboard(0);
+  EmptyClipboard();
+  SetClipboardData(CF_TEXT, hMem);
+  CloseClipboard();
+}
+
 static std::string GetNormalizedClipboardText()
 {
   auto text = GetClipboardText();
@@ -786,14 +798,16 @@ struct MI{
   WideString item;
   int data;
   bool Disabled;
+  char const* ClipboardData;
   MI()
     : data(-1)
     , Disabled(false)
+    , ClipboardData(nullptr)
   {
   }
-  MI(WideString const& str,int value,bool disabled=false):item(str),data(value),Disabled(disabled){}
-  MI(const char* str,int value,bool disabled=false):item(ToString(str)),data(value),Disabled(disabled){}
-  MI(int msgid,int value,bool disabled=false):item(GetMsg(msgid)),data(value),Disabled(disabled){}
+  MI(WideString const& str,int value,bool disabled=false,char const* clipdata=nullptr):item(str),data(value),Disabled(disabled),ClipboardData(clipdata){}
+  MI(const char* str,int value,bool disabled=false,char const* clipdata=nullptr):item(ToString(str)),data(value),Disabled(disabled),ClipboardData(clipdata){}
+  MI(int msgid,int value,bool disabled=false,char const* clipdata=nullptr):item(GetMsg(msgid)),data(value),Disabled(disabled),ClipboardData(clipdata){}
   bool IsSeparator() const
   {
     return item.empty();
@@ -885,8 +899,19 @@ std::vector<FarKey> GetFarKeys(std::string const& filterkeys)
   fk.push_back({VK_INSERT, SHIFT_PRESSED});
   fk.push_back({0x56, LEFT_CTRL_PRESSED});
   fk.push_back({0x56, RIGHT_CTRL_PRESSED});
+  fk.push_back({ VK_INSERT, LEFT_CTRL_PRESSED });
+  fk.push_back({ VK_INSERT, RIGHT_CTRL_PRESSED });
+  fk.push_back({ 0x43, LEFT_CTRL_PRESSED });
+  fk.push_back({ 0x43, RIGHT_CTRL_PRESSED });
   fk.push_back(FarKey());
   return fk;
+}
+
+bool IsCtrlC(FarKey const& key)
+{
+  return (key.VirtualKeyCode == VK_INSERT && key.ControlKeyState == LEFT_CTRL_PRESSED)
+      || (key.VirtualKeyCode == VK_INSERT && key.ControlKeyState == RIGHT_CTRL_PRESSED)
+      ||  key.VirtualKeyCode == 0x43;
 }
 
 int FilterMenu(const wchar_t *title,MenuList const& lst,int sel,int flags=MF_LABELS,const void* param=NULL)
@@ -922,7 +947,7 @@ int FilterMenu(const wchar_t *title,MenuList const& lst,int sel,int flags=MF_LAB
       }
       for (auto const& i : idx)
       {
-        menu[j++] = { MIF_NONE, i.second->item.c_str(), {}, i.second->data };
+        menu[j++] = { MIF_NONE, i.second->item.c_str(), {}, reinterpret_cast<intptr_t>(i.second) };
       }
       intptr_t bkey;
       WideString ftitle = filter.Length() > 0 ? L"[Filter: " + ToString(filter.Str()) + L"]" : WideString(L" [") + title + L"]";
@@ -932,7 +957,14 @@ int FilterMenu(const wchar_t *title,MenuList const& lst,int sel,int flags=MF_LAB
       if(res==-1 && bkey==-1)return -1;
       if(bkey==-1)
       {
-        return menu[res].UserData;
+        return reinterpret_cast<MI const *>(menu[res].UserData)->data;
+      }
+      if (IsCtrlC(fk[bkey]))
+      {
+        if (res >= 0 && reinterpret_cast<MI const *>(menu[res].UserData)->ClipboardData)
+          SetClipboardText(reinterpret_cast<MI const *>(menu[res].UserData)->ClipboardData);
+
+        return -1;
       }
       if (bkey >= filterkeys.length())
       {
@@ -1027,6 +1059,13 @@ bool LookupTagsMenu(char const* tagsFile, size_t maxCount, TagInfo& tag)
     {
       tag = tags[res];
       return true;
+    }
+    if (IsCtrlC(fk[bkey]))
+    {
+      if (res != -1)
+        SetClipboardText(tags[res].name.Str());
+
+      return false;
     }
     if (bkey >= filterkeys.length())
     {
@@ -1329,7 +1368,7 @@ static TagInfo* TagsMenu(PTagArray pta, bool displayFile = true)
   int maxfile=displayFile ? currentWidth-8-maxid-maxDeclaration-1-1-1 : 0;
   for(i=0;i<ta.Count();i++)
   {
-    sm.push_back(MI(FormatTagInfo(*ta[i], maxid, maxDeclaration, maxfile), i));
+    sm.push_back(MI(FormatTagInfo(*ta[i], maxid, maxDeclaration, maxfile), i, false, ta[i]->name));
   }
   int sel=FilterMenu(GetMsg(MSelectSymbol),sm,0,MF_SHOWCOUNT);
   if(sel==-1)return NULL;
@@ -1576,7 +1615,7 @@ HANDLE WINAPI OpenW(const struct OpenInfo *info)
           MenuList ml;
           for(int i=0;i<lst.Count();i++)
           {
-            ml.push_back(MI(lst[i],i));
+            ml.push_back(MI(lst[i],i,false,lst[i].Str()));
           }
           res=FilterMenu(GetMsg(MSelectSymbol),ml,0,MF_SHOWCOUNT,(void*)word.Str());
           if(res==-1)return nullptr;
