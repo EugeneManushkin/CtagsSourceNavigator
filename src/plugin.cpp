@@ -159,6 +159,33 @@ private:
   int Code;
 };
 
+class FileSynchronizer
+{
+public:
+  using CallbackType = std::function<void(std::string const&)>;
+
+  FileSynchronizer(std::string const& fname, CallbackType cb)
+    : FileName(fname)
+    , ModTime(0)
+    , Callback(cb)
+  {
+  }
+
+  void Synchronize()
+  {
+    struct stat st;
+    if (stat(FileName.c_str(), &st) != -1 && ModTime != st.st_mtime)
+      Callback(FileName);
+
+    ModTime = st.st_mtime;
+  }
+
+private:
+  std::string FileName;
+  time_t ModTime;
+  CallbackType Callback;
+};
+
 GUID StringToGuid(const std::string& str)
 {
   GUID guid;
@@ -637,13 +664,13 @@ static void SaveHistory(std::string fileName)
   }
 }
 
-static void LoadConfig()
+static void LoadConfig(std::string const& fileName)
 {
   SetDefaultConfig();
   config.autoload_changed = true;
   std::ifstream file;
   file.exceptions(std::ifstream::goodbit);
-  file.open(ToStdString(GetConfigFilePath()));
+  file.open(fileName);
   std::shared_ptr<void> fileCloser(0, [&](void*) { file.close(); });
   std::string buf;
   while (std::getline(file, buf))
@@ -694,6 +721,12 @@ static void LoadConfig()
   VisitedTags = VisitedTagsLru(config.history_len);
   if (config.history_len > 0)
     LoadHistory(ExpandEnvString(config.history_file.Str()).c_str());
+}
+
+void SynchronizeConfig()
+{
+  static FileSynchronizer configSynchronizer(ToStdString(GetConfigFilePath()), &LoadConfig);
+  configSynchronizer.Synchronize();
 }
 
 static void LazyAutoload()
@@ -995,7 +1028,7 @@ void WINAPI SetStartupInfoW(const struct PluginStartupInfo *Info)
   I=*Info;
   FSF = *Info->FSF;
   I.FSF = &FSF;
-  LoadConfig();
+  SynchronizeConfig();
 }
 
 int isident(int chr)
@@ -1427,6 +1460,7 @@ HANDLE WINAPI OpenW(const struct OpenInfo *info)
 {
   OPENFROM OpenFrom = info->OpenFrom;
   WideString tagfile;
+  SynchronizeConfig();
   if(OpenFrom==OPEN_EDITOR)
   {
     //DebugBreak();
@@ -1597,7 +1631,7 @@ HANDLE WINAPI OpenW(const struct OpenInfo *info)
            MI(MLookupSymbol, miLookupSymbol)
          , MI::Separator()
          , MI(MLoadTagsFile, miLoadTagsFile)
-         , MI(MLoadFromHistory, miLoadFromHistory)
+         , MI(MLoadFromHistory, miLoadFromHistory, !config.history_len)
          , MI(MUnloadTagsFile, miUnloadTagsFile)
          , MI(MAddTagsToAutoload, miAddTagsToAutoload)
          , MI::Separator()
@@ -1840,6 +1874,7 @@ intptr_t WINAPI ConfigureDlgProc(
 
 intptr_t WINAPI ConfigureW(const struct ConfigureInfo *Info)
 {
+  SynchronizeConfig();
   unsigned char y = 0;
   struct InitDialogItem initItems[]={
 //    Type        X1  Y2  X2 Y2  F S           Flags D Data
@@ -1892,7 +1927,7 @@ intptr_t WINAPI ConfigureW(const struct ConfigureInfo *Info)
   auto ExitCode = I.DialogRun(handle);
   if(ExitCode!=18)return FALSE;
   if (SaveConfig(initItems, itemsCount))
-    LoadConfig();
+    SynchronizeConfig();
 
   return TRUE;
 }
