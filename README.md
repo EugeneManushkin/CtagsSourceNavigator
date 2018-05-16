@@ -1,5 +1,9 @@
 # Ctags Source Navigator
 This is a [Far Manager](https://www.farmanager.com/) plugin for browsing source code indexed by [Ctags](https://en.wikipedia.org/wiki/Ctags) utility.
+## Useful links
+[Plugin Homepage](https://github.com/EugeneManushkin/CtagsSourceNavigator)
+[Far PlugRing](https://plugring.farmanager.com/plugin.php?pid=478)
+[Discussion Thread](https://forum.farmanager.com/viewtopic.php?f=5&t=6394)
 ## Features
 + Jump to name declaration
 + Code completion
@@ -9,7 +13,11 @@ This is a [Far Manager](https://www.farmanager.com/) plugin for browsing source 
 + Source code browsing history
 + Creating Ctags database for selected repository root
 + Reindexing repository.
-## What's new comparing to 2.1.0.9
+## What's new 
+#### comparing to 2.1.0.11
++ Improved tags history synchronization between multiple running instances of Far Manager
++ Improved config synchronization between multiple running instances of Far Manager
+#### comparing to 2.1.0.9
 + Canceling long-running operations is supported
 + Reindexing repository is implemented
 ## Requirements
