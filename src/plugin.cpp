@@ -159,6 +159,7 @@ private:
   int Code;
 };
 
+//TODO: Synchronization must be reworked
 class FileSynchronizer
 {
 public:
@@ -178,6 +179,14 @@ public:
       Callback(FileName);
 
     ModTime = st.st_mtime;
+  }
+
+  //TODO: rework force synchronization
+  void Synchronize(std::string const& fileName, bool force)
+  {
+    ModTime = force || fileName != FileName ? 0 : ModTime;
+    FileName = fileName;
+    Synchronize();
   }
 
 private:
@@ -638,7 +647,7 @@ static FarKey ToFarKey(WORD virtualKey)
   return {key, ToFarControlState(controlState)};
 }
 
-static void LoadHistory(std::string fileName)
+static void LoadHistory(std::string const& fileName)
 {
   std::ifstream file;
   file.exceptions(std::ifstream::goodbit);
@@ -662,6 +671,20 @@ static void SaveHistory(std::string fileName)
   {
     file << ToStdString(*i) << std::endl;
   }
+}
+
+static void SynchronizeTagsHistory(bool force)
+{
+  static FileSynchronizer historySynchronizer("", &LoadHistory);
+  if (config.history_len > 0)
+    historySynchronizer.Synchronize(ExpandEnvString(config.history_file.Str()), force);
+}
+
+static void VisitTags(WideString const& tagsFile)
+{
+  SynchronizeTagsHistory(false);
+  VisitedTags.Access(tagsFile);
+  SaveHistory(ExpandEnvString(config.history_file.Str()));
 }
 
 static void LoadConfig(std::string const& fileName)
@@ -719,11 +742,10 @@ static void LoadConfig(std::string const& fileName)
 
   config.history_len = !config.history_file.Length() ? 0 : config.history_len;
   VisitedTags = VisitedTagsLru(config.history_len);
-  if (config.history_len > 0)
-    LoadHistory(ExpandEnvString(config.history_file.Str()).c_str());
+  SynchronizeTagsHistory(true);
 }
 
-void SynchronizeConfig()
+static void SynchronizeConfig()
 {
   static FileSynchronizer configSynchronizer(ToStdString(GetConfigFilePath()), &LoadConfig);
   configSynchronizer.Synchronize();
@@ -1316,6 +1338,7 @@ static TagInfo* TagsMenu(PTagArray pta, bool displayFile = true)
 
 static WideString SelectFromHistory()
 {
+  SynchronizeTagsHistory(false);
   if (VisitedTags.begin() == VisitedTags.end())
   {
     InfoMessage(GetMsg(MHistoryEmpty));
@@ -1740,7 +1763,7 @@ HANDLE WINAPI OpenW(const struct OpenInfo *info)
       return OpenFrom == OPEN_ANALYSE ? PANEL_STOP : nullptr;
     }
     InfoMessage(GetMsg(MLoadOk) + WideString(L":") + ToString(std::to_string(symbolsLoaded)));
-    VisitedTags.Access(tagfile);
+    VisitTags(tagfile);
     return OpenFrom == OPEN_ANALYSE ? PANEL_STOP : nullptr;
   }
 
@@ -1945,6 +1968,4 @@ void WINAPI GetGlobalInfoW(struct GlobalInfo *info)
 
 void WINAPI ExitFARW(const struct ExitInfo *info)
 {
-  if (config.history_file.Length() > 0)
-    SaveHistory(ExpandEnvString(config.history_file.Str()));
 }
