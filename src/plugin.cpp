@@ -911,7 +911,8 @@ bool IsCtrlC(FarKey const& key)
 {
   return (key.VirtualKeyCode == VK_INSERT && key.ControlKeyState == LEFT_CTRL_PRESSED)
       || (key.VirtualKeyCode == VK_INSERT && key.ControlKeyState == RIGHT_CTRL_PRESSED)
-      ||  key.VirtualKeyCode == 0x43;
+      || (key.VirtualKeyCode == 0x43 && key.ControlKeyState == LEFT_CTRL_PRESSED)
+      || (key.VirtualKeyCode == 0x43 && key.ControlKeyState == RIGHT_CTRL_PRESSED);
 }
 
 int FilterMenu(const wchar_t *title,MenuList const& lst,int sel,int flags=MF_LABELS,const void* param=NULL)
