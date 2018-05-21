@@ -63,6 +63,6 @@ exit /b
 
 :RunTests
   cd %2
-  cmake -E tar xzvf %REPO_ROOT%\tests\tags\test_data.zip || exit 1
+  for %%G in (%REPO_ROOT%\tests\tags\*.zip) do ( cmake -E tar xzvf %%G || exit 1 )
   tags_tests.exe > %ROOT%\tags_tests-%1.txt 2>&1
 exit /b
