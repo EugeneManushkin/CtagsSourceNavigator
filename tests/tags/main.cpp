@@ -19,6 +19,12 @@ namespace
   using TagArrayPtr = std::unique_ptr<TagArray>;
   using TagsCont = std::vector<TagInfo>;
 
+  std::string GetFilePath(std::string const& file)
+  {
+    auto pos = file.rfind('\\');
+    return pos == std::string::npos ? std::string() : file.substr(0, pos);
+  }
+
   struct MetaTag
   {
     MetaTag(std::string const& line)
@@ -130,14 +136,24 @@ namespace TESTS
       ASSERT_FALSE(std::find(tags.begin(), tags.end(), metaTag) == tags.end());
     }
 
+    void LookupMetaTagInFile(MetaTag const& metaTag, std::string const& repoRoot)
+    {
+      std::string const fileFullPath = repoRoot + "\\" + metaTag.File;
+      auto tags = ToTagsCont(TagArrayPtr(FindFileSymbols(fileFullPath.c_str())));
+      ASSERT_FALSE(tags.empty());
+      ASSERT_FALSE(std::find(tags.begin(), tags.end(), metaTag) == tags.end());
+    }
+
     void LoadAndLookupNames(std::string const& tagsFile, std::string const& metaTagsFile)
     {
-      auto metaTags = LoadMetaTags(metaTagsFile);
+      auto const repoRoot = GetFilePath(tagsFile);
+      auto const metaTags = LoadMetaTags(metaTagsFile);
       ASSERT_FALSE(metaTags.empty());
       ASSERT_NO_FATAL_FAILURE(LoadTagsFile(tagsFile, metaTags.size()));
       for (auto const& metaTag : metaTags)
       {
         EXPECT_NO_FATAL_FAILURE(LookupMetaTag(metaTag, tagsFile)) << "Tag info: " << metaTag << ", tags file: " << tagsFile;
+        EXPECT_NO_FATAL_FAILURE(LookupMetaTagInFile(metaTag, repoRoot)) << "Tag info: " << metaTag << ", tags file: " << tagsFile;
       }
     }
   };
