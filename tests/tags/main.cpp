@@ -156,6 +156,16 @@ namespace TESTS
   {
     LoadAndLookupNames("single_file_repos\\tags.exuberant.w", "single_file_repos\\tags.exuberant.w.meta");
   }
+
+  TEST_F(Tags, AllNamesFoundInExuberantPlatformCharPathsRepos)
+  {
+    LoadAndLookupNames("platform_char_paths_repos\\tags.exuberant.w", "platform_char_paths_repos\\tags.meta");
+  }
+
+  TEST_F(Tags, AllNamesFoundInUniversalPlatformCharPathsRepos)
+  {
+    LoadAndLookupNames("platform_char_paths_repos\\tags.universal", "platform_char_paths_repos\\tags.meta");
+  }
 }
 
 int main(int argc, char* argv[])
