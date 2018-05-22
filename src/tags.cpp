@@ -245,6 +245,7 @@ static std::string MakeFilename(char const* str)
 {
   std::string result = str;
   result.resize(std::unique(result.begin(), result.end(), [](char a, char b) {return a == '\\' && a == b; }) - result.begin());
+  std::replace(result.begin(), result.end(), '/', '\\');
   return result;
 }
 
