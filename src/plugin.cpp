@@ -1208,7 +1208,7 @@ static void NavigateTo(TagInfo* info)
       Msg(MEFailedToOpen);
       return;
     }
-    int line=info->lineno-1;
+    int line= info->lineno < 0 ? -1 : info->lineno - 1;
     int cnt=0;
     char buf[512];
     while(fgets(buf,sizeof(buf),f) && cnt<line)cnt++;
