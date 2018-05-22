@@ -673,13 +673,6 @@ static void FindInFile(TagFileInfo* fi,const char* str,PTagArray ta)
 }
 
 //TODO: path comparation must be reworked
-static int ComparePathChars(char const* left, char const* right)
-{
-  int cmp = strnicmp(left, right, 1);
-  if (cmp != 0)return cmp;
-  return strncmp(left, right, 1);
-}
-
 static int CompareFilenames(char const* left, char const* &right, size_t len)
 {
   int cmp = 0;
@@ -690,7 +683,7 @@ static int CompareFilenames(char const* left, char const* &right, size_t len)
       while (IsPathSeparator(*(right + 1)))
         ++right;
     }
-    else if ((cmp = ComparePathChars(left, right)) != 0)
+    else if ((cmp = strnicmp(left, right, 1)) != 0)
     {
       return cmp;
     }
