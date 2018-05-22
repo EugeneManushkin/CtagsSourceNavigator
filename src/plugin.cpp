@@ -988,12 +988,11 @@ int FilterMenu(const wchar_t *title,MenuList const& lst,int sel,int flags=MF_LAB
 String TrimFilename(const String& file,int maxlength)
 {
   if(file.Length()<=maxlength)return file;
-  int ri=file.RIndex("\\")+1;
-  if(file.Length()-ri+3>maxlength)
-  {
-    return "..."+file.Substr(file.Length()-maxlength-3);
-  }
-  return file.Substr(0,3)+"..."+file.Substr(file.Length()-(maxlength-7));
+  size_t const prefixLen = 3;
+  String const junction = "...";
+  size_t const beginingLen = prefixLen + junction.Length();
+  return maxlength > beginingLen ? file.Substr(0, prefixLen) + junction + file.Substr(file.Length() - maxlength + beginingLen)
+                                 : file.Substr(file.Length() - maxlength);
 }
 
 //TODO: rework
@@ -1041,7 +1040,7 @@ bool LookupTagsMenu(char const* tagsFile, size_t maxCount, TagInfo& tag)
     int maxinfo = 0;
     GetMaxParams(tags, maxid, maxinfo);
     maxinfo = std::min(maxinfo, maxInfoWidth);
-    int maxfile=currentWidth-8-maxid-maxinfo-1-1-1;
+    int maxfile=currentWidth-8-maxid-maxinfo-1-1-1-1;
     std::vector<FarMenuItem> menu;
     std::list<WideString> menuStrings;
     for (auto const& i : tags)
@@ -1365,8 +1364,8 @@ static TagInfo* TagsMenu(PTagArray pta, bool displayFile = true)
     if(ti->declaration.Length()>maxDeclaration)maxDeclaration=ti->declaration.Length();
     //if(ti->file.Length()>maxfile)
   }
-  maxDeclaration = std::min(maxDeclaration, displayFile ? maxDeclarationWidth : currentWidth-8-maxid-1-1-1);
-  int maxfile=displayFile ? currentWidth-8-maxid-maxDeclaration-1-1-1 : 0;
+  maxDeclaration = std::min(maxDeclaration, displayFile ? maxDeclarationWidth : currentWidth-8-maxid-1-1-1-1);
+  int maxfile=displayFile ? currentWidth-8-maxid-maxDeclaration-1-1-1-1 : 0;
   for(i=0;i<ta.Count();i++)
   {
     sm.push_back(MI(FormatTagInfo(*ta[i], maxid, maxDeclaration, maxfile), i, false, ta[i]->name));
