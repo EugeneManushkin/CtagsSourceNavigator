@@ -1,6 +1,9 @@
 #include <gtest/gtest.h>
 #include <tags.h>
 
+#define NOMINMAX
+#include <windows.h>
+
 #include <fstream>
 #include <memory>
 #include <string>
@@ -25,6 +28,21 @@ namespace
     return pos == std::string::npos ? std::string() : file.substr(0, pos);
   }
 
+  std::vector<char> ToLower(std::string const& str)
+  {
+    std::vector<char> result(str.begin(), str.end());
+    result.push_back(0);
+    ::CharLowerA(&result[0]);
+    return result;
+  }
+
+  bool PathsEqual(std::string const& left, std::string const& right)
+  {
+    auto a = ToLower(left);
+    auto b = ToLower(right);
+    return a.size() == b.size() && std::equal(a.begin(), a.end(), b.begin());
+  }
+
   struct MetaTag
   {
     MetaTag(std::string const& line)
@@ -47,7 +65,7 @@ namespace
     {
       return Name == tag.name.Str()
           && File.length() < tag.file.Length()
-          && !File.compare(0, std::string::npos, tag.file.Str() + tag.file.Length() - File.length(), File.length())
+          && PathsEqual(File, std::string(tag.file.Str() + tag.file.Length() - File.length())) //!File.compare(0, std::string::npos, tag.file.Str() + tag.file.Length() - File.length(), File.length())
           && Line == tag.lineno;
     }
 
@@ -181,6 +199,21 @@ namespace TESTS
   TEST_F(Tags, AllNamesFoundInUniversalPlatformCharPathsRepos)
   {
     LoadAndLookupNames("platform_char_paths_repos\\tags.universal", "platform_char_paths_repos\\tags.meta");
+  }
+
+  TEST_F(Tags, AllNamesFoundInCygwinMixedCaseRepos)
+  {
+    LoadAndLookupNames("Mixed Case Repos\\tags.exuberant", "Mixed Case Repos\\tags.meta");
+  }
+
+  TEST_F(Tags, AllNamesFoundInExuberantMixedCaseRepos)
+  {
+    LoadAndLookupNames("Mixed Case Repos\\tags.exuberant.w", "Mixed Case Repos\\tags.meta");
+  }
+
+  TEST_F(Tags, AllNamesFoundInUniversalMixedCaseRepos)
+  {
+    LoadAndLookupNames("Mixed Case Repos\\tags.universal", "Mixed Case Repos\\tags.meta");
   }
 }
 
