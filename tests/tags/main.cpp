@@ -43,6 +43,11 @@ namespace
     return a.size() == b.size() && std::equal(a.begin(), a.end(), b.begin());
   }
 
+  bool IsFullPath(std::string const& path)
+  {
+    return path.length() > 1 && path[1] == ':';
+  }
+
   struct MetaTag
   {
     MetaTag(std::string const& line)
@@ -64,8 +69,8 @@ namespace
     bool operator == (TagInfo const& tag) const
     {
       return Name == tag.name.Str()
-          && File.length() < tag.file.Length()
-          && PathsEqual(File, std::string(tag.file.Str() + tag.file.Length() - File.length())) //!File.compare(0, std::string::npos, tag.file.Str() + tag.file.Length() - File.length(), File.length())
+          && File.length() <= tag.file.Length()
+          && PathsEqual(File, std::string(tag.file.Str() + tag.file.Length() - File.length()))
           && Line == tag.lineno;
     }
 
@@ -75,7 +80,7 @@ namespace
     int Line;
   };
 
-  std::regex const MetaTag::Regex("^(.+):(.+):line:([0-9]+)$");
+  std::regex const MetaTag::Regex("^([a-zA-Z0-9_~]+):(.+):line:([0-9]+)$");
 
   using MetaTagCont = std::vector<MetaTag>;
 
@@ -156,7 +161,7 @@ namespace TESTS
 
     void LookupMetaTagInFile(MetaTag const& metaTag, std::string const& repoRoot)
     {
-      std::string const fileFullPath = repoRoot + "\\" + metaTag.File;
+      std::string const fileFullPath = IsFullPath(metaTag.File) ? metaTag.File : repoRoot + "\\" + metaTag.File;
       auto tags = ToTagsCont(TagArrayPtr(FindFileSymbols(fileFullPath.c_str())));
       ASSERT_FALSE(tags.empty());
       ASSERT_FALSE(std::find(tags.begin(), tags.end(), metaTag) == tags.end());
@@ -214,6 +219,26 @@ namespace TESTS
   TEST_F(Tags, AllNamesFoundInUniversalMixedCaseRepos)
   {
     LoadAndLookupNames("Mixed Case Repos\\tags.universal", "Mixed Case Repos\\tags.meta");
+  }
+
+  TEST_F(Tags, AllNamesFoundInCygwinFullPathRepos)
+  {
+    LoadAndLookupNames("full_path_repos\\tags.exuberant", "full_path_repos\\tags.meta");
+  }
+
+  TEST_F(Tags, AllNamesFoundInCygwinMixedSlashFullPathRepos)
+  {
+    LoadAndLookupNames("full_path_repos\\tags.exuberant.mixed.slashes", "full_path_repos\\tags.meta");
+  }
+
+  TEST_F(Tags, AllNamesFoundInExuberantFullPathRepos)
+  {
+    LoadAndLookupNames("full_path_repos\\tags.exuberant.w", "full_path_repos\\tags.meta");
+  }
+
+  TEST_F(Tags, AllNamesFoundInUniversalFullPathRepos)
+  {
+    LoadAndLookupNames("full_path_repos\\tags.universal", "full_path_repos\\tags.meta");
   }
 }
 
