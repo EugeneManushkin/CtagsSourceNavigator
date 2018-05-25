@@ -50,7 +50,7 @@ namespace
 
   struct MetaTag
   {
-    MetaTag(std::string const& line)
+    MetaTag(std::string const& line, std::string const& repoRoot)
     {
       std::smatch matchResult;
       if (!std::regex_match(line, matchResult, Regex) || matchResult.size() != 4)
@@ -58,12 +58,13 @@ namespace
 
       Name = matchResult[1];
       File = matchResult[2];
+      FullPath = IsFullPath(File) ? File : repoRoot + "\\" + File;
       Line = atoi(std::string(matchResult[3]).c_str());
     }
 
     void Print(std::ostream& stream) const
     {
-      stream << "'" << Name << "' " << File << ":" << Line;
+      stream << "'" << Name << "' " << FullPath << ":" << Line;
     }
 
     bool operator == (TagInfo const& tag) const
@@ -77,6 +78,7 @@ namespace
     static std::regex const Regex;
     std::string Name;
     std::string File;
+    std::string FullPath;
     int Line;
   };
 
@@ -111,7 +113,7 @@ namespace
     return result;
   }
 
-  MetaTagCont LoadMetaTags(std::string const& fileName)
+  MetaTagCont LoadMetaTags(std::string const& fileName, std::string const& repoRoot)
   {
     MetaTagCont result;
     std::ifstream file;
@@ -122,7 +124,7 @@ namespace
     while (std::getline(file, buf))
     {
       if (!buf.empty())
-        result.push_back(MetaTag(buf));
+        result.push_back(MetaTag(buf, repoRoot));
     }
 
     return result;
@@ -152,31 +154,29 @@ namespace TESTS
       ASSERT_EQ(expectedTagsCount, symbolsLoaded);
     }
 
-    void LookupMetaTag(MetaTag const& metaTag, std::string const& tagsFile)
+    void LookupMetaTag(MetaTag const& metaTag)
     {
-      auto tags = ToTagsCont(TagArrayPtr(Find(metaTag.Name.c_str(), tagsFile.c_str())));
+      auto tags = ToTagsCont(TagArrayPtr(Find(metaTag.Name.c_str(), metaTag.FullPath.c_str())));
       ASSERT_FALSE(tags.empty());
       ASSERT_FALSE(std::find(tags.begin(), tags.end(), metaTag) == tags.end());
     }
 
-    void LookupMetaTagInFile(MetaTag const& metaTag, std::string const& repoRoot)
+    void LookupMetaTagInFile(MetaTag const& metaTag)
     {
-      std::string const fileFullPath = IsFullPath(metaTag.File) ? metaTag.File : repoRoot + "\\" + metaTag.File;
-      auto tags = ToTagsCont(TagArrayPtr(FindFileSymbols(fileFullPath.c_str())));
+      auto tags = ToTagsCont(TagArrayPtr(FindFileSymbols(metaTag.FullPath.c_str())));
       ASSERT_FALSE(tags.empty());
       ASSERT_FALSE(std::find(tags.begin(), tags.end(), metaTag) == tags.end());
     }
 
     void LoadAndLookupNames(std::string const& tagsFile, std::string const& metaTagsFile)
     {
-      auto const repoRoot = GetFilePath(tagsFile);
-      auto const metaTags = LoadMetaTags(metaTagsFile);
+      auto const metaTags = LoadMetaTags(metaTagsFile, GetFilePath(tagsFile));
       ASSERT_FALSE(metaTags.empty());
       ASSERT_NO_FATAL_FAILURE(LoadTagsFile(tagsFile, metaTags.size()));
       for (auto const& metaTag : metaTags)
       {
-        EXPECT_NO_FATAL_FAILURE(LookupMetaTag(metaTag, tagsFile)) << "Tag info: " << metaTag << ", tags file: " << tagsFile;
-        EXPECT_NO_FATAL_FAILURE(LookupMetaTagInFile(metaTag, repoRoot)) << "Tag info: " << metaTag << ", tags file: " << tagsFile;
+        EXPECT_NO_FATAL_FAILURE(LookupMetaTag(metaTag)) << "Tag info: " << metaTag << ", tags file: " << tagsFile;
+        EXPECT_NO_FATAL_FAILURE(LookupMetaTagInFile(metaTag)) << "Tag info: " << metaTag << ", tags file: " << tagsFile;
       }
     }
   };

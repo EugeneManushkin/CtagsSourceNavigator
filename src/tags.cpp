@@ -17,6 +17,7 @@
   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 */
 
+#include <functional>
 #include <set>
 #include <stdio.h>
 #include <sys/stat.h>
@@ -78,44 +79,36 @@ struct TagFileInfo{
     , indexFile(filename + ".idx")
     , modtm(0)
   {
-    filename.ToLower();
   }
 
   Vector<int> offsets;
 
-  String GetRepoRoot() const
-  {
-    String root=filename;
-    int ri=root.RIndex("\\");
-    if(ri!=-1)
-      root.Delete(ri+1);
+  char const* BelongsToRepo(char const* fileName) const;
 
-    return root;
-  }
+  std::string GetFullPath(std::string const& relativePath) const;
 
-  bool HasName(char const* fileName) const
+  bool HasName(char const* fileName) const;
+
+  bool IsFullPathRepo() const
   {
-    //TODO: String::CmpNoCase?
-    String lowercasedFileName = fileName;
-    lowercasedFileName.ToLower();
-    return lowercasedFileName == filename;
+    return fullpathrepo;
   }
 
   //TODO: rework: filename must be hidden
-  String const& GetName() const
+  std::string const& GetName() const
   {
     return filename;
   }
 
   FILE* OpenTags()
   {
-    return !Load() ? fopen(filename, "rb") : nullptr;
+    return !Load() ? fopen(filename.c_str(), "rb") : nullptr;
   }
 
   FILE* OpenIndex()
   {
-    modtm = !FileExists(indexFile.Str()) ? 0 : modtm;
-    return !Load() ? fopen(indexFile, "rb") : nullptr;
+    modtm = !FileExists(indexFile.c_str()) ? 0 : modtm;
+    return !Load() ? fopen(indexFile.c_str(), "rb") : nullptr;
   }
 
   int Load();
@@ -124,13 +117,16 @@ private:
   int CreateIndex(time_t tagsModTime);
   bool LoadIndex(time_t tagsModTime);
 
-  String filename;
-  String indexFile;
+  std::string filename;
+  std::string indexFile;
+  std::string reporoot;
+  bool fullpathrepo;
   time_t modtm;
 };
 
 using TagFileInfoPtr = std::shared_ptr<TagFileInfo>;
 std::vector<TagFileInfoPtr> files;
+using TagArrayPtr = std::unique_ptr<TagArray>;
 
 static bool IsPathSeparator(std::string::value_type c)
 {
@@ -142,7 +138,7 @@ static std::string JoinPath(std::string const& dirPath, std::string const& name)
   return dirPath.empty() || IsPathSeparator(dirPath.back()) ? dirPath + name : dirPath + std::string("\\") + name;
 }
 
-static bool IsFullPath(char const* fn, unsigned short fsz)
+static bool IsFullPath(char const* fn, size_t fsz)
 {
   return fsz > 1 && fn[1] == ':';
 }
@@ -154,6 +150,45 @@ static char GetPathSeparator(char const* str)
     ++str;
 
   return IsPathSeparator(*str) ? *str : defaultPathSeparator;
+}
+
+static std::string GetDirOfFile(std::string const& filePath)
+{
+    auto pos = filePath.find_last_of("\\/");
+    return !pos || pos == std::string::npos ? std::string() : filePath.substr(0, pos);
+}
+
+//TODO: path comparation must be reworked
+static int CompareFilenames(char const* left, char const* &right, size_t len)
+{
+  int cmp = 0;
+  while (len > 0)
+  {
+    if (IsPathSeparator(*left) && IsPathSeparator(*right))
+    {
+      while (IsPathSeparator(*(right + 1)))
+        ++right;
+    }
+    else if ((cmp = strnicmp(left, right, 1)) != 0)
+    {
+      return cmp;
+    }
+    --len;
+    ++left;
+    ++right;
+  }
+
+  return 0;
+}
+
+static void ForEachFileRepository(char const* fileFullPath, std::function<void(TagFileInfo*)> func)
+{
+  std::vector<TagFileInfoPtr> result;
+  for (auto const& repos : files)
+  {
+    if (repos->BelongsToRepo(fileFullPath))
+      func(repos.get());
+  }
 }
 
 char const IndexFileSignature[] = "tags.idx.v1";
@@ -241,7 +276,7 @@ static std::string MakeDeclaration(std::string const& str)
   return declaration;
 }
 
-static std::string MakeFilename(char const* str)
+static std::string MakeFilename(std::string const& str)
 {
   std::string result = str;
   result.resize(std::unique(result.begin(), result.end(), [](char a, char b) {return a == '\\' && a == b; }) - result.begin());
@@ -251,7 +286,7 @@ static std::string MakeFilename(char const* str)
 
 RegExp reParse("/(.+?)\\t(.*?)\\t(\\d+|\\/.*?\\/(?<=[^\\\\]\\/));\"\\t(\\w)(?:\\tline:(\\d+))?(?:\\t(\\S*))?/");
 
-TagInfo* ParseLine(const char* buf,const String& base)
+TagInfo* ParseLine(const char* buf, TagFileInfo const& fi)
 {
   String pos;
   String file;
@@ -262,12 +297,7 @@ TagInfo* ParseLine(const char* buf,const String& base)
     TagInfo *i=new TagInfo;
     SetStr(i->name,buf,m[1]);
     SetStr(file,buf,m[2]);
-    if(file[1]!=':' && file[0]!='\\')
-    {
-      file.Insert(0,base);
-    }
-
-    i->file = MakeFilename(file.Str()).c_str();
+    i->file = MakeFilename(fi.GetFullPath(file.Str())).c_str();
     SetStr(pos,buf,m[3]);
     if(pos[0]=='/')
     {
@@ -354,12 +384,22 @@ void GetLine(std::string& buffer, FILE *f)
   GetLine(tmp, buffer, f);
 }
 
+static std::string GetIntersection(char const* left, char const* right)
+{
+  if (!left || !*left)
+    return right;
+
+  auto begining = left;
+  for (; *left && *right && *left == *right; ++left, ++right);
+  return std::string(begining, left);
+}
+
 int TagFileInfo::CreateIndex(time_t tagsModTime)
 {
   TagFileInfo* fi = this;
   int pos=0;
   String file;
-  FILE *f=fopen(fi->filename,"rb");
+  FILE *f=fopen(fi->filename.c_str(),"rb");
   if(!f)return 0;
   fseek(f,0,SEEK_END);
   int sz=ftell(f);
@@ -417,6 +457,7 @@ int TagFileInfo::CreateIndex(time_t tagsModTime)
   pos=ftell(f);
   bool sorted=true;
   char pathSeparator = 0;
+  std::string pathIntersection;
   while(GetLine(strbuf, buffer, f))
   {
     if(strbuf[0]=='!')
@@ -440,6 +481,7 @@ int TagFileInfo::CreateIndex(time_t tagsModTime)
     li->fn=strchr(li->line,'\t')+1;
     pathSeparator = !pathSeparator ? GetPathSeparator(li->fn) : pathSeparator;
     file.Set(li->fn,0,strchr(li->fn,'\t')-li->fn);
+    pathIntersection = IsFullPath(file.Str(), file.Length()) ? GetIntersection(pathIntersection.c_str(), file.Str()) : pathIntersection;
     files.Insert(file,1);
     li->cls=strchr(li->line,'\t');
     do{
@@ -457,9 +499,14 @@ int TagFileInfo::CreateIndex(time_t tagsModTime)
 //    fi->offsets.Push(pos);
     pos=ftell(f);
   }
+  if (!pathIntersection.empty() && IsPathSeparator(pathIntersection.back()))
+    pathIntersection.resize(pathIntersection.length() - 1);
+
+  fullpathrepo = !pathIntersection.empty();
+  reporoot = pathIntersection.empty() ? GetDirOfFile(filename) : MakeFilename(pathIntersection);
   pathSeparator = !pathSeparator ? '\\' : pathSeparator;
   fclose(f);
-  FILE *g=fopen(fi->indexFile,"wb");
+  FILE *g=fopen(fi->indexFile.c_str(),"wb");
   if(!g)
   {
     delete [] linespool;
@@ -517,11 +564,9 @@ int TagFileInfo::CreateIndex(time_t tagsModTime)
   files.First();
   struct stat st;
   cnt=0;
-  String base=fi->filename;
-  base.Delete(base.RIndex("\\")+1);
   while(files.Next(key,val))
   {
-    file=base+key;
+    file=JoinPath(reporoot, key).c_str();
     if(stat(file,&st)==-1)continue;
     unsigned short fsz=strlen(key);
     fwrite(&fsz,sizeof(fsz),1,g);
@@ -536,14 +581,14 @@ int TagFileInfo::CreateIndex(time_t tagsModTime)
   utimbuf tm;
   tm.actime=fi->modtm;
   tm.modtime=fi->modtm;
-  utime(fi->indexFile,&tm);
+  utime(fi->indexFile.c_str(),&tm);
   return 1;
 }
 
 bool TagFileInfo::LoadIndex(time_t tagsModTime)
 {
   TagFileInfo* fi = this;
-  FILE *f=fopen(fi->indexFile,"rb");
+  FILE *f=fopen(fi->indexFile.c_str(),"rb");
   if (!f)
     return false;
 
@@ -571,7 +616,7 @@ bool TagFileInfo::LoadIndex(time_t tagsModTime)
 int TagFileInfo::Load()
 {
   struct stat st;
-  if (stat(filename, &st) == -1)
+  if (stat(filename.c_str(), &st) == -1)
     return MEFailedToOpen;
 
   if (modtm == st.st_mtime)
@@ -579,12 +624,31 @@ int TagFileInfo::Load()
 
   if (!LoadIndex(st.st_mtime) && !CreateIndex(st.st_mtime))
   {
-    remove(indexFile);
+    remove(indexFile.c_str());
     return MFailedToWriteIndex;
   }
 
   modtm = st.st_mtime;
   return 0;
+}
+
+char const* TagFileInfo::BelongsToRepo(char const* fileName) const
+{
+  if (reporoot.empty())
+    throw std::logic_error("reporoot is empty");
+
+  return !!CompareFilenames(reporoot.c_str(), fileName, reporoot.length()) ? nullptr :
+         IsPathSeparator(*fileName) ? ++fileName : fileName;
+}
+
+std::string TagFileInfo::GetFullPath(std::string const& relativePath) const
+{
+  return IsFullPath(relativePath.c_str(), relativePath.size()) ? relativePath : JoinPath(reporoot, relativePath);
+}
+
+bool TagFileInfo::HasName(char const* fileName) const
+{
+  return !CompareFilenames(filename.c_str(), fileName, filename.length());
 }
 
 //TODO: rework: must return error instead of message id (message id coud be zero)
@@ -661,38 +725,15 @@ static void FindInFile(TagFileInfo* fi,const char* str,PTagArray ta)
         break;
       }
     }
-    String base=fi->GetRepoRoot();
     for(int i=pos;i<=endpos;i++)
     {
       fseek(f,fi->offsets[i],SEEK_SET);
       fgets(strbuf,sizeof(strbuf),f);
-      TagInfo* t=ParseLine(strbuf,base);
+      TagInfo* t=ParseLine(strbuf,*fi);
       if(t)ta->Push(t);
     }
   }
   fclose(f);
-}
-
-//TODO: path comparation must be reworked
-static int CompareFilenames(char const* left, char const* &right, size_t len)
-{
-  int cmp = 0;
-  while (len > 0)
-  {
-    if (IsPathSeparator(*left) && IsPathSeparator(*right))
-    {
-      while (IsPathSeparator(*(right + 1)))
-        ++right;
-    }
-    else if ((cmp = strnicmp(left, right, 1)) != 0)
-    {
-      return cmp;
-    }
-    --len;
-    ++left;
-    ++right;
-  }
-  return 0;
 }
 
 void FindFile(TagFileInfo* fi,const char* filename,PTagArray ta)
@@ -721,7 +762,6 @@ void FindFile(TagFileInfo* fi,const char* filename,PTagArray ta)
   int cmp=1;
   int pos;
   char const*file;
-  String base=fi->GetRepoRoot();
   while(left<=right)
   {
     pos=(right+left)/2;
@@ -779,7 +819,7 @@ void FindFile(TagFileInfo* fi,const char* filename,PTagArray ta)
     }
     for(auto const& line : lines)
     {
-      TagInfo *ti=ParseLine(line.c_str(),base);
+      TagInfo *ti=ParseLine(line.c_str(),*fi);
       if(ti)ta->Push(ti);
     }
   }
@@ -810,7 +850,6 @@ void FindClass(TagFileInfo* fi,const char* str,PTagArray ta)
   int cmp=1;
   int pos;
   const char *cls;
-  String base=fi->GetRepoRoot();
 
   while(left<=right)
   {
@@ -912,7 +951,7 @@ void FindClass(TagFileInfo* fi,const char* str,PTagArray ta)
     }
     for(auto const& line : lines)
     {
-      TagInfo *ti=ParseLine(line.c_str(),base);
+      TagInfo *ti=ParseLine(line.c_str(),*fi);
       if(ti)ta->Push(ti);
     }
   }
@@ -952,13 +991,6 @@ static void CheckFiles(std::string const& projectRoot, TagFileInfo* fi,StrList& 
   fclose(g);
 }
 
-static std::string GetDirOfFile(std::string const& filePath)
-{
-  auto pos = filePath.rfind('\\');
-  pos = pos == std::string::npos ? filePath.rfind('/') : pos;
-  return !pos || pos == std::string::npos ? "" : filePath.substr(0, pos);
-}
-
 int CheckChangedFiles(const char* filename,StrList& dst)
 {
 //  String file=filename;
@@ -980,22 +1012,9 @@ int CheckChangedFiles(const char* filename,StrList& dst)
 
 PTagArray Find(const char* symbol,const char* file)
 {
-  PTagArray ta=new TagArray;
-  String filename=file;
-  filename.ToLower();
-  for(int i=0;i<files.size();i++)
-  {
-    if (filename.StartWith(files[i]->GetRepoRoot()))
-    {
-      FindInFile(files[i].get(),symbol,ta);
-    }
-  }
-  if(ta->Count()==0)
-  {
-    delete ta;
-    ta=NULL;
-  }
-  return ta;
+  TagArrayPtr ta(new TagArray);
+  ForEachFileRepository(file, std::bind(FindInFile, std::placeholders::_1, symbol, ta.get()));
+  return !ta->Count() ? nullptr : ta.release();
 }
 
 //TODO: support case insensitive search
@@ -1096,13 +1115,12 @@ static std::vector<TagInfo> FindPartiallyMatchedTags(TagFileInfo* fi, const char
   auto range = GetMatchedOffsetRange(f, fi, part, maxCount);
   if (range.second > range.first)
   {
-    String repoRoot=fi->GetRepoRoot();
     for(int i=range.first;i<range.second;i++)
     {
       fseek(f,fi->offsets[i],SEEK_SET);
       std::string line;
       GetLine(line, f);
-      std::unique_ptr<TagInfo> tag(ParseLine(line.c_str(), repoRoot));
+      std::unique_ptr<TagInfo> tag(ParseLine(line.c_str(), *fi));
       result.push_back(*tag);
     }
   }
@@ -1118,21 +1136,12 @@ std::vector<TagInfo> FindPartiallyMatchedTags(const char* file, const char* part
 
 void FindParts(const char* file, const char* part,StrList& dst)
 {
-  String filename=file;
-  filename.ToLower();
   dst.Clean();
   StrList tmp;
-  int i;
-  for(i=0;i<files.size();i++)
-  {
-    if (filename.StartWith(files[i]->GetRepoRoot()))
-    {
-      FindPartsInFile(files[i].get(),part,tmp);
-    }
-  }
+  ForEachFileRepository(file, std::bind(FindPartsInFile, std::placeholders::_1, part, tmp));
   if(tmp.Count()==0)return;
   tmp.Sort(dst);
-  i=1;
+  int i=1;
   String *s=&dst[0];
   while(i<dst.Count())
   {
@@ -1150,49 +1159,24 @@ void FindParts(const char* file, const char* part,StrList& dst)
 
 PTagArray FindFileSymbols(const char* file)
 {
-  String filename=file;
-  filename.ToLower();
-  PTagArray ta=new TagArray;
-  for(int i=0;i<files.size();i++)
+  TagArrayPtr ta (new TagArray);
+  for (const auto& repos : files)
   {
-    if (filename.StartWith(files[i]->GetRepoRoot()))
-    {
-      int j=0;
-      while(filename[j]==files[i]->GetName()[j])j++;
-      while(filename[j-1]!='\\')j--;
-      if(files[i]->GetName().Index("\\",j)==-1)
-      {
-        FindFile(files[i].get(),filename.Substr(j),ta);
-        FindFile(files[i].get(),filename,ta);
-      }
-    }
+    auto relativePath = repos->BelongsToRepo(file);
+    if (!relativePath || !*relativePath)
+      continue;
+
+    FindFile(repos.get(), repos->IsFullPathRepo() ? file : relativePath, ta.get());
   }
-  if(ta->Count()==0)
-  {
-    delete ta;
-    ta=NULL;
-  }
-  return ta;
+
+  return !ta->Count() ? nullptr : ta.release();
 }
 
 PTagArray FindClassSymbols(const char* file,const char* classname)
 {
-  PTagArray ta=new TagArray;
-  String filename=file;
-  filename.ToLower();
-  for(int i=0;i<files.size();i++)
-  {
-    if (filename.StartWith(files[i]->GetRepoRoot()))
-    {
-      FindClass(files[i].get(),classname,ta);
-    }
-  }
-  if(ta->Count()==0)
-  {
-    delete ta;
-    ta=NULL;
-  }
-  return ta;
+  TagArrayPtr ta(new TagArray);
+  ForEachFileRepository(file, std::bind(FindClass, std::placeholders::_1, classname, ta.get()));
+  return !ta->Count() ? nullptr : ta.release();
 }
 
 void Autoload(const char* fn)
@@ -1216,7 +1200,7 @@ void GetFiles(StrList& dst)
 {
   for(int i=0;i<files.size();i++)
   {
-    dst<<files[i]->GetName();
+    dst<<files[i]->GetName().c_str();
   }
 }
 
@@ -1351,20 +1335,9 @@ bool IsTagFile(const char* file)
   return result && !pattern.compare(0, std::string::npos, result, pattern.length());
 };
 
+//TODO: this should be reworked with FindPartiallyMatchedTags
 std::string GetTagsFile(std::string const& fileFullPath)
 {
-  String path(fileFullPath.c_str());
-  path.ToLower();
-  TagFileInfoPtr found;
-  size_t foundRootLen = 0;
-  for (auto const& i : files)
-  {
-    auto currentRoot = i->GetRepoRoot();
-    if (currentRoot.Length() > foundRootLen && path.StartWith(currentRoot))
-    {
-      found = i;
-      foundRootLen = currentRoot.Length();
-    }
-  }
-  return !found ? std::string() : found->GetName().Str();
+  auto iter = std::find_if(files.begin(), files.end(), [&](TagFileInfoPtr const& repos) {return repos->BelongsToRepo(fileFullPath.c_str()); });
+  return iter == files.end()  ? std::string() : (*iter)->GetName();
 }
