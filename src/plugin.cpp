@@ -1005,7 +1005,10 @@ WideString FormatTagInfo(TagInfo const& ti, int maxid, int maxDeclaration, int m
   );
 
   if (maxfile > 0)
-    s += String(" ") + TrimFilename(ti.file,maxfile);
+  {
+    auto lineNumber = ti.lineno >= 0 ? ":" + std::to_string(ti.lineno + 1) : std::string();
+    s += String(" ") + TrimFilename(ti.file + lineNumber.c_str(),maxfile);
+  }
 
   return ToString(s.Str());
 }
