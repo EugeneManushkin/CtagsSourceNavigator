@@ -28,6 +28,7 @@
 #include <fstream>
 #include <stdio.h>
 #include <string.h>
+#include <sys/stat.h>
 #include <time.h>
 #include <ctype.h>
 #include <memory>
@@ -244,31 +245,6 @@ std::string ToStdString(WideString const& str, UINT codePage = CP_ACP)
   return std::string(buffer.begin(), buffer.end());
 }
 
-template <typename CallType>
-auto SafeCall(CallType call, decltype(call()) errorResult) ->decltype(call())
-{
-  try
-  {
-    return call();
-  }
-  catch (std::exception const& e)
-  {
-    Msg(ToString(e.what()).c_str());
-  }
-  catch(Error const& err)
-  {
-    Msg(err.GetCode());
-  }
-
-  return errorResult;
-}
-
-template <typename CallType>
-void SafeCall(CallType call)
-{
-  SafeCall([call]() { call(); return 0; }, 0);
-}
-
 bool IsPathSeparator(WideString::value_type c)
 {
   return c == '/' || c == '\\';
@@ -325,6 +301,31 @@ int Msg(int msgid)
 {
   Msg(GetMsg(msgid));
   return 0;
+}
+
+template <typename CallType>
+auto SafeCall(CallType call, decltype(call()) errorResult) ->decltype(call())
+{
+  try
+  {
+    return call();
+  }
+  catch (std::exception const& e)
+  {
+    Msg(ToString(e.what()).c_str());
+  }
+  catch(Error const& err)
+  {
+    Msg(err.GetCode());
+  }
+
+  return errorResult;
+}
+
+template <typename CallType>
+void SafeCall(CallType call)
+{
+  SafeCall([call]() { call(); return 0; }, 0);
 }
 
 std::shared_ptr<void> LongOperationMessage(WideString const& msg)
