@@ -65,4 +65,5 @@ exit /b
   cd %2
   for %%G in (%REPO_ROOT%\tests\tags\*.zip) do ( cmake -E tar xzvf "%%G" || exit 1 )
   tags_tests.exe > %ROOT%\tags_tests-%1.txt 2>&1
+  tags_tests.exe --CheckIdxFiles > %ROOT%\tags_tests_idx-%1.txt 2>&1
 exit /b

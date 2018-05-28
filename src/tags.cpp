@@ -143,15 +143,6 @@ static bool IsFullPath(char const* fn, size_t fsz)
   return fsz > 1 && fn[1] == ':';
 }
 
-static char GetPathSeparator(char const* str)
-{
-  static char const defaultPathSeparator = '\\';
-  while (*str && *str != '\t' && !IsPathSeparator(*str))
-    ++str;
-
-  return IsPathSeparator(*str) ? *str : defaultPathSeparator;
-}
-
 static std::string GetDirOfFile(std::string const& filePath)
 {
     auto pos = filePath.find_last_of("\\/");
@@ -191,7 +182,7 @@ static void ForEachFileRepository(char const* fileFullPath, std::function<void(T
   }
 }
 
-char const IndexFileSignature[] = "tags.idx.v1";
+char const IndexFileSignature[] = "tags.idx.v2";
 
 static bool ReadSignature(FILE* f)
 {
@@ -200,6 +191,28 @@ static bool ReadSignature(FILE* f)
   {
     fseek(f, 0, SEEK_SET);
     return false;
+  }
+
+  return true;
+}
+
+static bool ReadRepoRoot(FILE* f, std::string& repoRoot)
+{
+  uint32_t rootLen = 0;
+  if (fread(&rootLen, 1, sizeof(rootLen), f) != sizeof(rootLen))
+    return false;
+
+  if (rootLen > 0)
+  {
+    std::vector<char> buf(rootLen);
+    if (fread(&buf[0], 1, buf.size(), f) != buf.size())
+      return false;  
+
+    repoRoot = std::string(buf.begin(), buf.end());
+  }
+  else
+  {
+    repoRoot.clear();
   }
 
   return true;
@@ -456,7 +469,6 @@ int TagFileInfo::CreateIndex(time_t tagsModTime)
 
   pos=ftell(f);
   bool sorted=true;
-  char pathSeparator = 0;
   std::string pathIntersection;
   while(GetLine(strbuf, buffer, f))
   {
@@ -479,7 +491,6 @@ int TagFileInfo::CreateIndex(time_t tagsModTime)
     //strdup(strbuf);
     li->pos=pos;
     li->fn=strchr(li->line,'\t')+1;
-    pathSeparator = !pathSeparator ? GetPathSeparator(li->fn) : pathSeparator;
     file.Set(li->fn,0,strchr(li->fn,'\t')-li->fn);
     pathIntersection = IsFullPath(file.Str(), file.Length()) ? GetIntersection(pathIntersection.c_str(), file.Str()) : pathIntersection;
     files.Insert(file,1);
@@ -504,7 +515,6 @@ int TagFileInfo::CreateIndex(time_t tagsModTime)
 
   fullpathrepo = !pathIntersection.empty();
   reporoot = pathIntersection.empty() ? GetDirOfFile(filename) : MakeFilename(pathIntersection);
-  pathSeparator = !pathSeparator ? '\\' : pathSeparator;
   fclose(f);
   FILE *g=fopen(fi->indexFile.c_str(),"wb");
   if(!g)
@@ -529,8 +539,12 @@ int TagFileInfo::CreateIndex(time_t tagsModTime)
   }
   int cnt=fi->offsets.Count();
   fwrite(IndexFileSignature, 1, sizeof(IndexFileSignature), g);
-  fwrite(&pathSeparator, 1, 1, g);
   fwrite(&tagsModTime,sizeof(tagsModTime),1,g);
+  uint32_t rootLen = fullpathrepo ? reporoot.length() : 0;
+  fwrite(&rootLen, 1, sizeof(rootLen), g);
+  if (fullpathrepo)
+    fwrite(reporoot.c_str(), 1, reporoot.length(), g);
+
   fwrite(&cnt,4,1,g);
   if (fi->offsets.Count())
     fwrite(&fi->offsets[0],4,fi->offsets.Count(),g);
@@ -597,12 +611,16 @@ bool TagFileInfo::LoadIndex(time_t tagsModTime)
   if(!ReadSignature(f))
     return false;
 
-  fseek(f, 1, SEEK_CUR);
   time_t storedTagsModTime = 0;
   fread(&storedTagsModTime,sizeof(storedTagsModTime),1,f);
   if (storedTagsModTime != tagsModTime)
     return false;
 
+  if (!ReadRepoRoot(f, reporoot))
+    return false;
+
+  fullpathrepo = !reporoot.empty();
+  reporoot = reporoot.empty() ? GetDirOfFile(filename) : reporoot;
   fread(&sz,4,1,f);
   fi->offsets.Clean();
   fi->offsets.Init(sz);
@@ -744,11 +762,14 @@ void FindFile(TagFileInfo* fi,const char* filename,PTagArray ta)
   if (!ReadSignature(g))
     throw std::logic_error("Signature must be valid");
 
-  fread(&filePathSeparator, 1, 1, g);
   fseek(g, sizeof(time_t), SEEK_CUR);
+  std::string repoRoot;
+  if (!ReadRepoRoot(g, repoRoot))
+    throw std::logic_error("Reporoot must be valid");
+
   int sz;
   fread(&sz,4,1,g);
-  fseek(g,4+sz*4+sizeof(IndexFileSignature)+1+sizeof(time_t),SEEK_SET);
+  fseek(g,4+sz*4+sizeof(IndexFileSignature)+sizeof(uint32_t)+repoRoot.length()+sizeof(time_t),SEEK_SET);
   Vector<int> offsets;
   offsets.Init(sz);
   if(sz)fread(&offsets[0],4,sz,g);
@@ -834,9 +855,13 @@ void FindClass(TagFileInfo* fi,const char* str,PTagArray ta)
   if (!ReadSignature(g))
     throw std::logic_error("Signature must be valid");
 
-  fseek(g,1+sizeof(time_t),SEEK_CUR);
+  fseek(g,sizeof(time_t),SEEK_CUR);
+  std::string repoRoot;
+  if (!ReadRepoRoot(g, repoRoot))
+    throw std::logic_error("Reporoot must be valid");
+
   fread(&sz,4,1,g);
-  fseek(g,4+sz*4*2+sizeof(IndexFileSignature)+1+sizeof(time_t),SEEK_SET);
+  fseek(g,4+sz*4*2+sizeof(IndexFileSignature)+sizeof(uint32_t)+repoRoot.length()+sizeof(time_t),SEEK_SET);
   fread(&sz,4,1,g);
   Vector<int> offsets;
   offsets.Init(sz);
@@ -964,7 +989,11 @@ static void CheckFiles(std::string const& projectRoot, TagFileInfo* fi,StrList& 
   if (ReadSignature(g))
     throw std::logic_error("Signature must be valid");
 
-  fseek(g, 1 + sizeof(time_t), SEEK_CUR);
+  fseek(g, sizeof(time_t), SEEK_CUR);
+  std::string repoRoot;
+  if (!ReadRepoRoot(g, repoRoot))
+    throw std::logic_error("Reporoot must be valid");
+
   int sz;
   fread(&sz,4,1,g);
   fseek(g,sz*4*2,SEEK_CUR);

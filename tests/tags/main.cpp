@@ -7,6 +7,7 @@
 #include <fstream>
 #include <memory>
 #include <string>
+#include <sys/stat.h>
 #include <regex>
 #include <vector>
 
@@ -21,6 +22,7 @@ namespace
 {
   using TagArrayPtr = std::unique_ptr<TagArray>;
   using TagsCont = std::vector<TagInfo>;
+  bool CheckIdxFiles = false;
 
   std::string GetFilePath(std::string const& file)
   {
@@ -46,6 +48,12 @@ namespace
   bool IsFullPath(std::string const& path)
   {
     return path.length() > 1 && path[1] == ':';
+  }
+
+  time_t GetModificationTime(std::string const& filename)
+  {
+    struct stat st;
+    return stat(filename.c_str(), &st) == -1 ? 0 : std::max(st.st_mtime, st.st_ctime);
   }
 
   struct MetaTag
@@ -150,8 +158,12 @@ namespace TESTS
     void LoadTagsFile(std::string const& tagsFile, size_t expectedTagsCount)
     {
       size_t symbolsLoaded = -1;
+      auto idxFile = tagsFile + ".idx";
+      auto modTime = GetModificationTime(idxFile);
+      ASSERT_EQ(CheckIdxFiles, !!modTime);
       ASSERT_EQ(LoadSuccess, Load(tagsFile.c_str(), symbolsLoaded));
       ASSERT_EQ(expectedTagsCount, symbolsLoaded);
+      ASSERT_TRUE(!CheckIdxFiles || modTime == GetModificationTime(idxFile));
     }
 
     void LookupMetaTag(MetaTag const& metaTag)
@@ -244,6 +256,7 @@ namespace TESTS
 
 int main(int argc, char* argv[])
 {
+  CheckIdxFiles = std::find_if(argv, argv + argc, [](char* argument) {return !strcmp(argument, "--CheckIdxFiles");}) != argv + argc;
   testing::InitGoogleTest(&argc, argv);
   RUN_ALL_TESTS();  
 }
