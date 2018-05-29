@@ -132,7 +132,6 @@ int Load(const char* filename);
 int Load(const char* filename, size_t& symbolsLoaded);
 void UnloadTags(int idx);
 PTagArray Find(const char* symbol,const char* filename);
-void FindParts(const char* file,const char* part,StrList& dst);
 std::vector<TagInfo> FindPartiallyMatchedTags(const char* file, const char* part, size_t maxCount);
 PTagArray FindFileSymbols(const char* file);
 PTagArray FindClassSymbols(const char* file,const char* classname);
@@ -141,5 +140,5 @@ void GetFiles(StrList& dst);
 int SaveChangedFiles(const char* file, const char* outputFilename);
 int MergeFiles(const char* target,const char* mfile);
 bool IsTagFile(const char* file);
-std::string GetTagsFile(std::string const& fileFullPath);
+bool TagsLoadedForFile(const char* file);
 #endif

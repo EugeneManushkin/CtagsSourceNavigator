@@ -1114,76 +1114,27 @@ static std::pair<size_t, size_t> GetMatchedOffsetRange(FILE* f, TagFileInfo* fi,
   return std::make_pair(0, 0);
 }
 
-static void FindPartsInFile(TagFileInfo* fi,const char* str,StrList& dst)
+static void FindPartiallyMatchedTagsImpl(TagFileInfo* fi, const char* part, size_t maxCount, std::vector<TagInfo>& result)
 {
   FILE *f=fi->OpenTags();
   if(!f)return;
-  auto range = GetMatchedOffsetRange(f, fi, str, 0);
-  if (range.second > range.first)
-  {
-    for(int i=range.first;i<range.second;i++)
-    {
-      fseek(f,fi->offsets[i],SEEK_SET);
-      fgets(strbuf,sizeof(strbuf),f);
-      char *tab=strchr(strbuf,'\t');
-      if(tab)
-      {
-        *tab=0;
-        dst.Push(strbuf);
-      }
-    }
-  }
-  fclose(f);
-}
-
-static std::vector<TagInfo> FindPartiallyMatchedTags(TagFileInfo* fi, const char* part, size_t maxCount)
-{
-  std::vector<TagInfo> result;
-  FILE *f=fi->OpenTags();
-  if(!f)return result;
   auto range = GetMatchedOffsetRange(f, fi, part, maxCount);
-  if (range.second > range.first)
+  for(; range.first < range.second; ++range.first)
   {
-    for(int i=range.first;i<range.second;i++)
-    {
-      fseek(f,fi->offsets[i],SEEK_SET);
-      std::string line;
-      GetLine(line, f);
-      std::unique_ptr<TagInfo> tag(ParseLine(line.c_str(), *fi));
-      result.push_back(*tag);
-    }
+    fseek(f, fi->offsets[range.first], SEEK_SET);
+    std::string line;
+    GetLine(line, f);
+    std::unique_ptr<TagInfo> tag(ParseLine(line.c_str(), *fi));
+    result.push_back(*tag);
   }
   fclose(f);
-  return result;
 }
 
 std::vector<TagInfo> FindPartiallyMatchedTags(const char* file, const char* part, size_t maxCount)
 {
-  auto fi = std::find_if(files.begin(), files.end(), [&](TagFileInfoPtr const& tag){ return tag->HasName(file); });
-  return fi != files.end() ? FindPartiallyMatchedTags(fi->get(), part, maxCount) : std::vector<TagInfo>();
-}
-
-void FindParts(const char* file, const char* part,StrList& dst)
-{
-  dst.Clean();
-  StrList tmp;
-  ForEachFileRepository(file, std::bind(FindPartsInFile, std::placeholders::_1, part, tmp));
-  if(tmp.Count()==0)return;
-  tmp.Sort(dst);
-  int i=1;
-  String *s=&dst[0];
-  while(i<dst.Count())
-  {
-    if(dst[i]==*s)
-    {
-      dst.Delete();
-    }else
-    {
-      s=&dst[i];
-      i++;
-      if(i==dst.Count())break;
-    }
-  }
+  std::vector<TagInfo> result;
+  ForEachFileRepository(file, std::bind(FindPartiallyMatchedTagsImpl, std::placeholders::_1, part, maxCount, std::ref(result)));
+  return result;
 }
 
 PTagArray FindFileSymbols(const char* file)
@@ -1364,9 +1315,8 @@ bool IsTagFile(const char* file)
   return result && !pattern.compare(0, std::string::npos, result, pattern.length());
 };
 
-//TODO: this should be reworked with FindPartiallyMatchedTags
-std::string GetTagsFile(std::string const& fileFullPath)
+bool TagsLoadedForFile(const char* file)
 {
-  auto iter = std::find_if(files.begin(), files.end(), [&](TagFileInfoPtr const& repos) {return repos->BelongsToRepo(fileFullPath.c_str()); });
-  return iter == files.end()  ? std::string() : (*iter)->GetName();
+  auto iter = std::find_if(files.begin(), files.end(), [&](TagFileInfoPtr const& repos) {return repos->BelongsToRepo(file); });
+  return iter != files.end();
 }

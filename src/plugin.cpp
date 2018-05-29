@@ -45,6 +45,7 @@
 
 #include <algorithm>
 #include <functional>
+#include <iterator>
 #include <string>
 #include <vector>
 #include <list>
@@ -384,7 +385,8 @@ WideString GetCurFile(HANDLE hPanel = PANEL_ACTIVE)
   item->Size = sz;
   item->Item = reinterpret_cast<PluginPanelItem*>(item + 1);
   sz = I.PanelControl(hPanel, FCTL_GETPANELITEM, pi.CurrentItem, &buffer[0]);
-  return item->Item->FileName;
+  WideString result = item->Item->FileName;
+  return result == L".." ? L"." : result;
 }
 
 static std::string ExpandEnvString(std::string const& str)
@@ -1462,7 +1464,7 @@ static std::string SearchTagsFile(std::string const& fileName)
 
 static bool EnsureTagsLoaded(std::string const& fileName)
 {
-  if (!GetTagsFile(fileName).empty())
+  if (TagsLoadedForFile(fileName.c_str()))
     return true;
 
   auto tagsFile = SearchTagsFile(fileName);
@@ -1498,18 +1500,10 @@ static WideString ReindexRepository(std::string const& fileName)
 
 static void LookupSymbol(std::string const& file)
 {
-  auto tagsFile = IsTagFile(file.c_str()) ? file : GetTagsFile(file);
-  tagsFile = tagsFile.empty() ? SearchTagsFile(file) : tagsFile;
-  if (tagsFile.empty())
-    throw Error(MENotLoaded);
-
-  int rc=Load(tagsFile.c_str());
-  if(rc>1)
-    throw Error(rc);
-
+  EnsureTagsLoaded(file);
   size_t const maxMenuItems = 10;
   TagInfo selectedTag;
-  if (LookupTagsMenu(tagsFile.c_str(), maxMenuItems, selectedTag))
+  if (LookupTagsMenu(file.c_str(), maxMenuItems, selectedTag))
     NavigateTo(&selectedTag);
 }
 
@@ -1520,6 +1514,15 @@ static void FreeTagsArray(PTagArray ta)
     delete (*ta)[i];
   }
   delete ta;
+}
+
+static std::vector<std::string> TagsToStrings(std::vector<TagInfo> const& tags)
+{
+  std::vector<std::string> result;
+  std::transform(tags.begin(), tags.end(), std::back_inserter(result), [](TagInfo const& tag) {return tag.name.Str();});
+  std::sort(result.begin(), result.end());
+  result.erase(std::unique(result.begin(), result.end()), result.end());
+  return result;
 }
 
 HANDLE WINAPI OpenW(const struct OpenInfo *info)
@@ -1606,26 +1609,23 @@ HANDLE WINAPI OpenW(const struct OpenInfo *info)
       {
         String word=GetWord(1);
         if(word.Length()==0)return nullptr;
-        StrList lst;
-        FindParts(fileName.c_str(),word,lst);
-        if(lst.Count()==0)
+        auto lst = TagsToStrings(FindPartiallyMatchedTags(fileName.c_str(), word, 0));
+        if(lst.empty())
         {
           Msg(MNothingFound);
           return nullptr;
         }
-        int res;
-        if(lst.Count()>1)
+        int res = 0;
+        if(lst.size()>1)
         {
           MenuList ml;
-          for(int i=0;i<lst.Count();i++)
+          int i = 0;
+          for(auto const& name : lst)
           {
-            ml.push_back(MI(lst[i],i,false,lst[i].Str()));
+            ml.push_back(MI(name.c_str(), i++, false, name.c_str()));
           }
           res=FilterMenu(GetMsg(MSelectSymbol),ml,0,MF_SHOWCOUNT,(void*)word.Str());
           if(res==-1)return nullptr;
-        }else
-        {
-          res=0;
         }
         EditorGetString egs;
         egs.StringNumber=-1;
@@ -1639,7 +1639,7 @@ HANDLE WINAPI OpenW(const struct OpenInfo *info)
         esp.LeftPos=-1;
         esp.Overtype=-1;
         I.EditorControl(ei.EditorID, ECTL_SETPOSITION, 0, &esp);
-        WideString newText(ToString(lst[res].Substr(word.Length()).Str()));
+        WideString newText(ToString(lst[res].substr(word.Length())));
         I.EditorControl(ei.EditorID, ECTL_INSERTTEXT, 0, const_cast<wchar_t*>(newText.c_str()));
       }break;
       case miBrowseFile:
