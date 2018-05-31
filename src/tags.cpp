@@ -73,12 +73,19 @@ static bool FileExists(char const* filename)
   return GetFileAttributesA(filename) != INVALID_FILE_ATTRIBUTES;
 }
 
+static bool IsPathSeparator(std::string::value_type c)
+{
+    return c == '/' || c == '\\';
+}
+
 struct TagFileInfo{
   TagFileInfo(char const* fname)
     : filename(fname)
     , indexFile(filename + ".idx")
     , modtm(0)
   {
+    if (filename.empty() || IsPathSeparator(filename.back()))
+      throw std::logic_error("Invalid tags file name");
   }
 
   Vector<int> offsets;
@@ -127,11 +134,6 @@ private:
 using TagFileInfoPtr = std::shared_ptr<TagFileInfo>;
 std::vector<TagFileInfoPtr> files;
 using TagArrayPtr = std::unique_ptr<TagArray>;
-
-static bool IsPathSeparator(std::string::value_type c)
-{
-  return c == '/' || c == '\\';
-}
 
 static std::string JoinPath(std::string const& dirPath, std::string const& name)
 {
@@ -510,9 +512,7 @@ int TagFileInfo::CreateIndex(time_t tagsModTime)
 //    fi->offsets.Push(pos);
     pos=ftell(f);
   }
-  if (!pathIntersection.empty() && IsPathSeparator(pathIntersection.back()))
-    pathIntersection.resize(pathIntersection.length() - 1);
-
+  for (; !pathIntersection.empty() && IsPathSeparator(pathIntersection.back()); pathIntersection.resize(pathIntersection.length() - 1));
   fullpathrepo = !pathIntersection.empty();
   reporoot = pathIntersection.empty() ? GetDirOfFile(filename) : MakeFilename(pathIntersection);
   fclose(f);
@@ -652,11 +652,14 @@ int TagFileInfo::Load()
 
 char const* TagFileInfo::BelongsToRepo(char const* fileName) const
 {
-  if (reporoot.empty())
-    throw std::logic_error("reporoot is empty");
+  if (reporoot.empty() || IsPathSeparator(reporoot.back()))
+    throw std::logic_error("Invalid reporoot");
 
-  return !!CompareFilenames(reporoot.c_str(), fileName, reporoot.length()) ? nullptr :
-         IsPathSeparator(*fileName) ? ++fileName : fileName;
+  if (!!CompareFilenames(reporoot.c_str(), fileName, reporoot.length()) || (*fileName && !IsPathSeparator(*fileName)))
+    return nullptr;
+
+  for (; IsPathSeparator(*fileName); ++fileName);
+  return fileName;
 }
 
 std::string TagFileInfo::GetFullPath(std::string const& relativePath) const
@@ -666,7 +669,8 @@ std::string TagFileInfo::GetFullPath(std::string const& relativePath) const
 
 bool TagFileInfo::HasName(char const* fileName) const
 {
-  return !CompareFilenames(filename.c_str(), fileName, filename.length());
+  // filename.back() is not path separator
+  return !CompareFilenames(filename.c_str(), fileName, filename.length()) && !*fileName;
 }
 
 //TODO: rework: must return error instead of message id (message id coud be zero)

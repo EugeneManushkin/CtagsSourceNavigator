@@ -30,19 +30,35 @@ namespace
     return pos == std::string::npos ? std::string() : file.substr(0, pos);
   }
 
-  std::vector<char> ToLower(std::string const& str)
+  std::string ToLower(std::string const& str)
   {
     std::vector<char> result(str.begin(), str.end());
     result.push_back(0);
     ::CharLowerA(&result[0]);
+    return std::string(result.begin(), result.end());
+  }
+
+  std::string ToUpper(std::string const& str)
+  {
+    std::vector<char> result(str.begin(), str.end());
+    result.push_back(0);
+    ::CharUpperA(&result[0]);
+    return std::string(result.begin(), result.end());
+  }
+
+  std::string AddExtraSlashes(std::string const& str)
+  {
+    std::string result;
+    for (auto c : str)
+    {
+      result += std::string(c == '\\' ? 2 : 1, c);
+    }
     return result;
   }
 
   bool PathsEqual(std::string const& left, std::string const& right)
   {
-    auto a = ToLower(left);
-    auto b = ToLower(right);
-    return a.size() == b.size() && std::equal(a.begin(), a.end(), b.begin());
+    return ToLower(left) == ToLower(right);
   }
 
   bool IsFullPath(std::string const& path)
@@ -155,15 +171,27 @@ namespace TESTS
       UnloadTags(-1);
     }
 
-    void LoadTagsFile(std::string const& tagsFile, size_t expectedTagsCount)
+    void LoadTagsFileImpl(std::string const& tagsFile, size_t expectedTagsCount)
     {
       size_t symbolsLoaded = -1;
+      ASSERT_EQ(LoadSuccess, Load(tagsFile.c_str(), symbolsLoaded));
+      ASSERT_EQ(expectedTagsCount, symbolsLoaded);
+    }
+
+    void LoadTagsFile(std::string const& tagsFile, size_t expectedTagsCount)
+    {
       auto idxFile = tagsFile + ".idx";
       auto modTime = GetModificationTime(idxFile);
       ASSERT_EQ(CheckIdxFiles, !!modTime);
-      ASSERT_EQ(LoadSuccess, Load(tagsFile.c_str(), symbolsLoaded));
-      ASSERT_EQ(expectedTagsCount, symbolsLoaded);
+      ASSERT_NO_FATAL_FAILURE(LoadTagsFileImpl(tagsFile, expectedTagsCount));
       ASSERT_TRUE(!CheckIdxFiles || modTime == GetModificationTime(idxFile));
+      ASSERT_NO_FATAL_FAILURE(LoadTagsFileImpl(ToUpper(tagsFile), expectedTagsCount));
+      ASSERT_NO_FATAL_FAILURE(LoadTagsFileImpl(ToLower(tagsFile), expectedTagsCount));
+      ASSERT_NO_FATAL_FAILURE(LoadTagsFileImpl(AddExtraSlashes(tagsFile), expectedTagsCount));
+      size_t symbolsLoaded = -1;
+      ASSERT_NE(LoadSuccess, Load((tagsFile + "extra").c_str(), symbolsLoaded));
+      ASSERT_THROW(Load((tagsFile + "\\").c_str(), symbolsLoaded), std::logic_error);
+      ASSERT_THROW(Load((tagsFile + "/").c_str(), symbolsLoaded), std::logic_error);
     }
 
     void LookupMetaTag(MetaTag const& metaTag)
@@ -190,6 +218,22 @@ namespace TESTS
         EXPECT_NO_FATAL_FAILURE(LookupMetaTag(metaTag)) << "Tag info: " << metaTag << ", tags file: " << tagsFile;
         EXPECT_NO_FATAL_FAILURE(LookupMetaTagInFile(metaTag)) << "Tag info: " << metaTag << ", tags file: " << tagsFile;
       }
+    }
+    
+    void TestTagsLoadedForFile()
+    {
+      ASSERT_TRUE(TagsLoadedForFile("C:\\18743\\Dummy Folder\\Repository Root\\lowercasefolder"));
+      ASSERT_TRUE(TagsLoadedForFile("C:\\18743\\Dummy Folder\\Repository Root/lowercasefolder/"));
+      ASSERT_TRUE(TagsLoadedForFile("C:/18743/Dummy Folder/Repository Root/lowercasefolder/"));
+      ASSERT_TRUE(TagsLoadedForFile("C:\\18743\\Dummy Folder\\Repository Root\\lowercasefolder\\"));
+      ASSERT_TRUE(TagsLoadedForFile("C:\\18743\\Dummy Folder\\Repository Root\\lowercasefolder\\."));
+      ASSERT_TRUE(TagsLoadedForFile("c:\\18743\\dummy folder\\repository root\\lowercasefolder\\."));
+      ASSERT_TRUE(TagsLoadedForFile("C:\\18743\\DUMMY FOLDER\\REPOSITORY ROOT\\LOWERCASEFOLDER\\."));
+      ASSERT_FALSE(TagsLoadedForFile("D:\\18743\\Dummy Folder\\Repository Root\\lowercasefolder\\file.cpp"));
+      ASSERT_FALSE(TagsLoadedForFile("C:\\18743\\Dummy Folder\\Repository Root\\lowercasefoldex\\file.cpp"));
+      ASSERT_FALSE(TagsLoadedForFile("C:\\18743\\Dummy Folder\\Repository Root\\lowercasefoldername"));
+      ASSERT_FALSE(TagsLoadedForFile("C:\\18743\\Dummy Folder\\Repository Root\\lowercasefoldername\\"));
+      ASSERT_FALSE(TagsLoadedForFile("C:\\18743\\Dummy Folder\\Repository Root\\lowercasefoldername\\file.cpp"));
     }
   };
 
@@ -236,21 +280,25 @@ namespace TESTS
   TEST_F(Tags, AllNamesFoundInCygwinFullPathRepos)
   {
     LoadAndLookupNames("full_path_repos\\tags.exuberant", "full_path_repos\\tags.meta");
+    TestTagsLoadedForFile();
   }
 
   TEST_F(Tags, AllNamesFoundInCygwinMixedSlashFullPathRepos)
   {
     LoadAndLookupNames("full_path_repos\\tags.exuberant.mixed.slashes", "full_path_repos\\tags.meta");
+    TestTagsLoadedForFile();
   }
 
   TEST_F(Tags, AllNamesFoundInExuberantFullPathRepos)
   {
     LoadAndLookupNames("full_path_repos\\tags.exuberant.w", "full_path_repos\\tags.meta");
+    TestTagsLoadedForFile();
   }
 
   TEST_F(Tags, AllNamesFoundInUniversalFullPathRepos)
   {
     LoadAndLookupNames("full_path_repos\\tags.universal", "full_path_repos\\tags.meta");
+    TestTagsLoadedForFile();
   }
 }
 
