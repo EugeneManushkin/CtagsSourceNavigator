@@ -1129,7 +1129,8 @@ static void FindPartiallyMatchedTagsImpl(TagFileInfo* fi, const char* part, size
     std::string line;
     GetLine(line, f);
     std::unique_ptr<TagInfo> tag(ParseLine(line.c_str(), *fi));
-    result.push_back(*tag);
+    if (tag)
+      result.push_back(*tag);
   }
   fclose(f);
 }

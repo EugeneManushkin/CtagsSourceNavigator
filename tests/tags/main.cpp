@@ -212,6 +212,18 @@ namespace TESTS
       ASSERT_FALSE(std::find(tags.begin(), tags.end(), metaTag) == tags.end());
     }
 
+    void LookupAllPartiallyMatchedNames(MetaTag const& metaTag)
+    {
+      std::string part = metaTag.Name;
+      while (!part.empty())
+      {
+        auto tags = FindPartiallyMatchedTags(metaTag.FullPath.c_str(), part.c_str(), 0);
+        ASSERT_FALSE(tags.empty()) << "Part not found: " << part;
+        ASSERT_FALSE(std::find(tags.begin(), tags.end(), metaTag) == tags.end()) << "Part not found: " << part;
+        part.resize(part.length() - 1);
+      }
+    }
+
     void LoadAndLookupNames(std::string const& tagsFile, std::string const& metaTagsFile)
     {
       auto const metaTags = LoadMetaTags(metaTagsFile, GetFilePath(tagsFile));
@@ -222,6 +234,7 @@ namespace TESTS
       {
         EXPECT_NO_FATAL_FAILURE(LookupMetaTag(metaTag)) << "Tag info: " << metaTag << ", tags file: " << tagsFile;
         EXPECT_NO_FATAL_FAILURE(LookupMetaTagInFile(metaTag)) << "Tag info: " << metaTag << ", tags file: " << tagsFile;
+        EXPECT_NO_FATAL_FAILURE(LookupAllPartiallyMatchedNames(metaTag)) << "Tag info: " << metaTag << ", tags file: " << tagsFile;
       }
     }
     
