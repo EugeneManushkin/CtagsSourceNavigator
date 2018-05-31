@@ -185,6 +185,10 @@ namespace TESTS
       ASSERT_EQ(CheckIdxFiles, !!modTime);
       ASSERT_NO_FATAL_FAILURE(LoadTagsFileImpl(tagsFile, expectedTagsCount));
       ASSERT_TRUE(!CheckIdxFiles || modTime == GetModificationTime(idxFile));
+    }
+
+    void TestLoadTags(std::string const& tagsFile, size_t expectedTagsCount)
+    {
       ASSERT_NO_FATAL_FAILURE(LoadTagsFileImpl(ToUpper(tagsFile), expectedTagsCount));
       ASSERT_NO_FATAL_FAILURE(LoadTagsFileImpl(ToLower(tagsFile), expectedTagsCount));
       ASSERT_NO_FATAL_FAILURE(LoadTagsFileImpl(AddExtraSlashes(tagsFile), expectedTagsCount));
@@ -213,6 +217,7 @@ namespace TESTS
       auto const metaTags = LoadMetaTags(metaTagsFile, GetFilePath(tagsFile));
       ASSERT_FALSE(metaTags.empty());
       ASSERT_NO_FATAL_FAILURE(LoadTagsFile(tagsFile, metaTags.size()));
+      ASSERT_NO_FATAL_FAILURE(TestLoadTags(tagsFile, metaTags.size()));
       for (auto const& metaTag : metaTags)
       {
         EXPECT_NO_FATAL_FAILURE(LookupMetaTag(metaTag)) << "Tag info: " << metaTag << ", tags file: " << tagsFile;
