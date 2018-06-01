@@ -999,7 +999,7 @@ String TrimFilename(const String& file,int maxlength)
 }
 
 //TODO: rework
-WideString FormatTagInfo(TagInfo const& ti, int maxid, int maxDeclaration, int maxfile)
+WideString FormatTagInfo(TagInfo const& ti, int maxid, int maxDeclaration, int maxfile, bool displayFile)
 {
   std::string declaration = ti.declaration.Substr(0, maxDeclaration).Str();
   String s;
@@ -1007,10 +1007,10 @@ WideString FormatTagInfo(TagInfo const& ti, int maxid, int maxDeclaration, int m
     declaration.c_str(),maxDeclaration-declaration.length(),""
   );
 
-  if (maxfile > 0)
+  if (displayFile || ti.lineno >= 0)
   {
     auto lineNumber = ti.lineno >= 0 ? ":" + std::to_string(ti.lineno + 1) : std::string();
-    s += String(" ") + TrimFilename(ti.file + lineNumber.c_str(),maxfile);
+    s += String(" ") + TrimFilename((displayFile ? ti.file : String("Line")) + lineNumber.c_str(),maxfile);
   }
 
   return ToString(s.Str());
@@ -1051,7 +1051,7 @@ bool LookupTagsMenu(char const* tagsFile, size_t maxCount, TagInfo& tag)
     std::list<WideString> menuStrings;
     for (auto const& i : tags)
     {
-      menuStrings.push_back(FormatTagInfo(i, maxid, maxinfo, maxfile));
+      menuStrings.push_back(FormatTagInfo(i, maxid, maxinfo, maxfile, true));
       FarMenuItem item = {MIF_NONE,menuStrings.back().c_str()};
       menu.push_back(item);
     }
@@ -1370,11 +1370,11 @@ static TagInfo* TagsMenu(PTagArray pta, bool displayFile = true)
     if(ti->declaration.Length()>maxDeclaration)maxDeclaration=ti->declaration.Length();
     //if(ti->file.Length()>maxfile)
   }
-  maxDeclaration = std::min(maxDeclaration, displayFile ? maxDeclarationWidth : currentWidth-8-maxid-1-1-1-1);
-  int maxfile=displayFile ? currentWidth-8-maxid-maxDeclaration-1-1-1-1 : 0;
+  maxDeclaration = std::min(maxDeclaration, maxDeclarationWidth);
+  int maxfile=currentWidth-8-maxid-maxDeclaration-1-1-1-1;
   for(i=0;i<ta.Count();i++)
   {
-    sm.push_back(MI(FormatTagInfo(*ta[i], maxid, maxDeclaration, maxfile), i, false, ta[i]->name));
+    sm.push_back(MI(FormatTagInfo(*ta[i], maxid, maxDeclaration, maxfile, displayFile), i, false, ta[i]->name));
   }
   int sel=FilterMenu(GetMsg(MSelectSymbol),sm,0,MF_SHOWCOUNT);
   if(sel==-1)return NULL;
