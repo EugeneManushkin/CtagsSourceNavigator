@@ -90,7 +90,7 @@ struct TagFileInfo{
 
   Vector<int> offsets;
 
-  char const* BelongsToRepo(char const* fileName) const;
+  char const* GetRelativePath(char const* fileName) const;
 
   std::string GetFullPath(std::string const& relativePath) const;
 
@@ -179,7 +179,7 @@ static void ForEachFileRepository(char const* fileFullPath, std::function<void(T
   std::vector<TagFileInfoPtr> result;
   for (auto const& repos : files)
   {
-    if (repos->BelongsToRepo(fileFullPath))
+    if (repos->GetRelativePath(fileFullPath))
       func(repos.get());
   }
 }
@@ -650,7 +650,7 @@ int TagFileInfo::Load()
   return 0;
 }
 
-char const* TagFileInfo::BelongsToRepo(char const* fileName) const
+char const* TagFileInfo::GetRelativePath(char const* fileName) const
 {
   if (reporoot.empty() || IsPathSeparator(reporoot.back()))
     throw std::logic_error("Invalid reporoot");
@@ -1147,7 +1147,7 @@ PTagArray FindFileSymbols(const char* file)
   TagArrayPtr ta (new TagArray);
   for (const auto& repos : files)
   {
-    auto relativePath = repos->BelongsToRepo(file);
+    auto relativePath = repos->GetRelativePath(file);
     if (!relativePath || !*relativePath)
       continue;
 
@@ -1322,6 +1322,5 @@ bool IsTagFile(const char* file)
 
 bool TagsLoadedForFile(const char* file)
 {
-  auto iter = std::find_if(files.begin(), files.end(), [&](TagFileInfoPtr const& repos) {return repos->BelongsToRepo(file); });
-  return iter != files.end();
+  return std::find_if(files.begin(), files.end(), [&](TagFileInfoPtr const& repos) {return repos->GetRelativePath(file); }) != files.end();
 }

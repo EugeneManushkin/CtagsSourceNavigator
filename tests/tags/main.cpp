@@ -229,7 +229,7 @@ namespace TESTS
       auto const metaTags = LoadMetaTags(metaTagsFile, GetFilePath(tagsFile));
       ASSERT_FALSE(metaTags.empty());
       ASSERT_NO_FATAL_FAILURE(LoadTagsFile(tagsFile, metaTags.size()));
-      ASSERT_NO_FATAL_FAILURE(TestLoadTags(tagsFile, metaTags.size()));
+      EXPECT_NO_FATAL_FAILURE(TestLoadTags(tagsFile, metaTags.size()));
       for (auto const& metaTag : metaTags)
       {
         EXPECT_NO_FATAL_FAILURE(LookupMetaTag(metaTag)) << "Tag info: " << metaTag << ", tags file: " << tagsFile;
@@ -237,21 +237,29 @@ namespace TESTS
         EXPECT_NO_FATAL_FAILURE(LookupAllPartiallyMatchedNames(metaTag)) << "Tag info: " << metaTag << ", tags file: " << tagsFile;
       }
     }
-    
+
+    void TestFileBelongsToRepo(char const* file, bool belongs)
+    {
+      EXPECT_EQ(belongs, TagsLoadedForFile(file)) << "File: " << file;
+      EXPECT_EQ(belongs, !!TagArrayPtr(Find("main", file))) << "File: " << file;
+    }
+
     void TestTagsLoadedForFile()
     {
-      ASSERT_TRUE(TagsLoadedForFile("C:\\18743\\Dummy Folder\\Repository Root\\lowercasefolder"));
-      ASSERT_TRUE(TagsLoadedForFile("C:\\18743\\Dummy Folder\\Repository Root/lowercasefolder/"));
-      ASSERT_TRUE(TagsLoadedForFile("C:/18743/Dummy Folder/Repository Root/lowercasefolder/"));
-      ASSERT_TRUE(TagsLoadedForFile("C:\\18743\\Dummy Folder\\Repository Root\\lowercasefolder\\"));
-      ASSERT_TRUE(TagsLoadedForFile("C:\\18743\\Dummy Folder\\Repository Root\\lowercasefolder\\."));
-      ASSERT_TRUE(TagsLoadedForFile("c:\\18743\\dummy folder\\repository root\\lowercasefolder\\."));
-      ASSERT_TRUE(TagsLoadedForFile("C:\\18743\\DUMMY FOLDER\\REPOSITORY ROOT\\LOWERCASEFOLDER\\."));
-      ASSERT_FALSE(TagsLoadedForFile("D:\\18743\\Dummy Folder\\Repository Root\\lowercasefolder\\file.cpp"));
-      ASSERT_FALSE(TagsLoadedForFile("C:\\18743\\Dummy Folder\\Repository Root\\lowercasefoldex\\file.cpp"));
-      ASSERT_FALSE(TagsLoadedForFile("C:\\18743\\Dummy Folder\\Repository Root\\lowercasefoldername"));
-      ASSERT_FALSE(TagsLoadedForFile("C:\\18743\\Dummy Folder\\Repository Root\\lowercasefoldername\\"));
-      ASSERT_FALSE(TagsLoadedForFile("C:\\18743\\Dummy Folder\\Repository Root\\lowercasefoldername\\file.cpp"));
+      EXPECT_NO_FATAL_FAILURE(TestFileBelongsToRepo("C:\\18743\\Dummy Folder\\Repository Root\\lowercasefolder", true));
+      EXPECT_NO_FATAL_FAILURE(TestFileBelongsToRepo("C:\\18743\\Dummy Folder\\Repository Root/lowercasefolder/", true));
+      EXPECT_NO_FATAL_FAILURE(TestFileBelongsToRepo("C:/18743/Dummy Folder/Repository Root/lowercasefolder/", true));
+      EXPECT_NO_FATAL_FAILURE(TestFileBelongsToRepo("C:\\18743\\Dummy Folder\\Repository Root\\lowercasefolder\\", true));
+      EXPECT_NO_FATAL_FAILURE(TestFileBelongsToRepo("C:\\18743\\Dummy Folder\\Repository Root\\lowercasefolder\\.", true));
+      EXPECT_NO_FATAL_FAILURE(TestFileBelongsToRepo("c:\\18743\\dummy folder\\repository root\\lowercasefolder\\.", true));
+      EXPECT_NO_FATAL_FAILURE(TestFileBelongsToRepo("C:\\18743\\DUMMY FOLDER\\REPOSITORY ROOT\\LOWERCASEFOLDER\\.", true));
+      EXPECT_NO_FATAL_FAILURE(TestFileBelongsToRepo("C:\\18743\\Dummy Folder\\Repository Root\\lowercasefolde", false));
+      EXPECT_NO_FATAL_FAILURE(TestFileBelongsToRepo("C:\\18743\\Dummy Folder\\Repository Root\\lowercasefolde\\", false));
+      EXPECT_NO_FATAL_FAILURE(TestFileBelongsToRepo("D:\\18743\\Dummy Folder\\Repository Root\\lowercasefolder\\file.cpp", false));
+      EXPECT_NO_FATAL_FAILURE(TestFileBelongsToRepo("C:\\18743\\Dummy Folder\\Repository Root\\lowercasefoldex\\file.cpp", false));
+      EXPECT_NO_FATAL_FAILURE(TestFileBelongsToRepo("C:\\18743\\Dummy Folder\\Repository Root\\lowercasefoldername", false));
+      EXPECT_NO_FATAL_FAILURE(TestFileBelongsToRepo("C:\\18743\\Dummy Folder\\Repository Root\\lowercasefoldername\\", false));
+      EXPECT_NO_FATAL_FAILURE(TestFileBelongsToRepo("C:\\18743\\Dummy Folder\\Repository Root\\lowercasefoldername\\file.cpp", false));
     }
   };
 
