@@ -222,7 +222,7 @@ GUID StringToGuid(const std::string& str)
 ::GUID CtagsMenuGuid = StringToGuid("{7f125c0d-5e18-4b7f-a6df-1caae013c48f}");
 ::GUID MenuGuid = StringToGuid("{a5b1037e-2f54-4609-b6dd-70cd47bd222b}");
 //TODO: determine MaxMenuWidth depending on max Far Manager window width
-intptr_t const MaxMenuWidth = 120;
+int const MaxMenuWidth = 120;
 
 WideString ToString(std::string const& str, UINT codePage = CP_ACP)
 {
@@ -387,6 +387,13 @@ WideString GetCurFile(HANDLE hPanel = PANEL_ACTIVE)
   sz = I.PanelControl(hPanel, FCTL_GETPANELITEM, pi.CurrentItem, &buffer[0]);
   WideString result = item->Item->FileName;
   return result == L".." ? L"." : result;
+}
+
+static int GetFarWidth()
+{
+  SMALL_RECT rect = {};
+  I.AdvControl(&PluginGuid, ACTL_GETFARRECT, 0, &rect);
+  return rect.Right - rect.Left;
 }
 
 static std::string ExpandEnvString(std::string const& str)
@@ -1035,8 +1042,7 @@ bool LookupTagsMenu(char const* tagsFile, size_t maxCount, TagInfo& tag)
   auto title = GetMsg(MSelectSymbol);
   std::string filterkeys = "1234567890abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_$\\\x08-_=|;':\",./<>?[]*&^%#@!~";
   std::vector<FarKey> fk = GetFarKeys(filterkeys);
-  //TODO: what if opened in editor?
-  const int currentWidth = MaxMenuWidth;
+  const int currentWidth = std::min(GetFarWidth(), MaxMenuWidth);
   const int maxInfoWidth = currentWidth / 5;
   while(true)
   {
@@ -1361,7 +1367,7 @@ static TagInfo* TagsMenu(PTagArray pta, bool displayFile = true)
   TagArray& ta=*pta;
   int maxid=0,maxDeclaration=0;
   int i;
-  const int currentWidth = std::min(GetCurrentEditorInfo().WindowSizeX, MaxMenuWidth);
+  const int currentWidth = std::min<intptr_t>(GetFarWidth(), MaxMenuWidth);
   const int maxDeclarationWidth = currentWidth / 5;
   for(i=0;i<ta.Count();i++)
   {
