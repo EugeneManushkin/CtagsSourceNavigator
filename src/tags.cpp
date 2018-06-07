@@ -428,8 +428,7 @@ int TagFileInfo::CreateIndex(time_t tagsModTime)
   Hash<int> files;
   std::string buffer;
   char const* strbuf;
-  GetLine(strbuf, buffer, f);
-  if(strncmp(strbuf,"!_TAG_FILE_FORMAT",17))
+  if(!GetLine(strbuf, buffer, f) || strncmp(strbuf,"!_TAG_FILE_FORMAT",17))
   {
     fclose(f);
     return 0;
