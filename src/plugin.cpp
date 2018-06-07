@@ -371,6 +371,46 @@ WideString GetPanelDir(HANDLE hPanel = PANEL_ACTIVE)
   return dir->Name;
 }
 
+static void SetPanelDir(WideString const& dir, HANDLE hPanel)
+{
+  if (dir.empty())
+    return; 
+
+  FarPanelDirectory farDir = {sizeof(FarPanelDirectory), dir.c_str()};
+  I.PanelControl(hPanel, FCTL_SETPANELDIRECTORY, 0, &farDir);
+}
+
+static void SelectFile(WideString const& fileName, HANDLE hPanel = PANEL_ACTIVE)
+{
+  auto pos = fileName.rfind('\\');
+  if (pos == WideString::npos)
+    return;
+
+  SetPanelDir(fileName.substr(0, pos), hPanel);
+  PanelInfo pi = {sizeof(PanelInfo)};
+  I.PanelControl(hPanel, FCTL_GETPANELINFO, 0, &pi);
+  size_t foundItem = 0;
+  for(; foundItem < pi.ItemsNumber; ++foundItem)
+  {
+    auto sz = I.PanelControl(hPanel, FCTL_GETPANELITEM, foundItem, 0);
+    if (!sz)
+      continue;
+
+    std::vector<char> buf(sz);
+    PluginPanelItem *item = reinterpret_cast<PluginPanelItem*>(&buf[0]);
+    FarGetPluginPanelItem FGPPI = {sizeof(FarGetPluginPanelItem), buf.size(), item};
+    I.PanelControl(hPanel, FCTL_GETPANELITEM, foundItem, &FGPPI);
+    if (FSF.ProcessName(item->FileName, const_cast<wchar_t*>(fileName.c_str()), 0, PN_CMPNAME | PN_SKIPPATH) != 0)
+      break;
+  }
+
+  if (foundItem == pi.ItemsNumber)
+    return;
+
+  PanelRedrawInfo redrawInfo = { sizeof(PanelRedrawInfo), foundItem, pi.TopPanelItem };
+  I.PanelControl(hPanel, FCTL_REDRAWPANEL, 0, &redrawInfo);
+}
+
 WideString GetCurFile(HANDLE hPanel = PANEL_ACTIVE)
 {
   PanelInfo pi = {sizeof(PanelInfo)};
@@ -1193,7 +1233,7 @@ bool GotoOpenedFile(const char* file)
   return false;
 }
 
-static void NavigateTo(TagInfo* info)
+static void NavigateTo(TagInfo* info, bool setPanelDir = false)
 {
   auto ei = GetCurrentEditorInfo();
   std::string fileName = GetFileNameFromEditor(ei.EditorID); // TODO: auto
@@ -1263,6 +1303,9 @@ static void NavigateTo(TagInfo* info)
       }
     }
     fclose(f);
+    if (setPanelDir)
+      SelectFile(ToString(info->file.Str()));
+
     I.Editor(ToString(file.Str()).c_str(), L"", 0, 0, -1, -1, EF_NONMODAL, line + 1, 1, CP_DEFAULT);
     return;
   }
@@ -1329,6 +1372,9 @@ static void NavigateTo(TagInfo* info)
       return;
     }
   }
+
+  if (setPanelDir)
+    SelectFile(ToString(info->file.Str()));
 
   esp.CurLine=line;
   esp.TopScreenLine=esp.CurLine-1;
@@ -1504,13 +1550,13 @@ static WideString ReindexRepository(std::string const& fileName)
   return tagsFile;
 }
 
-static void LookupSymbol(std::string const& file)
+static void LookupSymbol(std::string const& file, bool setPanelDir)
 {
   EnsureTagsLoaded(file);
   size_t const maxMenuItems = 10;
   TagInfo selectedTag;
   if (LookupTagsMenu(file.c_str(), maxMenuItems, selectedTag))
-    NavigateTo(&selectedTag);
+    NavigateTo(&selectedTag, setPanelDir);
 }
 
 static void FreeTagsArray(PTagArray ta)
@@ -1685,7 +1731,7 @@ HANDLE WINAPI OpenW(const struct OpenInfo *info)
       }break;
       case miLookupSymbol:
       {
-        SafeCall(std::bind(LookupSymbol, fileName));
+        SafeCall(std::bind(LookupSymbol, fileName, false));
       }break;
       case miReindexRepo:
       {
@@ -1770,7 +1816,7 @@ HANDLE WINAPI OpenW(const struct OpenInfo *info)
         }break;
         case miLookupSymbol:
         {
-          SafeCall(std::bind(LookupSymbol, ToStdString(JoinPath(GetPanelDir(), GetCurFile()))));
+          SafeCall(std::bind(LookupSymbol, ToStdString(JoinPath(GetPanelDir(), GetCurFile())), true));
         }break;
         case miReindexRepo:
         {
