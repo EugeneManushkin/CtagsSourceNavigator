@@ -425,8 +425,7 @@ WideString GetCurFile(HANDLE hPanel = PANEL_ACTIVE)
   item->Size = sz;
   item->Item = reinterpret_cast<PluginPanelItem*>(item + 1);
   sz = I.PanelControl(hPanel, FCTL_GETPANELITEM, pi.CurrentItem, &buffer[0]);
-  WideString result = item->Item->FileName;
-  return result == L".." ? L"." : result;
+  return item->Item->FileName;
 }
 
 static int GetFarWidth()
@@ -560,10 +559,10 @@ static void ExecuteScript(WideString const& script, WideString const& args, Wide
     throw std::runtime_error("External utility failed with code " + std::to_string(exitCode));
 }
 
-static WideString GetSelectedDirectory()
+static WideString GetSelectedItem(WideString const& DotDotSubst = L".")
 {
   WideString selected = GetCurFile();
-  return selected == L".." ? GetPanelDir() : JoinPath(GetPanelDir(), selected);
+  return JoinPath(GetPanelDir(), selected == L".." ? DotDotSubst : selected);
 }
 
 int TagDirectory(WideString const& dir)
@@ -1717,7 +1716,7 @@ HANDLE WINAPI OpenW(const struct OpenInfo *info)
         }break;
         case miLoadTagsFile:
         {
-          tagfile = JoinPath(GetPanelDir(), GetCurFile());
+          tagfile = GetSelectedItem();
         }break;
         case miUnloadTagsFile:
         {
@@ -1735,7 +1734,7 @@ HANDLE WINAPI OpenW(const struct OpenInfo *info)
         }break;
         case miCreateTagsFile:
         {
-          WideString selectedDir = GetSelectedDirectory();
+          WideString selectedDir = GetSelectedItem(WideString());
           int rc = SafeCall(std::bind(TagDirectory, selectedDir), 0);
           if (rc)
           {
@@ -1744,7 +1743,7 @@ HANDLE WINAPI OpenW(const struct OpenInfo *info)
         }break;
         case miAddTagsToAutoload:
         {
-          auto err = AddToAutoload(ToStdString(JoinPath(GetPanelDir(), GetCurFile())));
+          auto err = AddToAutoload(ToStdString(GetSelectedItem()));
           if (err)
           {
             Msg(err);
@@ -1752,11 +1751,11 @@ HANDLE WINAPI OpenW(const struct OpenInfo *info)
         }break;
         case miLookupSymbol:
         {
-          SafeCall(std::bind(LookupSymbol, ToStdString(JoinPath(GetPanelDir(), GetCurFile())), true));
+          SafeCall(std::bind(LookupSymbol, ToStdString(GetSelectedItem()), true));
         }break;
         case miReindexRepo:
         {
-          tagfile = SafeCall(std::bind(ReindexRepository, ToStdString(JoinPath(GetPanelDir(), GetCurFile()))), WideString());
+          tagfile = SafeCall(std::bind(ReindexRepository, ToStdString(GetSelectedItem())), WideString());
         }break;
       }
     }

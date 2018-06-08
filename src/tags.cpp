@@ -658,7 +658,7 @@ char const* TagFileInfo::GetRelativePath(char const* fileName) const
     return nullptr;
 
   for (; IsPathSeparator(*fileName); ++fileName);
-  return fileName;
+  return !*fileName ? nullptr : fileName;
 }
 
 std::string TagFileInfo::GetFullPath(std::string const& relativePath) const
