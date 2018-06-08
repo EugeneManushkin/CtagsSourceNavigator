@@ -137,8 +137,6 @@ PTagArray FindFileSymbols(const char* file);
 PTagArray FindClassSymbols(const char* file,const char* classname);
 void Autoload(const char* fn);
 void GetFiles(StrList& dst);
-int SaveChangedFiles(const char* file, const char* outputFilename);
-int MergeFiles(const char* target,const char* mfile);
 bool IsTagFile(const char* file);
 bool TagsLoadedForFile(const char* file);
 #endif

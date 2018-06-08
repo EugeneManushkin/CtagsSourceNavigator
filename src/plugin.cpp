@@ -587,16 +587,6 @@ static WideString GenerateTempPath()
   return WideString(buffer.begin(), --buffer.end());
 }
 
-static std::shared_ptr<void> MakeTemp(WideString const& dirPath)
-{
-  if (!::CreateDirectoryW(dirPath.c_str(), nullptr))
-    return std::shared_ptr<void>();
-
-  return std::shared_ptr<void>(0, [&](void*){
-    //TODO: remove dir recursive
-  });
-}
-
 static WideString GetTempFilename()
 {
   auto tempPath = GenerateTempPath();
@@ -626,44 +616,6 @@ static WideString RenameToTempFilename(WideString const& originalFile)
   auto newName = JoinPath(dirOfFile, GetTempFilename());
   RenameFile(originalFile, newName);
   return newName;
-}
-
-static bool UpdateTagsFile(const char* file)
-{
-  WideString tempPath = GenerateTempPath();
-  if (tempPath.empty())
-    return false;
-
-  auto dirHolder = MakeTemp(tempPath);
-  WideString changesFile = JoinPath(tempPath, L"tags.changes");
-  if (!SaveChangedFiles(file, ToStdString(changesFile).c_str()))
-    return false;
-
-  String opt=config.opt;
-  opt.Replace("-R","");
-  RegExp re("/\\*(\\.\\S*)?/");
-  SMatch m[4];
-  int n=4;
-  while(re.Search(opt,m,n))
-  {
-    opt.Delete(m[0].start,m[0].end-m[0].start);
-  }
-
-  WideString updateFile = JoinPath(tempPath, L"tags.update");
-  WideString arguments = ToString(opt.Str()) + L" -f " + updateFile + L" -L " + changesFile;
-  try
-  {
-    ExecuteScript(ToString(ExpandEnvString(config.exe.Str())), arguments, GetPanelDir());
-  }
-  catch(std::exception const&)
-  {
-    return false;
-  }
-
-  if (!MergeFiles(file, ToStdString(updateFile).c_str()))
-    return false;
-
-  return !Load(file);
 }
 
 static void SetDefaultConfig()
@@ -1744,7 +1696,7 @@ HANDLE WINAPI OpenW(const struct OpenInfo *info)
     if(OpenFrom==OPEN_PLUGINSMENU)
     {
       enum {miLoadFromHistory,miLoadTagsFile,miUnloadTagsFile, miReindexRepo,
-            miCreateTagsFile,miAddTagsToAutoload, miUpdateTagsFile, miLookupSymbol};
+            miCreateTagsFile,miAddTagsToAutoload, miLookupSymbol};
       MenuList ml = {
            MI(MLookupSymbol, miLookupSymbol)
          , MI::Separator()
@@ -1756,7 +1708,6 @@ HANDLE WINAPI OpenW(const struct OpenInfo *info)
          , MI(MCreateTagsFile, miCreateTagsFile)
          , MI(MReindexRepo, miReindexRepo)
       };
-      //TODO: fix UpdateTagsFile operation and include in menu
       int rc=Menu(GetMsg(MPlugin),ml,0);
       switch(rc)
       {
@@ -1790,21 +1741,6 @@ HANDLE WINAPI OpenW(const struct OpenInfo *info)
           {
             tagfile = JoinPath(selectedDir, L"tags");
           }
-        }break;
-        case miUpdateTagsFile:
-        {
-          HANDLE hScreen=I.SaveScreen(0,0,-1,-1);
-          WideString msg = WideString(GetMsg(MPlugin)) + L"\n" + GetMsg(MUpdatingTagsFile);
-          StrList changed;
-          String file = ToStdString(JoinPath(GetPanelDir(), GetCurFile())).c_str();
-          I.Message(&PluginGuid, &InfoMessageGuid, FMSG_LEFTALIGN | FMSG_ALLINONE, nullptr, reinterpret_cast<const wchar_t* const*>(msg.c_str()), 0, 0);
-          if(!UpdateTagsFile(file))
-          {
-            I.RestoreScreen(hScreen);
-            Msg(MUnableToUpdate);
-            return nullptr;
-          }
-          I.RestoreScreen(hScreen);
         }break;
         case miAddTagsToAutoload:
         {
