@@ -1299,7 +1299,7 @@ static void NavigateTo(TagInfo* info, bool setPanelDir = false)
     line=0;
     SMatch m[10];
     int n=10;
-    EditorGetString egs;
+    EditorGetString egs = {sizeof(EditorGetString)};
     while(line<ei.TotalLines)
     {
       esp.CurLine=line;
@@ -1630,11 +1630,11 @@ HANDLE WINAPI OpenW(const struct OpenInfo *info)
           res=FilterMenu(GetMsg(MSelectSymbol),ml,0,MF_SHOWCOUNT,(void*)word.Str());
           if(res==-1)return nullptr;
         }
-        EditorGetString egs;
+        EditorGetString egs = {sizeof(EditorGetString)};
         egs.StringNumber=-1;
         I.EditorControl(ei.EditorID, ECTL_GETSTRING, 0, &egs);
         while(isident(egs.StringText[ei.CurPos]))ei.CurPos++;
-        EditorSetPosition esp;
+        EditorSetPosition esp = {sizeof(EditorSetPosition)};
         esp.CurLine=-1;
         esp.CurPos=ei.CurPos;
         esp.CurTabPos=-1;
