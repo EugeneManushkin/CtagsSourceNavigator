@@ -86,6 +86,7 @@ enum{
   MAskCancel,
   MCanceling,
   MCanceled,
+  MSearchFile,
 };
 
 struct Config{

@@ -1027,29 +1027,98 @@ void GetMaxParams(std::vector<TagInfo> const& ta, int& maxid, int& maxDeclaratio
   }
 }
 
-bool LookupTagsMenu(char const* tagsFile, size_t maxCount, TagInfo& tag)
+class LookupMenuVisitor
 {
-  String filter;
+public:
+  virtual std::vector<WideString> Search(char const* file, char const* filter, size_t maxCount, int currentWidth) = 0;
+  virtual std::string GetClipboardText(intptr_t index) const = 0;
+//TODO: Rework this interface
+  virtual TagInfo GetTag(intptr_t index) const = 0;
+};
+
+class LookupTagsVisitor : public LookupMenuVisitor
+{
+public:
+  std::vector<WideString> Search(char const* file, char const* filter, size_t maxCount, int currentWidth)
+  {
+    const int maxInfoWidth = currentWidth / 5;
+    Tags = FindPartiallyMatchedTags(file, filter, maxCount);
+    //TODO: rework
+    int maxid = 0;
+    int maxinfo = 0;
+    GetMaxParams(Tags, maxid, maxinfo);
+    maxinfo = std::min(maxinfo, maxInfoWidth);
+    int maxfile = currentWidth - 8 - maxid - maxinfo - 1 - 1 - 1 - 1;
+    std::vector<WideString> menuStrings;
+    for (auto const& i : Tags)
+    {
+      menuStrings.push_back(FormatTagInfo(i, maxid, maxinfo, maxfile, true));
+    }
+
+    return menuStrings;
+  }
+
+  virtual std::string GetClipboardText(intptr_t index) const
+  {
+    return Tags[index].name.Str();
+  }
+
+  virtual TagInfo GetTag(intptr_t index) const
+  {
+    return Tags[index];
+  }
+
+private:
+  std::vector<TagInfo> Tags;
+};
+
+class SearchPathVisitor : public LookupMenuVisitor
+{
+public:
+  std::vector<WideString> Search(char const* file, char const* filter, size_t maxCount, int currentWidth)
+  {
+    Paths = FindPartiallyMatchedFile(file, filter, maxCount);
+    std::vector<WideString> menuStrings;
+    for (auto const& path : Paths)
+    {
+      menuStrings.push_back(ToString(TrimFilename(path.c_str(), currentWidth).Str()));
+    }
+
+    return menuStrings;
+  }
+
+  virtual std::string GetClipboardText(intptr_t index) const
+  {
+    return Paths[index];
+  }
+
+  virtual TagInfo GetTag(intptr_t index) const
+  {
+    TagInfo result = {};
+    result.file = Paths[index].c_str();
+    return result;
+  }
+
+private:
+  std::vector<std::string> Paths;
+};
+
+//TODO: Rework TagInfo& tag
+bool LookupTagsMenu(char const* file, size_t maxCount, TagInfo& tag, LookupMenuVisitor& visitor)
+{
+  String filter("");
   auto title = GetMsg(MSelectSymbol);
+//TODO: Support platform path chars
   std::string filterkeys = "1234567890abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_$\\\x08-_=|;':\",./<>?[]*&^%#@!~";
   std::vector<FarKey> fk = GetFarKeys(filterkeys);
   const int currentWidth = std::min(GetFarWidth(), MaxMenuWidth);
-  const int maxInfoWidth = currentWidth / 5;
   while(true)
   {
-    auto tags = FindPartiallyMatchedTags(tagsFile, filter.Str(), maxCount);
-//TODO: rework
-    int maxid = 0;
-    int maxinfo = 0;
-    GetMaxParams(tags, maxid, maxinfo);
-    maxinfo = std::min(maxinfo, maxInfoWidth);
-    int maxfile=currentWidth-8-maxid-maxinfo-1-1-1-1;
+    auto menuStrings = visitor.Search(file, filter.Str(), maxCount, currentWidth);
     std::vector<FarMenuItem> menu;
-    std::list<WideString> menuStrings;
-    for (auto const& i : tags)
+    for (auto const& i : menuStrings)
     {
-      menuStrings.push_back(FormatTagInfo(i, maxid, maxinfo, maxfile, true));
-      FarMenuItem item = {MIF_NONE,menuStrings.back().c_str()};
+      FarMenuItem item = {MIF_NONE,i.c_str()};
       menu.push_back(item);
     }
     intptr_t bkey;
@@ -1060,13 +1129,13 @@ bool LookupTagsMenu(char const* tagsFile, size_t maxCount, TagInfo& tag)
     if(res==-1 && bkey==-1)return false;
     if(bkey==-1)
     {
-      tag = tags[res];
+      tag = visitor.GetTag(res);
       return true;
     }
     if (IsCtrlC(fk[bkey]))
     {
       if (res != -1)
-        SetClipboardText(tags[res].name.Str());
+        SetClipboardText(visitor.GetClipboardText(res));
 
       return false;
     }
@@ -1196,6 +1265,17 @@ static void NavigateTo(TagInfo* info, bool setPanelDir = false)
     ui.top=ei.TopScreenLine;
     ui.left=ei.LeftPos;
     UndoArray.Push(ui);
+  }
+
+  if (!info->name.Length())
+  {
+    if (setPanelDir)
+      SelectFile(ToString(info->file.Str()));
+
+    if (!GotoOpenedFile(info->file.Str()))
+      SetPos(info->file.Str(), -1, -1, -1, -1);
+
+    return;
   }
 
   String file=info->file.Str();
@@ -1501,12 +1581,12 @@ static WideString ReindexRepository(std::string const& fileName)
   return tagsFile;
 }
 
-static void LookupSymbol(std::string const& file, bool setPanelDir)
+static void Lookup(std::string const& file, bool setPanelDir, LookupMenuVisitor& visitor)
 {
   EnsureTagsLoaded(file);
   size_t const maxMenuItems = 10;
   TagInfo selectedTag;
-  if (LookupTagsMenu(file.c_str(), maxMenuItems, selectedTag))
+  if (LookupTagsMenu(file.c_str(), maxMenuItems, selectedTag, visitor))
     NavigateTo(&selectedTag, setPanelDir);
 }
 
@@ -1541,7 +1621,7 @@ HANDLE WINAPI OpenW(const struct OpenInfo *info)
     LazyAutoload();
     enum{
       miFindSymbol,miUndo,miResetUndo,miReindexRepo,
-      miComplete,miBrowseClass,miBrowseFile,miLookupSymbol,
+      miComplete,miBrowseClass,miBrowseFile,miLookupSymbol,miSearchFile
     };
     MenuList ml = {
         MI(MFindSymbol,miFindSymbol)
@@ -1551,6 +1631,7 @@ HANDLE WINAPI OpenW(const struct OpenInfo *info)
       , MI(MBrowseClass,miBrowseClass)
       , MI(MBrowseSymbolsInFile,miBrowseFile)
       , MI(MLookupSymbol,miLookupSymbol)
+      , MI(MSearchFile,miSearchFile)
       , MI::Separator()
       , MI(MReindexRepo, miReindexRepo)
     };
@@ -1682,7 +1763,13 @@ HANDLE WINAPI OpenW(const struct OpenInfo *info)
       }break;
       case miLookupSymbol:
       {
-        SafeCall(std::bind(LookupSymbol, fileName, false));
+        LookupTagsVisitor visitor;
+        SafeCall(std::bind(Lookup, fileName, false, std::ref(visitor)));
+      }break;
+      case miSearchFile:
+      {
+        SearchPathVisitor visitor;
+        SafeCall(std::bind(Lookup, fileName, false, std::ref(visitor)));
       }break;
       case miReindexRepo:
       {
@@ -1695,9 +1782,10 @@ HANDLE WINAPI OpenW(const struct OpenInfo *info)
     if(OpenFrom==OPEN_PLUGINSMENU)
     {
       enum {miLoadFromHistory,miLoadTagsFile,miUnloadTagsFile, miReindexRepo,
-            miCreateTagsFile,miAddTagsToAutoload, miLookupSymbol};
+            miCreateTagsFile,miAddTagsToAutoload, miLookupSymbol, miSearchFile};
       MenuList ml = {
            MI(MLookupSymbol, miLookupSymbol)
+         , MI(MSearchFile, miSearchFile)
          , MI::Separator()
          , MI(MLoadTagsFile, miLoadTagsFile)
          , MI(MLoadFromHistory, miLoadFromHistory, !config.history_len)
@@ -1751,7 +1839,13 @@ HANDLE WINAPI OpenW(const struct OpenInfo *info)
         }break;
         case miLookupSymbol:
         {
-          SafeCall(std::bind(LookupSymbol, ToStdString(GetSelectedItem()), true));
+          LookupTagsVisitor visitor;
+          SafeCall(std::bind(Lookup, ToStdString(GetSelectedItem()), true, std::ref(visitor)));
+        }break;
+        case miSearchFile:
+        {
+          SearchPathVisitor visitor;
+          SafeCall(std::bind(Lookup, ToStdString(GetSelectedItem()), true, std::ref(visitor)));
         }break;
         case miReindexRepo:
         {
