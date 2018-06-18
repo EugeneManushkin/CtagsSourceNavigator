@@ -184,7 +184,7 @@ static void ForEachFileRepository(char const* fileFullPath, std::function<void(T
   }
 }
 
-char const IndexFileSignature[] = "tags.idx.v2";
+char const IndexFileSignature[] = "tags.idx.v3";
 
 static bool ReadSignature(FILE* f)
 {
@@ -377,6 +377,37 @@ int StrCmp(const void* v1,const void* v2)
   return strcmp(*(char**)v1,*(char**)v2);
 }
 
+//TODO: Rework: all paths must be compared by CompareFilenames
+static int CompareTabPaths(char const* left, char const* right)
+{
+  int cmp = 0;
+  for(; (*left && *left != '\t') || (*right && *right != '\t'); ++left, ++right)
+    if ((cmp = strnicmp(left, right, 1)) != 0)
+      return cmp;
+
+  return 0;
+}
+
+static bool PathsEqual(LineInfo const* left, LineInfo const* right)
+{
+  return !CompareTabPaths(left->fn, right->fn);
+}
+
+static char const* GetFilename(char const* path)
+{
+  char const* pos = path;
+  for (; *path && *path != '\t'; ++path)
+    pos = IsPathSeparator(*path) ? path : pos;
+
+  for (; *pos && IsPathSeparator(*pos); ++pos);
+  return pos;
+}
+
+static int FilenameCmp(void const* left, void const* right)
+{
+  return CompareTabPaths(GetFilename((*static_cast<LineInfo* const*>(left))->fn), GetFilename((*static_cast<LineInfo* const*>(right))->fn));
+}
+
 //TODO: rework
 char const* GetLine(char const* &str, std::string& buffer, FILE *f)
 {
@@ -563,6 +594,20 @@ int TagFileInfo::CreateIndex(time_t tagsModTime)
   {
     fwrite(&classes[i]->pos,4,1,g);
   }
+
+  uint32_t uniqueFilesCount = 0;
+  if (lines.Count())
+  {
+    auto linesEnd = std::unique(&lines[0], &lines[0] + lines.Count(), PathsEqual);
+    qsort(&lines[0], linesEnd - &lines[0], sizeof(LineInfo*), FilenameCmp);
+    uniqueFilesCount = static_cast<uint32_t>(linesEnd - &lines[0]);
+  }
+  fwrite(&uniqueFilesCount, sizeof(uniqueFilesCount), 1, g);
+  for(i = 0; i < uniqueFilesCount; i++)
+  {
+    fwrite(&lines[i]->pos, sizeof(lines[i]->pos), 1, g);
+  }
+
   delete [] linespool;
   while(poolfirst)
   {
@@ -993,27 +1038,103 @@ PTagArray Find(const char* symbol,const char* file)
   return !ta->Count() ? nullptr : ta.release();
 }
 
-//TODO: support case insensitive search
-static std::pair<size_t, size_t> GetMatchedOffsetRange(FILE* f, TagFileInfo* fi,const char* str, size_t maxCount)
+class PartiallyMatchVisitor
 {
-  if (!fi->offsets.Count())
+public:
+  virtual bool Empty() const = 0;
+  virtual int Compare(std::string const& str) const = 0;
+  virtual bool ExactMatch(std::string const& str) const = 0;
+};
+
+class TagsMatch : public PartiallyMatchVisitor
+{
+public:
+  TagsMatch(char const* part)
+    : Part(part)
+  {
+  }
+  
+  bool Empty() const
+  {
+    return Part.empty();
+  }
+
+  int Compare(std::string const& strbuf) const
+  {
+    return strncmp(Part.c_str(), strbuf.c_str(), Part.length());
+  }
+
+  bool ExactMatch(std::string const& strbuf) const
+  {
+    return strbuf.length() == Part.length() || strbuf[Part.length()] == '\t';
+  }
+
+private:
+  std::string Part;
+};
+
+class FileMatch : public PartiallyMatchVisitor
+{
+public:
+  FileMatch(char const* part)
+    : Part(part)
+  {
+  }
+  
+  bool Empty() const
+  {
+    return Part.empty();
+  }
+
+  int Compare(std::string const& strbuf) const
+  {
+    //TODO: Rework: all paths must be compared by CompareFilenames
+    return stricmp(Part.c_str(), GetFilenamePart(strbuf, Part.length()).c_str());
+  }
+
+  bool ExactMatch(std::string const& strbuf) const
+  {
+    return GetFilenamePart(strbuf, 0).length() == Part.length();
+  }
+
+private:
+  std::string GetFilenamePart(std::string const& strbuf, size_t maxLength) const
+  {
+    auto pos = strbuf.find('\t');
+    if (pos == std::string::npos || pos == strbuf.length() - 1)
+    //TODO: replace with Error(MNotTagFile)
+      throw std::runtime_error("Invalid tags file format");
+
+    auto fileName = GetFilename(strbuf.c_str() + pos + 1);
+    auto fileNameEnd = std::find(fileName, strbuf.c_str() + strbuf.length(), '\t');
+    auto len = fileNameEnd - fileName;
+    len = !maxLength ? len : std::min<size_t>(len, maxLength);
+    return std::string(fileName, fileName + len);
+  }
+
+  std::string Part;
+};
+
+//TODO: support case insensitive search
+static std::pair<size_t, size_t> GetMatchedOffsetRange(FILE* f, Vector<int> const& offsets, PartiallyMatchVisitor const& visitor, size_t maxCount)
+{
+  if (!offsets.Count())
     return std::make_pair(0, 0);
 
-  if (!str || str[0] == 0)
-    return std::make_pair(0, std::min(static_cast<size_t>(fi->offsets.Count()), maxCount));
+  if (visitor.Empty())
+    return std::make_pair(0, std::min(static_cast<size_t>(offsets.Count()), maxCount));
 
-  size_t len=strlen(str);
   size_t pos;
   size_t left=0;
-  size_t right=fi->offsets.Count()-1;
+  size_t right=offsets.Count()-1;
   int cmp;
   std::string strbuf;
   while(left<=right)
   {
     pos=(right+left)/2;
-    fseek(f,fi->offsets[pos],SEEK_SET);
+    fseek(f,offsets[pos],SEEK_SET);
     GetLine(strbuf,f);
-    cmp=strncmp(str,strbuf.c_str(),len);
+    cmp=visitor.Compare(strbuf);
     if(!cmp)
     {
       break;
@@ -1028,28 +1149,28 @@ static std::pair<size_t, size_t> GetMatchedOffsetRange(FILE* f, TagFileInfo* fi,
   if(!cmp)
   {
     size_t endpos=pos;
-    size_t exactmatchend=strbuf.length() == len || strbuf[len] == '\t' ? pos + 1 : pos;
+    size_t exactmatchend=visitor.ExactMatch(strbuf) ? pos + 1 : pos;
     while(pos>0)
     {
-      fseek(f,fi->offsets[pos-1],SEEK_SET);
+      fseek(f,offsets[pos-1],SEEK_SET);
       GetLine(strbuf,f);
-      if(!strncmp(str,strbuf.c_str(),len))
+      if(!visitor.Compare(strbuf))
       {
         pos--;
-        exactmatchend = strbuf.length() > len && strbuf[len] != '\t' ? pos : exactmatchend;
+        exactmatchend = !visitor.ExactMatch(strbuf) ? pos : exactmatchend;
       }else
       {
         break;
       }
     }
-    while(endpos<fi->offsets.Count()-1)
+    while(endpos<offsets.Count()-1)
     {
-      fseek(f,fi->offsets[endpos+1],SEEK_SET);
+      fseek(f,offsets[endpos+1],SEEK_SET);
       GetLine(strbuf, f);
-      if(!strncmp(str,strbuf.c_str(),len))
+      if(!visitor.Compare(strbuf))
       {
         endpos++;
-        exactmatchend = strbuf.length() == len || strbuf[len] == '\t' ? endpos + 1 : exactmatchend;
+        exactmatchend = visitor.ExactMatch(strbuf) ? endpos + 1 : exactmatchend;
       }else
       {
         break;
@@ -1065,7 +1186,7 @@ static void FindPartiallyMatchedTagsImpl(TagFileInfo* fi, const char* part, size
 {
   FILE *f=fi->OpenTags();
   if(!f)return;
-  auto range = GetMatchedOffsetRange(f, fi, part, maxCount);
+  auto range = GetMatchedOffsetRange(f, fi->offsets, TagsMatch(part), maxCount);
   for(; range.first < range.second; ++range.first)
   {
     fseek(f, fi->offsets[range.first], SEEK_SET);
@@ -1082,6 +1203,52 @@ std::vector<TagInfo> FindPartiallyMatchedTags(const char* file, const char* part
 {
   std::vector<TagInfo> result;
   ForEachFileRepository(file, std::bind(FindPartiallyMatchedTagsImpl, std::placeholders::_1, part, maxCount, std::ref(result)));
+  return result;
+}
+
+void FindPartiallyMatchedFileImpl(TagFileInfo* fi, const char* part, size_t maxCount, std::vector<std::string>& paths)
+{
+  FILE *g=fi->OpenIndex();
+  if(!g)return;
+  int sz;
+  if (!ReadSignature(g))
+    throw std::logic_error("Signature must be valid");
+
+  fseek(g,sizeof(time_t),SEEK_CUR);
+  std::string repoRoot;
+  if (!ReadRepoRoot(g, repoRoot))
+    throw std::logic_error("Reporoot must be valid");
+
+  fread(&sz,4,1,g);
+  fseek(g,4+sz*4*2+sizeof(IndexFileSignature)+sizeof(uint32_t)+repoRoot.length()+sizeof(time_t),SEEK_SET);
+  fread(&sz,4,1,g);
+  fseek(g,sz*4,SEEK_CUR);
+  uint32_t uniqueFilesCount = 0;
+  fread(&uniqueFilesCount,4,1,g);
+  Vector<int> offsets;
+  offsets.Init(uniqueFilesCount);
+  if(uniqueFilesCount)fread(&offsets[0],4,uniqueFilesCount,g);
+  fclose(g);
+
+  FILE *f=fi->OpenTags();
+  if(!f)return;
+  auto range = GetMatchedOffsetRange(f, offsets, FileMatch(part), maxCount);
+  for(; range.first < range.second; ++range.first)
+  {
+    fseek(f, offsets[range.first], SEEK_SET);
+    std::string line;
+    GetLine(line, f);
+    std::unique_ptr<TagInfo> tag(ParseLine(line.c_str(), *fi));
+    if (tag)
+      paths.push_back(tag->file.Str());
+  }
+  fclose(f);
+}
+
+std::vector<std::string> FindPartiallyMatchedFile(const char* file, const char* part, size_t maxCount)
+{
+  std::vector<std::string> result;
+  ForEachFileRepository(file, std::bind(FindPartiallyMatchedFileImpl, std::placeholders::_1, part, maxCount, std::ref(result)));
   return result;
 }
 

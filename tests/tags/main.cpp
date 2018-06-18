@@ -5,6 +5,7 @@
 #include <windows.h>
 
 #include <fstream>
+#include <functional>
 #include <memory>
 #include <string>
 #include <sys/stat.h>
@@ -30,12 +31,18 @@ namespace
     return pos == std::string::npos ? std::string() : file.substr(0, pos);
   }
 
+  std::string GetFileName(std::string const& path)
+  {
+      auto pos = path.rfind('\\');
+      return pos == std::string::npos ? path : path.substr(pos + 1);
+  }
+
   std::string ToLower(std::string const& str)
   {
     std::vector<char> result(str.begin(), str.end());
     result.push_back(0);
     ::CharLowerA(&result[0]);
-    return std::string(result.begin(), result.end());
+    return std::string(&result[0]);
   }
 
   std::string ToUpper(std::string const& str)
@@ -43,7 +50,7 @@ namespace
     std::vector<char> result(str.begin(), str.end());
     result.push_back(0);
     ::CharUpperA(&result[0]);
-    return std::string(result.begin(), result.end());
+    return std::string(&result[0]);
   }
 
   std::string AddExtraSlashes(std::string const& str)
@@ -59,6 +66,12 @@ namespace
   bool PathsEqual(std::string const& left, std::string const& right)
   {
     return ToLower(left) == ToLower(right);
+  }
+
+  bool HasFilenamePart(std::string const& path, std::string const& part)
+  {
+    auto fileName = ToLower(GetFileName(path)).substr(0, part.length());
+    return fileName == ToLower(part);
   }
 
   bool IsFullPath(std::string const& path)
@@ -214,12 +227,25 @@ namespace TESTS
 
     void LookupAllPartiallyMatchedNames(MetaTag const& metaTag)
     {
-      std::string part = metaTag.Name;
+      std::string part = metaTag.Name + "extra";
       while (!part.empty())
       {
         auto tags = FindPartiallyMatchedTags(metaTag.FullPath.c_str(), part.c_str(), 0);
-        ASSERT_FALSE(tags.empty()) << "Part not found: " << part;
-        ASSERT_FALSE(std::find(tags.begin(), tags.end(), metaTag) == tags.end()) << "Part not found: " << part;
+        ASSERT_EQ(part.length() > metaTag.Name.length(), tags.empty()) << "Part: " << part;
+        ASSERT_EQ(part.length() > metaTag.Name.length(), std::find(tags.begin(), tags.end(), metaTag) == tags.end()) << "Part: " << part;
+        part.resize(part.length() - 1);
+      }
+    }
+
+    void LookupAllPartiallyMatchedFilanames(MetaTag const& metaTag)
+    {
+      std::string const fileName = GetFileName(metaTag.FullPath);
+      std::string part = fileName + "extra";
+      while (!part.empty())
+      {
+        auto paths = FindPartiallyMatchedFile(metaTag.FullPath.c_str(), part.c_str(), 0);
+        ASSERT_EQ(part.length() > fileName.length(), paths.empty()) << "Part: " << part;
+        ASSERT_EQ(part.length() > fileName.length(), std::find_if(paths.begin(), paths.end(), std::bind(HasFilenamePart, std::placeholders::_1, part)) == paths.end()) << "Part: " << part;
         part.resize(part.length() - 1);
       }
     }
@@ -235,6 +261,7 @@ namespace TESTS
         EXPECT_NO_FATAL_FAILURE(LookupMetaTag(metaTag)) << "Tag info: " << metaTag << ", tags file: " << tagsFile;
         EXPECT_NO_FATAL_FAILURE(LookupMetaTagInFile(metaTag)) << "Tag info: " << metaTag << ", tags file: " << tagsFile;
         EXPECT_NO_FATAL_FAILURE(LookupAllPartiallyMatchedNames(metaTag)) << "Tag info: " << metaTag << ", tags file: " << tagsFile;
+        EXPECT_NO_FATAL_FAILURE(LookupAllPartiallyMatchedFilanames(metaTag)) << "Tag info: " << metaTag << ", tags file: " << tagsFile;
       }
     }
 
@@ -266,6 +293,35 @@ namespace TESTS
       EXPECT_NO_FATAL_FAILURE(TestFileBelongsToRepo("C:\\18743\\Dummy Folder\\Repository Root\\lowercasefoldername", false));
       EXPECT_NO_FATAL_FAILURE(TestFileBelongsToRepo("C:\\18743\\Dummy Folder\\Repository Root\\lowercasefoldername\\", false));
       EXPECT_NO_FATAL_FAILURE(TestFileBelongsToRepo("C:\\18743\\Dummy Folder\\Repository Root\\lowercasefoldername\\file.cpp", false));
+    }
+
+    void TestRepeatedFile(std::string const& reposFile, std::string const& filePart, size_t maxCount, size_t expectedCount)
+    {
+      auto paths = FindPartiallyMatchedFile(reposFile.c_str(), filePart.c_str(), maxCount);
+      ASSERT_EQ(expectedCount, paths.size());
+      if (filePart.empty())
+        return;
+
+      for (auto const& path : paths)
+      {
+        EXPECT_TRUE(HasFilenamePart(path, filePart)) << "File part not found: " << filePart;
+      }
+    }
+
+    void TestRepeatedFiles(std::string const& tagsFile)
+    {
+      size_t const expectedTags = 30;
+      ASSERT_NO_FATAL_FAILURE(LoadTagsFile(tagsFile, expectedTags));
+      EXPECT_NO_FATAL_FAILURE(TestRepeatedFile(tagsFile, "", expectedTags, expectedTags));
+      EXPECT_NO_FATAL_FAILURE(TestRepeatedFile(tagsFile, "", 10, 10));
+      EXPECT_NO_FATAL_FAILURE(TestRepeatedFile(tagsFile, "5times.cpp", 0, 5));
+      EXPECT_NO_FATAL_FAILURE(TestRepeatedFile(tagsFile, "5times", 0, 5));
+      EXPECT_NO_FATAL_FAILURE(TestRepeatedFile(tagsFile, "10times.cpp", 0, 10));
+      EXPECT_NO_FATAL_FAILURE(TestRepeatedFile(tagsFile, "10times", 0, 10));
+      EXPECT_NO_FATAL_FAILURE(TestRepeatedFile(tagsFile, "10times.cpp", 10, 10));
+      EXPECT_NO_FATAL_FAILURE(TestRepeatedFile(tagsFile, "15times.cpp", 0, 15));
+      EXPECT_NO_FATAL_FAILURE(TestRepeatedFile(tagsFile, "15times", 10, 10));
+      EXPECT_NO_FATAL_FAILURE(TestRepeatedFile(tagsFile, "15times.cpp", 10, 15));
     }
   };
 
@@ -331,6 +387,21 @@ namespace TESTS
   {
     LoadAndLookupNames("full_path_repos\\tags.universal", "full_path_repos\\tags.meta");
     TestTagsLoadedForFile();
+  }
+
+  TEST_F(Tags, FilePartsFoundInUniversalRepeatedFilesRepos)
+  {
+    TestRepeatedFiles("repeated_files_repos\\tags.universal");
+  }
+
+  TEST_F(Tags, FilePartsFoundInCygwinRepeatedFilesRepos)
+  {
+    TestRepeatedFiles("repeated_files_repos\\tags.exuberant");
+  }
+
+  TEST_F(Tags, FilePartsFoundInExuberantRepeatedFilesRepos)
+  {
+    TestRepeatedFiles("repeated_files_repos\\tags.exuberant.w");
   }
 }
 
