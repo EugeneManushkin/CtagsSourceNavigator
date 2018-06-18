@@ -184,7 +184,7 @@ static void ForEachFileRepository(char const* fileFullPath, std::function<void(T
   }
 }
 
-char const IndexFileSignature[] = "tags.idx.v3";
+char const IndexFileSignature[] = "tags.idx.v4";
 
 static bool ReadSignature(FILE* f)
 {
@@ -456,7 +456,6 @@ int TagFileInfo::CreateIndex(time_t tagsModTime)
   Vector<LineInfo*> classes;
   lines.SetSize(sz/80);
 
-  Hash<int> files;
   std::string buffer;
   char const* strbuf;
   if(!GetLine(strbuf, buffer, f) || strncmp(strbuf,"!_TAG_FILE_FORMAT",17))
@@ -525,7 +524,6 @@ int TagFileInfo::CreateIndex(time_t tagsModTime)
     li->fn=strchr(li->line,'\t')+1;
     file.Set(li->fn,0,strchr(li->fn,'\t')-li->fn);
     pathIntersection = IsFullPath(file.Str(), file.Length()) ? GetIntersection(pathIntersection.c_str(), file.Str()) : pathIntersection;
-    files.Insert(file,1);
     li->cls=strchr(li->line,'\t');
     do{
       if(li->cls)li->cls++;
@@ -615,25 +613,6 @@ int TagFileInfo::CreateIndex(time_t tagsModTime)
     delete poolfirst;
     poolfirst=pool;
   }
-  int fstart=ftell(g);
-  fwrite(&fstart,4,1,g);
-  char *key;
-  int val;
-  files.First();
-  struct stat st;
-  cnt=0;
-  while(files.Next(key,val))
-  {
-    file=JoinPath(reporoot, key).c_str();
-    if(stat(file,&st)==-1)continue;
-    unsigned short fsz=strlen(key);
-    fwrite(&fsz,sizeof(fsz),1,g);
-    fwrite(key,fsz,1,g);
-    fwrite(&st.st_mtime,sizeof(st.st_mtime),1,g);
-    cnt++;
-  }
-  fseek(g,fstart,SEEK_SET);
-  fwrite(&cnt,sizeof(cnt),1,g);
   fclose(g);
 
   utimbuf tm;
