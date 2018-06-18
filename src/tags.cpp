@@ -1126,10 +1126,10 @@ static std::pair<size_t, size_t> GetMatchedOffsetRange(FILE* f, Vector<int> cons
 
   size_t pos;
   size_t left=0;
-  size_t right=offsets.Count()-1;
+  size_t right=offsets.Count();
   int cmp;
   std::string strbuf;
-  while(left<=right)
+  while(left < right)
   {
     pos=(right+left)/2;
     fseek(f,offsets[pos],SEEK_SET);
@@ -1137,10 +1137,10 @@ static std::pair<size_t, size_t> GetMatchedOffsetRange(FILE* f, Vector<int> cons
     cmp=visitor.Compare(strbuf);
     if(!cmp)
     {
-      break;
-    }else if(cmp<=0)
+      left = right = pos;
+    }else if(cmp < 0)
     {
-      right=pos-1;
+      right=pos;
     }else
     {
       left=pos+1;
