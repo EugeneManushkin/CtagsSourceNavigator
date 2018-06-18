@@ -1249,6 +1249,7 @@ std::vector<std::string> FindPartiallyMatchedFile(const char* file, const char* 
 {
   std::vector<std::string> result;
   ForEachFileRepository(file, std::bind(FindPartiallyMatchedFileImpl, std::placeholders::_1, part, maxCount, std::ref(result)));
+  std::sort(result.begin(), result.end());
   return result;
 }
 
