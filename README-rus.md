@@ -30,7 +30,7 @@
    Перейдите на страницу **F9->Options->Plugins configuration->Ctags Source Navigator**, поместите полный путь к ctags.exe в поле 'Path to ctags.exe', нажмите ОК.
 5. *[Пропустите этот шаг, если вы не хотите использовать стандартный макрос с горчячими клавишами.]* Скопируйте скрипт ctags_hotkeys.lua в папку %FARPROFILE%\Macros\scripts. Это можно сделать в командной строке Far Manager: перейдите в папку с распакованным плагином и выполните
    ```
-   copy ctags_hotkeys.lua %FARPROFILE%\Macros\scripts
+   copy ctags_hotkeys.lua "%FARPROFILE%\Macros\scripts"
    ```
    После копирования скрипта перезапустите Far Manager
 ## Использование
