@@ -476,13 +476,6 @@ static void SetClipboardText(std::string const& text)
   CloseClipboard();
 }
 
-static std::string GetNormalizedClipboardText()
-{
-  auto text = GetClipboardText();
-  text.resize(std::remove_if(text.begin(), text.end(), [](char c) {return !isident(c);}) - text.begin());
-  return text;
-}
-
 static bool IsEscPressed()
 {
   HANDLE h_con = GetStdHandle(STD_INPUT_HANDLE);
@@ -989,7 +982,7 @@ int FilterMenu(const wchar_t *title,MenuList const& lst,int sel,int flags=MF_LAB
       }
       if (bkey >= filterkeys.length())
       {
-        filter += GetNormalizedClipboardText().c_str();
+        filter += GetClipboardText().c_str();
         continue;
       }
       int key=filterkeys[bkey];
@@ -1160,7 +1153,7 @@ bool LookupTagsMenu(char const* file, size_t maxCount, TagInfo& tag, LookupMenuV
     }
     if (bkey >= filterkeys.length())
     {
-      filter += GetNormalizedClipboardText().c_str();
+      filter += GetClipboardText().c_str();
       continue;
     }
     int key=filterkeys[bkey];
