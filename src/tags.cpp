@@ -711,12 +711,6 @@ int Load(const char* filename, size_t& symbolsLoaded)
   return 0;
 }
 
-int Load(const char* filename)
-{
-  size_t symbolsLoaded = 0;
-  return Load(filename, symbolsLoaded);
-}
-
 static void FindInFile(TagFileInfo* fi,const char* str,PTagArray ta)
 {
   FILE *f=fi->OpenTags();
@@ -1266,7 +1260,8 @@ void Autoload(const char* fn)
     {
       String fn=sl[i];
       if(fn.Length()==0 || !IsFullPath(fn, fn.Length()))continue;
-      Load(fn);
+      size_t symbolsLoaded = 0;
+      Load(fn, symbolsLoaded);
     }
   }
 }

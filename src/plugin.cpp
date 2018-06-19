@@ -774,6 +774,25 @@ static void LazyAutoload()
   config.autoload_changed = false;
 }
 
+static size_t LoadTagsImpl(std::string const& tagsFile)
+{
+  size_t symbolsLoaded = 0;
+  auto message = LongOperationMessage(GetMsg(MLoadingTags));
+  if (auto err = Load(tagsFile.c_str(), symbolsLoaded))
+    throw Error(err);
+
+  return symbolsLoaded;
+}
+
+static void LoadTags(std::string const& tagsFile, bool silent)
+{
+  size_t symbolsLoaded = LoadTagsImpl(tagsFile);
+  if (!silent)
+    InfoMessage(GetMsg(MLoadOk) + WideString(L":") + ToString(std::to_string(symbolsLoaded)));
+
+  VisitTags(ToString(tagsFile));
+}
+
 static int AddToAutoload(std::string const& fname)
 {
   if (!IsTagFile(fname.c_str()))
@@ -1551,9 +1570,10 @@ static bool EnsureTagsLoaded(std::string const& fileName)
     return true;
 
   auto tagsFile = SearchTagsFile(fileName);
-  if (tagsFile.empty() || !!Load(tagsFile.c_str()))
+  if (tagsFile.empty())
     throw Error(MENotLoaded);
 
+  LoadTags(tagsFile.c_str(), true);
   return true;
 }
 
@@ -1879,15 +1899,7 @@ HANDLE WINAPI OpenW(const struct OpenInfo *info)
 
   if(!tagfile.empty())
   {
-    size_t symbolsLoaded = 0;
-    int rc=Load(ToStdString(tagfile).c_str(), symbolsLoaded);
-    if(rc>1)
-    {
-      Msg(GetMsg(rc));
-      return OpenFrom == OPEN_ANALYSE ? PANEL_STOP : nullptr;
-    }
-    InfoMessage(GetMsg(MLoadOk) + WideString(L":") + ToString(std::to_string(symbolsLoaded)));
-    VisitTags(tagfile);
+    SafeCall(std::bind(LoadTags, ToStdString(tagfile), false));
     return OpenFrom == OPEN_ANALYSE ? PANEL_STOP : nullptr;
   }
 

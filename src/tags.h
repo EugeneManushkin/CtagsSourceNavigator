@@ -87,6 +87,7 @@ enum{
   MCanceling,
   MCanceled,
   MSearchFile,
+  MLoadingTags,
 };
 
 struct Config{
@@ -129,7 +130,6 @@ typedef TagArray* PTagArray;
 int isident(int chr);
 
 
-int Load(const char* filename);
 int Load(const char* filename, size_t& symbolsLoaded);
 void UnloadTags(int idx);
 PTagArray Find(const char* symbol,const char* filename);
