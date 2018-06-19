@@ -9,17 +9,16 @@ This is a [Far Manager](https://www.farmanager.com/) plugin for browsing source 
 + Code completion
 + Searching name in entire repository
 + Searching name in currently edited file
++ Search and open files by name
 + Listing class members
 + Source code browsing history
 + Creating Ctags database for selected repository root
 + Reindexing repository.
 ## What's new 
-#### comparing to 2.1.0.11
-+ Improved tags history synchronization between multiple running instances of Far Manager
-+ Improved config synchronization between multiple running instances of Far Manager
-#### comparing to 2.1.0.9
-+ Canceling long-running operations is supported
-+ Reindexing repository is implemented
++ Search and open files by name (equivalent to "Open resource" command in Eclipse CDT)
++ Supported tags with absolute paths (ctags.exe ... -R C:\full\path\to\repository)
++ Enhanced user interface
++ Fixed bugs
 ## Requirements
 + Far3
 + Ctags utility
@@ -43,8 +42,9 @@ This is a [Far Manager](https://www.farmanager.com/) plugin for browsing source 
 5. Return cursor to previous position by pressing **F11->Ctags Source Navigator->Go back**
 6. List all class members. Set cursor on class name and then press **F11->Ctags Source Navigator->Class members**
 7. Search names defined in current file. Press **F11->Ctags Source Navigator->Search name in opened file** and begin typing (or insert by Ctrl+V or Shift+Ins) a name you want to search.
-8. Search names defined in entire repository. This option works in plugin main menu and in editor menu. Press **F11->Ctags Source Navigator->Search name in entire repository** and begin typing (or insert by Ctrl+V or Shift+Ins)
-9. You may reindex your repository if current code database is outdated. Press **F11->Ctags Source Navigator->Reindex repository** in main menu or in editor menu and then plugin will suggest you to select one of the tags files which you may reindex. **If something goes wrong while reindexing (e.g. reindexing is canceled) plugin will rollback on old tags file.**
+8. Search names defined in entire repository. This option works in plugin main menu and in editor menu. Press **F11->Ctags Source Navigator->Search name in entire repository** and begin typing (or insert by Ctrl+V or Shift+Ins) a name you want to search.
+9. Search and open indexed file. This feature is available from main and editor menu: press **F11->Ctags Source Navigator->Search file by name** and begin typing a file name you want to open.
+10. You may reindex your repository if current code database is outdated. Press **F11->Ctags Source Navigator->Reindex repository** in main menu or in editor menu and then plugin will suggest you to select one of the tags files which you may reindex. **If something goes wrong while reindexing (e.g. reindexing is canceled) plugin will rollback on old tags file.**
 ## Contribute
 If you have an idea of a cool new feature or you have found a bug please [create an issue](https://github.com/EugeneManushkin/CtagsSourceNavigator/issues/new). Mark this repository with a star if you like the plugin
 ## Source code
