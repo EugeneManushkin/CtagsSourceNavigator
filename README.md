@@ -14,9 +14,11 @@ This is a [Far Manager](https://www.farmanager.com/) plugin for browsing source 
 + Source code browsing history
 + Creating Ctags database for selected repository root
 + Reindexing repository.
++ Hotkeys macro
 ## What's new 
 + Search and open files by name (equivalent to "Open resource" command in Eclipse CDT)
 + Supported tags with absolute paths (ctags.exe ... -R C:\full\path\to\repository)
++ Provided hotkey macro
 + Enhanced user interface
 + Fixed bugs
 ## Requirements
@@ -28,6 +30,9 @@ This is a [Far Manager](https://www.farmanager.com/) plugin for browsing source 
 3. Install ctags utility. You may either install [Universal Ctags](https://ctags.io/), [Exuberant Ctags](http://ctags.sourceforge.net/) or use ctags utility from [Cygwin](http://www.cygwin.com/) project.
 4. *[Optional: skip this step if you don't want to create index files by the plugin or if ctags utility is available from the command line (is written in %PATH% environment variable).]*
    Go to **F9->Options->Plugins configuration->Ctags Source Navigator**, put the full path to ctags.exe in 'Path to ctags.exe' edit box, press OK button.
+5. *[Optional: skip this step if you don't want to use plugin default hotkeys macro.]* Copy ctags_hotkeys.lua script to %FARPROFILE%\Macros\scripts folder. You may do this in Far Manager: goto extracted plugin folder and type
+   ```copy ctags_hotkeys.lua %FARPROFILE%\Macros\scripts```
+   After copying hotkeys macro restart Far Manager
 ## Usage
 1. First you need to create a 'tags' file for a repository. You may use ctags plugin to do this: goto your repository folder, navigate cursor to folder you want to index by ctags or navigate to top folder ("..") if you want to index entire repository folder. Press **F11->Ctags Source Navigator->Tag selected directory**. Tags file will be created inside selected folder and all symbols will be automatically loaded in plugin.
 2. If you already have a repository indexed by ctags you may load index file ('tags') to tell the plugin that you want to browse this repository. Do either:
