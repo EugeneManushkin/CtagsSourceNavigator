@@ -53,14 +53,14 @@ This is a [Far Manager](https://www.farmanager.com/) plugin for browsing source 
 9. Search and open indexed file. This feature is available from main and editor menu: press **F11->Ctags Source Navigator->Search file by name** and begin typing a file name you want to open.
 10. You may reindex your repository if current code database is outdated. Press **F11->Ctags Source Navigator->Reindex repository** in main menu or in editor menu and then plugin will suggest you to select one of the tags files which you may reindex. **If something goes wrong while reindexing (e.g. reindexing is canceled) plugin will rollback on old tags file.**
 ## Default macro hotkeys (available if installed)
-###Editor hotkeys:
+### Editor hotkeys:
 + Open declaration - ```Ctrl+F```
 + Complete name - ```Ctrl+Space```
 + Go back - ```Ctrl+G```
 + Search name in opened file - ```Ctrl+Shift+X```
 + Search name in entire repository - ```Ctrl+Shift+T```
 + Search file by name - ```Ctrl+Shift+R```
-###Main menu hotkeys:
+### Main menu hotkeys:
 + Search name in entire repository - ```Ctrl+Shift+T```
 + Search file by name - ```Ctrl+Shift+R```
 ## Contribute
