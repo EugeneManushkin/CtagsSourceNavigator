@@ -345,8 +345,8 @@ static char strbuf[16384];
 struct LineInfo{
   char *line;
   int pos;
-  char *fn;
-  char *cls;
+  char const *fn;
+  char const *cls;
 };
 
 int LinesCmp(const void* v1,const void* v2)
@@ -365,11 +365,24 @@ int FilesCmp(const void* v1,const void* v2)
   return strcmp(a->line,b->line);
 }
 
+static bool IsFieldEnd(char c)
+{
+  return !c || c == '\r' || c =='\n' || c == '\t';
+}
+
+int ClassNameCmp(char const* left, char const* right)
+{
+  for (; left && !IsFieldEnd(*left) && right && !IsFieldEnd(*right) && *left == *right; ++left, ++right);
+  int leftChar = left && !IsFieldEnd(*left) ? *left : 0;
+  int rightChar = right && !IsFieldEnd(*right) ? *right : 0;
+  return leftChar - rightChar;
+}
+
 int ClsCmp(const void* v1,const void* v2)
 {
   LineInfo *a=*(LineInfo**)v1;
   LineInfo *b=*(LineInfo**)v2;
-  return strcmp(a->cls,b->cls);
+  return ClassNameCmp(a->cls,b->cls);
 }
 
 int StrCmp(const void* v1,const void* v2)
@@ -406,6 +419,33 @@ static char const* GetFilename(char const* path)
 static int FilenameCmp(void const* left, void const* right)
 {
   return CompareTabPaths(GetFilename((*static_cast<LineInfo* const*>(left))->fn), GetFilename((*static_cast<LineInfo* const*>(right))->fn));
+}
+
+static char const* FindClassFullQualification(char const* str)
+{
+  std::vector<std::string> const fieldNames = {
+                                                "\tclass:"
+                                               ,"\tstruct:"
+                                               ,"\tunion:"
+                                              };
+
+  for (const auto& fieldName : fieldNames)
+  {    
+    if (auto ptr = strstr(str, fieldName.c_str()))
+      return ptr + fieldName.length();
+  }
+
+  return nullptr;
+}
+
+static char const* ExtractClassName(char const* fullQualification)
+{
+  char const* className = fullQualification;
+  for(; fullQualification && !IsFieldEnd(*fullQualification); ++fullQualification)
+    if (!isident(*fullQualification))
+      className = fullQualification + 1;
+
+  return className && !IsFieldEnd(*className) ? className : nullptr;
 }
 
 //TODO: rework
@@ -511,7 +551,6 @@ int TagFileInfo::CreateIndex(time_t tagsModTime)
     li=pool->getNext(pool);
     int len=strlen(strbuf);
     li->line=linespool+linespoolpos;
-    if(strbuf[len-1]==0x0d || strbuf[len-1]==0x0a)len--;
     memcpy(li->line,strbuf,len);
     li->line[len]=0;
     if(sorted && lines.Count()>1 && strcmp(li->line,lines[-1]->line)<0)
@@ -524,18 +563,9 @@ int TagFileInfo::CreateIndex(time_t tagsModTime)
     li->fn=strchr(li->line,'\t')+1;
     file.Set(li->fn,0,strchr(li->fn,'\t')-li->fn);
     pathIntersection = IsFullPath(file.Str(), file.Length()) ? GetIntersection(pathIntersection.c_str(), file.Str()) : pathIntersection;
-    li->cls=strchr(li->line,'\t');
-    do{
-      if(li->cls)li->cls++;
-      if(li->cls && (!strncmp(li->cls,"class:",6) || !strncmp(li->cls,"struct:",7)))
-      {
-        li->cls=strchr(li->cls,':')+1;
-        char *tmp=strchr(li->cls,'\t');
-        if(tmp)*tmp=0;
-        classes.Push(li);
-        break;
-      }
-    }while((li->cls=strchr(li->cls,'\t')));
+    if (li->cls = ExtractClassName(FindClassFullQualification(li->line)))
+      classes.Push(li);
+
     lines.Push(li);
 //    fi->offsets.Push(pos);
     pos=ftell(f);
@@ -868,6 +898,7 @@ void FindFile(TagFileInfo* fi,const char* filename,PTagArray ta)
   fclose(f);
 }
 
+//TODO: Rework: replace with GetMatchedOffsetRange instead
 void FindClass(TagFileInfo* fi,const char* str,PTagArray ta)
 {
   FILE *g=fi->OpenIndex();
@@ -896,28 +927,18 @@ void FindClass(TagFileInfo* fi,const char* str,PTagArray ta)
   int cmp=1;
   int pos;
   const char *cls;
+  std::string strbuf;
 
   while(left<=right)
   {
     pos=(right+left)/2;
     fseek(f,offsets[pos],SEEK_SET);
-    fgets(strbuf,sizeof(strbuf),f);
-    cls=strstr(strbuf,"\tclass:");
-    if(!cls)
-    {
-      cls=strstr(strbuf,"\tstruct:");
-      if(!cls)
-      {
-        cls="";
-      }else
-      {
-        cls+=8;
-      }
-    }else
-    {
-      cls+=7;
-    }
-    cmp=strncmp(str,cls,len);
+    GetLine(strbuf, f);
+    if (!(cls=ExtractClassName(FindClassFullQualification(strbuf.c_str()))))
+      //TODO: throw invalid tags format
+      return;
+
+    cmp=ClassNameCmp(str,cls);
     if(!cmp && !isident(cls[len]))
     {
       break;
@@ -935,23 +956,9 @@ void FindClass(TagFileInfo* fi,const char* str,PTagArray ta)
     while(pos>0)
     {
       fseek(f,offsets[pos-1],SEEK_SET);
-      fgets(strbuf,sizeof(strbuf),f);
-      cls=strstr(strbuf,"\tclass:");
-      if(!cls)
-      {
-        cls=strstr(strbuf,"\tstruct:");
-        if(!cls)
-        {
-          cls="";
-        }else
-        {
-          cls+=8;
-        }
-      }else
-      {
-        cls+=7;
-      }
-      if(!strncmp(str,cls,len) && !isident(cls[len]))
+      GetLine(strbuf, f);
+      cls=ExtractClassName(FindClassFullQualification(strbuf.c_str()));
+      if(cls && !ClassNameCmp(str,cls) && !isident(cls[len]))
       {
         pos--;
       }else
@@ -962,24 +969,9 @@ void FindClass(TagFileInfo* fi,const char* str,PTagArray ta)
     while(endpos<offsets.Count()-1)
     {
       fseek(f,offsets[endpos+1],SEEK_SET);
-      fgets(strbuf,sizeof(strbuf),f);
-      cls=strstr(strbuf,"\tclass:");
-      cls=strstr(strbuf,"\tclass:");
-      if(!cls)
-      {
-        cls=strstr(strbuf,"\tstruct:");
-        if(!cls)
-        {
-          cls="";
-        }else
-        {
-          cls+=8;
-        }
-      }else
-      {
-        cls+=7;
-      }
-      if(!strncmp(str,cls,len) && !isident(cls[len]))
+      GetLine(strbuf, f);
+      cls=ExtractClassName(FindClassFullQualification(strbuf.c_str()));
+      if(cls && !ClassNameCmp(str,cls) && !isident(cls[len]))
       {
         endpos++;
       }else
@@ -992,7 +984,7 @@ void FindClass(TagFileInfo* fi,const char* str,PTagArray ta)
     for(int i=pos;i<=endpos;i++)
     {
       fseek(f,offsets[i],SEEK_SET);
-      fgets(strbuf,sizeof(strbuf),f);
+      GetLine(strbuf, f);
       lines.insert(strbuf);
     }
     for(auto const& line : lines)
