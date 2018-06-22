@@ -122,6 +122,7 @@ namespace
   std::regex const MetaTag::Regex("^([a-zA-Z0-9_~]+):(.+):line:([0-9]+)$");
 
   using MetaTagCont = std::vector<MetaTag>;
+  using MetaClassCont = std::vector<std::pair<std::string, MetaTagCont> >;
 
   bool operator == (TagInfo const& left, MetaTag const& right)
   {
@@ -166,6 +167,37 @@ namespace
 
     return result;
   }
+
+  MetaClassCont LoadMetaClasses(std::string const& fileName, std::string const& repoRoot)
+  {
+    std::ifstream file;
+    file.exceptions(std::ifstream::badbit);
+    file.open(fileName);
+    std::shared_ptr<void> fileCloser(0, [&](void*) { file.close(); });
+    MetaClassCont result;
+    MetaClassCont::value_type current;
+    std::string buf;
+    while (std::getline(file, buf))
+    {
+      if (buf.empty())
+        continue;
+
+      if (buf[0] == '#')
+      {
+        if (!current.first.empty())
+          result.push_back(std::move(current));
+
+        std::swap(current, MetaClassCont::value_type());
+        current.first = buf.substr(1, std::string::npos);
+      }
+      else
+      {
+        current.second.push_back(MetaTag(buf, repoRoot));
+      }
+    }
+
+    return result;
+  }
 }
 
 namespace TESTS
@@ -188,7 +220,7 @@ namespace TESTS
     {
       size_t symbolsLoaded = -1;
       ASSERT_EQ(LoadSuccess, Load(tagsFile.c_str(), symbolsLoaded));
-      ASSERT_EQ(expectedTagsCount, symbolsLoaded);
+      ASSERT_EQ(expectedTagsCount, expectedTagsCount == -1 ? expectedTagsCount : symbolsLoaded);
     }
 
     void LoadTagsFile(std::string const& tagsFile, size_t expectedTagsCount)
@@ -223,6 +255,16 @@ namespace TESTS
       auto tags = ToTagsCont(TagArrayPtr(FindFileSymbols(metaTag.FullPath.c_str())));
       ASSERT_FALSE(tags.empty());
       ASSERT_FALSE(std::find(tags.begin(), tags.end(), metaTag) == tags.end());
+    }
+
+    void LookupClassMembers(std::string const& className, MetaTagCont const& expectedMembers)
+    {
+      ASSERT_FALSE(expectedMembers.empty());
+      auto tags = ToTagsCont(TagArrayPtr(FindClassSymbols(expectedMembers.back().FullPath.c_str(), className.c_str())));
+      for (auto const& metaTag : expectedMembers)
+      {
+        EXPECT_FALSE(std::find(tags.begin(), tags.end(), metaTag) == tags.end()) << "Class: " << className << ", member: " << metaTag;
+      }
     }
 
     void LookupAllPartiallyMatchedNames(MetaTag const& metaTag)
@@ -262,6 +304,17 @@ namespace TESTS
         EXPECT_NO_FATAL_FAILURE(LookupMetaTagInFile(metaTag)) << "Tag info: " << metaTag << ", tags file: " << tagsFile;
         EXPECT_NO_FATAL_FAILURE(LookupAllPartiallyMatchedNames(metaTag)) << "Tag info: " << metaTag << ", tags file: " << tagsFile;
         EXPECT_NO_FATAL_FAILURE(LookupAllPartiallyMatchedFilanames(metaTag)) << "Tag info: " << metaTag << ", tags file: " << tagsFile;
+      }
+    }
+
+    void LookupAllClassMembers(std::string const& tagsFile, std::string const& metaClassesFile)
+    {
+      auto const metaClasses = LoadMetaClasses(metaClassesFile, GetFilePath(metaClassesFile));
+      ASSERT_FALSE(metaClasses.empty());
+      ASSERT_NO_FATAL_FAILURE(LoadTagsFile(tagsFile, -1));
+      for (auto const& metaClass : metaClasses)
+      {
+        EXPECT_NO_FATAL_FAILURE(LookupClassMembers(metaClass.first, metaClass.second));
       }
     }
 
@@ -402,6 +455,16 @@ namespace TESTS
   TEST_F(Tags, FilePartsFoundInExuberantRepeatedFilesRepos)
   {
     TestRepeatedFiles("repeated_files_repos\\tags.exuberant.w");
+  }
+
+  TEST_F(Tags, AllClassMembersFoundInExuberantRepos)
+  {
+    LookupAllClassMembers("classes_repos\\tags.exuberant.w", "classes_repos\\tags.exuberant.w.classmeta");
+  }
+
+  TEST_F(Tags, AllClassMembersFoundInUniversalRepos)
+  {
+    LookupAllClassMembers("classes_repos\\tags.universal", "classes_repos\\tags.universal.classmeta");
   }
 }
 
