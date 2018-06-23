@@ -551,6 +551,7 @@ int TagFileInfo::CreateIndex(time_t tagsModTime)
     li=pool->getNext(pool);
     int len=strlen(strbuf);
     li->line=linespool+linespoolpos;
+    if(strbuf[len-1]==0x0d || strbuf[len-1]==0x0a)len--;
     memcpy(li->line,strbuf,len);
     li->line[len]=0;
     if(sorted && lines.Count()>1 && strcmp(li->line,lines[-1]->line)<0)
