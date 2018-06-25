@@ -18,6 +18,7 @@
 */
 
 #include <functional>
+#include <iterator>
 #include <set>
 #include <stdio.h>
 #include <sys/stat.h>
@@ -1148,14 +1149,15 @@ static std::pair<size_t, size_t> GetMatchedOffsetRange(FILE* f, Vector<int> cons
   return std::make_pair(0, 0);
 }
 
-static void FindPartiallyMatchedTagsImpl(TagFileInfo* fi, const char* part, size_t maxCount, std::vector<TagInfo>& result)
+static std::vector<TagInfo> GetMatchedTags(TagFileInfo* fi, Vector<int> const& offsets, PartiallyMatchVisitor const& visitor, size_t maxCount)
 {
+  std::vector<TagInfo> result;
   FILE *f=fi->OpenTags();
-  if(!f)return;
-  auto range = GetMatchedOffsetRange(f, fi->offsets, TagsMatch(part), maxCount);
+  if(!f)return result;
+  auto range = GetMatchedOffsetRange(f, offsets, visitor, maxCount);
   for(; range.first < range.second; ++range.first)
   {
-    fseek(f, fi->offsets[range.first], SEEK_SET);
+    fseek(f, offsets[range.first], SEEK_SET);
     std::string line;
     GetLine(line, f);
     std::unique_ptr<TagInfo> tag(ParseLine(line.c_str(), *fi));
@@ -1163,6 +1165,13 @@ static void FindPartiallyMatchedTagsImpl(TagFileInfo* fi, const char* part, size
       result.push_back(*tag);
   }
   fclose(f);
+  return result;
+}
+
+static void FindPartiallyMatchedTagsImpl(TagFileInfo* fi, const char* part, size_t maxCount, std::vector<TagInfo>& result)
+{
+  auto tags = GetMatchedTags(fi, fi->offsets, TagsMatch(part), maxCount);
+  std::copy(tags.begin(), tags.end(), std::back_inserter(result));
 }
 
 std::vector<TagInfo> FindPartiallyMatchedTags(const char* file, const char* part, size_t maxCount)
@@ -1195,20 +1204,8 @@ void FindPartiallyMatchedFileImpl(TagFileInfo* fi, const char* part, size_t maxC
   offsets.Init(uniqueFilesCount);
   if(uniqueFilesCount)fread(&offsets[0],4,uniqueFilesCount,g);
   fclose(g);
-
-  FILE *f=fi->OpenTags();
-  if(!f)return;
-  auto range = GetMatchedOffsetRange(f, offsets, FileMatch(part), maxCount);
-  for(; range.first < range.second; ++range.first)
-  {
-    fseek(f, offsets[range.first], SEEK_SET);
-    std::string line;
-    GetLine(line, f);
-    std::unique_ptr<TagInfo> tag(ParseLine(line.c_str(), *fi));
-    if (tag)
-      paths.push_back(tag->file.Str());
-  }
-  fclose(f);
+  auto tags = GetMatchedTags(fi, offsets, FileMatch(part), maxCount);
+  std::transform(tags.begin(), tags.end(), std::back_inserter(paths), [](TagInfo const& tag) {return tag.file.Str();}); 
 }
 
 std::vector<std::string> FindPartiallyMatchedFile(const char* file, const char* part, size_t maxCount)
