@@ -124,9 +124,6 @@ struct TagInfo{
   TagInfo():lineno(-1){}
 };
 
-typedef Vector<TagInfo*> TagArray;
-typedef TagArray* PTagArray;
-
 int isident(int chr);
 
 
@@ -136,7 +133,7 @@ std::vector<TagInfo> Find(const char* name, const char* filename);
 std::vector<TagInfo> FindPartiallyMatchedTags(const char* file, const char* part, size_t maxCount);
 std::vector<std::string> FindPartiallyMatchedFile(const char* file, const char* part, size_t maxCount);
 std::vector<TagInfo> FindClassMembers(const char* file, const char* classname);
-PTagArray FindFileSymbols(const char* file);
+std::vector<TagInfo> FindFileSymbols(const char* file);
 void Autoload(const char* fn);
 void GetFiles(StrList& dst);
 bool IsTagFile(const char* file);

@@ -21,8 +21,6 @@ int isident(int chr)
 
 namespace
 {
-  using TagArrayPtr = std::unique_ptr<TagArray>;
-  using TagsCont = std::vector<TagInfo>;
   bool CheckIdxFiles = false;
 
   std::string GetFilePath(std::string const& file)
@@ -135,22 +133,6 @@ namespace
     return stream;
   }
 
-  TagsCont ToTagsCont(TagArrayPtr&& arr)
-  {
-    TagsCont result;
-    if (!arr)
-      return result;
-
-    for (int i = 0; i < arr->Count(); ++i)
-    {
-      result.push_back(*(*arr)[i]);
-      delete (*arr)[i];
-    }
-
-    arr.reset();
-    return result;
-  }
-
   MetaTagCont LoadMetaTags(std::string const& fileName, std::string const& repoRoot)
   {
     MetaTagCont result;
@@ -252,7 +234,7 @@ namespace TESTS
 
     void LookupMetaTagInFile(MetaTag const& metaTag)
     {
-      auto tags = ToTagsCont(TagArrayPtr(FindFileSymbols(metaTag.FullPath.c_str())));
+      auto tags = FindFileSymbols(metaTag.FullPath.c_str());
       ASSERT_FALSE(tags.empty());
       ASSERT_FALSE(std::find(tags.begin(), tags.end(), metaTag) == tags.end());
     }

@@ -1601,24 +1601,6 @@ static void Lookup(std::string const& file, bool setPanelDir, LookupMenuVisitor&
     NavigateTo(&selectedTag, setPanelDir);
 }
 
-//TODO: remove
-using TagArrayPtr = std::unique_ptr<TagArray>;
-std::vector<TagInfo> ToTagsCont(TagArrayPtr&& arr)
-{
-  std::vector<TagInfo> result;
-  if (!arr)
-    return result;
-
-  for (int i = 0; i < arr->Count(); ++i)
-  {
-    result.push_back(*(*arr)[i]);
-    delete (*arr)[i];
-  }
-
-  arr.reset();
-  return result;
-}
-
 static std::vector<std::string> TagsToStrings(std::vector<TagInfo> const& tags)
 {
   std::vector<std::string> result;
@@ -1747,7 +1729,7 @@ HANDLE WINAPI OpenW(const struct OpenInfo *info)
       }break;
       case miBrowseFile:
       {
-        auto ta = ToTagsCont(TagArrayPtr(FindFileSymbols(fileName.c_str())));
+        auto ta = FindFileSymbols(fileName.c_str());
         if(ta.empty())
         {
           Msg(MNothingFound);

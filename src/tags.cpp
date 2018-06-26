@@ -134,7 +134,6 @@ private:
 
 using TagFileInfoPtr = std::shared_ptr<TagFileInfo>;
 std::vector<TagFileInfoPtr> files;
-using TagArrayPtr = std::unique_ptr<TagArray>;
 
 static std::string JoinPath(std::string const& dirPath, std::string const& name)
 {
@@ -743,7 +742,7 @@ int Load(const char* filename, size_t& symbolsLoaded)
   return 0;
 }
 
-void FindFile(TagFileInfo* fi,const char* filename,PTagArray ta)
+void FindFile(TagFileInfo* fi,const char* filename,std::vector<TagInfo>& result)
 {
   FILE *g=fi->OpenIndex();
   if(!g)return;
@@ -829,8 +828,9 @@ void FindFile(TagFileInfo* fi,const char* filename,PTagArray ta)
     }
     for(auto const& line : lines)
     {
-      TagInfo *ti=ParseLine(line.c_str(),*fi);
-      if(ti)ta->Push(ti);
+      std::unique_ptr<TagInfo> tag(ParseLine(line.c_str(), *fi));
+      if (tag)
+        result.push_back(*tag);
     }
   }
   fclose(f);
@@ -1155,19 +1155,19 @@ std::vector<TagInfo> FindClassMembers(const char* file, const char* classname)
   return result;
 }
 
-PTagArray FindFileSymbols(const char* file)
+std::vector<TagInfo> FindFileSymbols(const char* file)
 {
-  TagArrayPtr ta (new TagArray);
+  std::vector<TagInfo> result;
   for (const auto& repos : files)
   {
     auto relativePath = repos->GetRelativePath(file);
     if (!relativePath || !*relativePath)
       continue;
 
-    FindFile(repos.get(), repos->IsFullPathRepo() ? file : relativePath, ta.get());
+    FindFile(repos.get(), repos->IsFullPathRepo() ? file : relativePath, result);
   }
 
-  return !ta->Count() ? nullptr : ta.release();
+  return result;
 }
 
 void Autoload(const char* fn)
