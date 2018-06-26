@@ -245,7 +245,7 @@ namespace TESTS
 
     void LookupMetaTag(MetaTag const& metaTag)
     {
-      auto tags = ToTagsCont(TagArrayPtr(Find(metaTag.Name.c_str(), metaTag.FullPath.c_str())));
+      auto tags = Find(metaTag.Name.c_str(), metaTag.FullPath.c_str());
       ASSERT_FALSE(tags.empty());
       ASSERT_FALSE(std::find(tags.begin(), tags.end(), metaTag) == tags.end());
     }
@@ -321,7 +321,7 @@ namespace TESTS
     void TestFileBelongsToRepo(char const* file, bool belongs)
     {
       EXPECT_EQ(belongs, TagsLoadedForFile(file)) << "File: " << file;
-      EXPECT_EQ(belongs, !!TagArrayPtr(Find("main", file))) << "File: " << file;
+      EXPECT_EQ(belongs, !Find("main", file).empty()) << "File: " << file;
     }
 
     void TestTagsLoadedForFile()

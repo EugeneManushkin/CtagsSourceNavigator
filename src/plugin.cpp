@@ -1673,7 +1673,7 @@ HANDLE WINAPI OpenW(const struct OpenInfo *info)
         String word=GetWord();
         if(word.Length()==0)return nullptr;
         //Msg(word);
-        auto ta = ToTagsCont(TagArrayPtr(Find(word, fileName.c_str())));
+        auto ta = Find(word, fileName.c_str());
         if(ta.empty())
         {
           Msg(GetMsg(MNotFound));

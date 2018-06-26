@@ -350,11 +350,24 @@ struct LineInfo{
   char const *cls;
 };
 
+static bool IsFieldEnd(char c)
+{
+  return !c || c == '\r' || c == '\n' || c == '\t';
+}
+
+int FieldCmp(char const* left, char const* right)
+{
+  for (; left && !IsFieldEnd(*left) && right && !IsFieldEnd(*right) && *left == *right; ++left, ++right);
+  int leftChar = left && !IsFieldEnd(*left) ? *left : 0;
+  int rightChar = right && !IsFieldEnd(*right) ? *right : 0;
+  return leftChar - rightChar;
+}
+
 int LinesCmp(const void* v1,const void* v2)
 {
   LineInfo *a=*(LineInfo**)v1;
   LineInfo *b=*(LineInfo**)v2;
-  return strcmp(a->line,b->line);
+  return FieldCmp(a->line,b->line);
 }
 
 int FilesCmp(const void* v1,const void* v2)
@@ -366,24 +379,11 @@ int FilesCmp(const void* v1,const void* v2)
   return strcmp(a->line,b->line);
 }
 
-static bool IsFieldEnd(char c)
-{
-  return !c || c == '\r' || c =='\n' || c == '\t';
-}
-
-int ClassNameCmp(char const* left, char const* right)
-{
-  for (; left && !IsFieldEnd(*left) && right && !IsFieldEnd(*right) && *left == *right; ++left, ++right);
-  int leftChar = left && !IsFieldEnd(*left) ? *left : 0;
-  int rightChar = right && !IsFieldEnd(*right) ? *right : 0;
-  return leftChar - rightChar;
-}
-
 int ClsCmp(const void* v1,const void* v2)
 {
   LineInfo *a=*(LineInfo**)v1;
   LineInfo *b=*(LineInfo**)v2;
-  return ClassNameCmp(a->cls,b->cls);
+  return FieldCmp(a->cls,b->cls);
 }
 
 int StrCmp(const void* v1,const void* v2)
@@ -743,70 +743,6 @@ int Load(const char* filename, size_t& symbolsLoaded)
   return 0;
 }
 
-static void FindInFile(TagFileInfo* fi,const char* str,PTagArray ta)
-{
-  FILE *f=fi->OpenTags();
-  if(!f)return;
-  int len=strlen(str);
-  int pos;
-  int left=0;
-  int right=fi->offsets.Count()-1;
-  int cmp = 1;
-  while(left<=right)
-  {
-    pos=(right+left)/2;
-    fseek(f,fi->offsets[pos],SEEK_SET);
-    fgets(strbuf,sizeof(strbuf),f);
-    cmp=strncmp(str,strbuf,len);
-    if(!cmp && strbuf[len]=='\t')
-    {
-      break;
-    }else if(cmp<=0)
-    {
-      right=pos-1;
-    }else
-    {
-      left=pos+1;
-    }
-  }
-  if(!cmp && strbuf[len]=='\t')
-  {
-    int endpos=pos;
-    while(pos>0)
-    {
-      fseek(f,fi->offsets[pos-1],SEEK_SET);
-      fgets(strbuf,sizeof(strbuf),f);
-      if(!strncmp(str,strbuf,len) && strbuf[len]=='\t')
-      {
-        pos--;
-      }else
-      {
-        break;
-      }
-    }
-    while(endpos<fi->offsets.Count()-1)
-    {
-      fseek(f,fi->offsets[endpos+1],SEEK_SET);
-      fgets(strbuf,sizeof(strbuf),f);
-      if(!strncmp(str,strbuf,len) && strbuf[len]=='\t')
-      {
-        endpos++;
-      }else
-      {
-        break;
-      }
-    }
-    for(int i=pos;i<=endpos;i++)
-    {
-      fseek(f,fi->offsets[i],SEEK_SET);
-      fgets(strbuf,sizeof(strbuf),f);
-      TagInfo* t=ParseLine(strbuf,*fi);
-      if(t)ta->Push(t);
-    }
-  }
-  fclose(f);
-}
-
 void FindFile(TagFileInfo* fi,const char* filename,PTagArray ta)
 {
   FILE *g=fi->OpenIndex();
@@ -900,13 +836,6 @@ void FindFile(TagFileInfo* fi,const char* filename,PTagArray ta)
   fclose(f);
 }
 
-PTagArray Find(const char* symbol,const char* file)
-{
-  TagArrayPtr ta(new TagArray);
-  ForEachFileRepository(file, std::bind(FindInFile, std::placeholders::_1, symbol, ta.get()));
-  return !ta->Count() ? nullptr : ta.release();
-}
-
 class MatchVisitor
 {
 public:
@@ -915,10 +844,39 @@ public:
   virtual bool ExactMatch(std::string const& str) const = 0;
 };
 
-class TagsMatch : public MatchVisitor
+class NameMatch : public MatchVisitor
 {
 public:
-  TagsMatch(char const* part)
+  NameMatch(char const* name)
+    : Name(name)
+  {
+    if (Name.empty())
+      throw std::invalid_argument("Empty name");
+  }
+  
+  bool Empty() const
+  {
+    return false;
+  }
+
+  int Compare(std::string const& strbuf) const
+  {
+    return FieldCmp(Name.c_str(), strbuf.c_str());
+  }
+
+  bool ExactMatch(std::string const& strbuf) const
+  {
+    return true;
+  }
+
+private:
+  std::string Name;
+};
+
+class NamePartialMatch : public MatchVisitor
+{
+public:
+  NamePartialMatch(char const* part)
     : Part(part)
   {
   }
@@ -1006,7 +964,7 @@ public:
       //TODO: throw Error()
       throw std::runtime_error("Tags file modified");
 
-    return ClassNameCmp(Classname.c_str(), cls);
+    return FieldCmp(Classname.c_str(), cls);
   }
 
   bool ExactMatch(std::string const& strbuf) const
@@ -1104,9 +1062,23 @@ static std::vector<TagInfo> GetMatchedTags(TagFileInfo* fi, Vector<int> const& o
   return result;
 }
 
+//TODO: refactor duplicated code: use one function (fi, visitor, result) instead of ...Impl functions
+static void FindImpl(TagFileInfo* fi, const char* name, std::vector<TagInfo>& result)
+{
+  auto tags = GetMatchedTags(fi, fi->offsets, NameMatch(name), 0);
+  std::move(tags.begin(), tags.end(), std::back_inserter(result));
+}
+
+std::vector<TagInfo> Find(const char* name, const char* file)
+{
+  std::vector<TagInfo> result;
+  ForEachFileRepository(file, std::bind(FindImpl, std::placeholders::_1, name, std::ref(result)));
+  return result;
+}
+
 static void FindPartiallyMatchedTagsImpl(TagFileInfo* fi, const char* part, size_t maxCount, std::vector<TagInfo>& result)
 {
-  auto tags = GetMatchedTags(fi, fi->offsets, TagsMatch(part), maxCount);
+  auto tags = GetMatchedTags(fi, fi->offsets, NamePartialMatch(part), maxCount);
   std::move(tags.begin(), tags.end(), std::back_inserter(result));
 }
 
