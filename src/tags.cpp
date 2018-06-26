@@ -1005,7 +1005,7 @@ PTagArray Find(const char* symbol,const char* file)
   return !ta->Count() ? nullptr : ta.release();
 }
 
-class PartiallyMatchVisitor
+class MatchVisitor
 {
 public:
   virtual bool Empty() const = 0;
@@ -1013,7 +1013,7 @@ public:
   virtual bool ExactMatch(std::string const& str) const = 0;
 };
 
-class TagsMatch : public PartiallyMatchVisitor
+class TagsMatch : public MatchVisitor
 {
 public:
   TagsMatch(char const* part)
@@ -1040,7 +1040,7 @@ private:
   std::string Part;
 };
 
-class FileMatch : public PartiallyMatchVisitor
+class FileMatch : public MatchVisitor
 {
 public:
   FileMatch(char const* part)
@@ -1083,7 +1083,7 @@ private:
 };
 
 //TODO: support case insensitive search
-static std::pair<size_t, size_t> GetMatchedOffsetRange(FILE* f, Vector<int> const& offsets, PartiallyMatchVisitor const& visitor, size_t maxCount)
+static std::pair<size_t, size_t> GetMatchedOffsetRange(FILE* f, Vector<int> const& offsets, MatchVisitor const& visitor, size_t maxCount)
 {
   if (!offsets.Count())
     return std::make_pair(0, 0);
@@ -1149,7 +1149,7 @@ static std::pair<size_t, size_t> GetMatchedOffsetRange(FILE* f, Vector<int> cons
   return std::make_pair(0, 0);
 }
 
-static std::vector<TagInfo> GetMatchedTags(TagFileInfo* fi, Vector<int> const& offsets, PartiallyMatchVisitor const& visitor, size_t maxCount)
+static std::vector<TagInfo> GetMatchedTags(TagFileInfo* fi, Vector<int> const& offsets, MatchVisitor const& visitor, size_t maxCount)
 {
   std::vector<TagInfo> result;
   FILE *f=fi->OpenTags();
