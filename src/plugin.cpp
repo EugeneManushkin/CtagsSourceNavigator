@@ -1265,7 +1265,7 @@ bool GotoOpenedFile(const char* file)
   return false;
 }
 
-static void NavigateTo(TagInfo* info, bool setPanelDir = false)
+static void NavigateTo(TagInfo const* info, bool setPanelDir = false)
 {
   auto ei = GetCurrentEditorInfo();
   std::string fileName = GetFileNameFromEditor(ei.EditorID); // TODO: auto
@@ -1449,31 +1449,29 @@ int SetPos(const char *filename,int line,int col,int top,int left)
   return 1;
 }
 
-static TagInfo* TagsMenu(PTagArray pta, bool displayFile = true)
+static TagInfo const* TagsMenu(std::vector<TagInfo> const& ta, bool displayFile = true)
 {
   MenuList sm;
   String s;
-  TagArray& ta=*pta;
   int maxid=0,maxDeclaration=0;
-  int i;
   const int currentWidth = std::min<intptr_t>(GetFarWidth(), MaxMenuWidth);
   const int maxDeclarationWidth = currentWidth / 5;
-  for(i=0;i<ta.Count();i++)
+  for(auto const& ti : ta)
   {
-    TagInfo *ti=ta[i];
-    if(ti->name.Length()>maxid)maxid=ti->name.Length();
-    if(ti->declaration.Length()>maxDeclaration)maxDeclaration=ti->declaration.Length();
+    if(ti.name.Length()>maxid)maxid=ti.name.Length();
+    if(ti.declaration.Length()>maxDeclaration)maxDeclaration=ti.declaration.Length();
     //if(ti->file.Length()>maxfile)
   }
   maxDeclaration = std::min(maxDeclaration, maxDeclarationWidth);
   int maxfile=currentWidth-8-maxid-maxDeclaration-1-1-1-1;
-  for(i=0;i<ta.Count();i++)
+  int i = 0;
+  for(auto const& ti : ta)
   {
-    sm.push_back(MI(FormatTagInfo(*ta[i], maxid, maxDeclaration, maxfile, displayFile), i, false, ta[i]->name));
+    sm.push_back(MI(FormatTagInfo(ti, maxid, maxDeclaration, maxfile, displayFile), i++, false, ti.name));
   }
   int sel=FilterMenu(GetMsg(MSelectSymbol),sm,0,MF_SHOWCOUNT);
   if(sel==-1)return NULL;
-  return ta[sel];
+  return &ta[sel];
 }
 
 static WideString SelectFromHistory()
@@ -1603,13 +1601,22 @@ static void Lookup(std::string const& file, bool setPanelDir, LookupMenuVisitor&
     NavigateTo(&selectedTag, setPanelDir);
 }
 
-static void FreeTagsArray(PTagArray ta)
+//TODO: remove
+using TagArrayPtr = std::unique_ptr<TagArray>;
+std::vector<TagInfo> ToTagsCont(TagArrayPtr&& arr)
 {
-  for(int i=0;i<ta->Count();i++)
+  std::vector<TagInfo> result;
+  if (!arr)
+    return result;
+
+  for (int i = 0; i < arr->Count(); ++i)
   {
-    delete (*ta)[i];
+    result.push_back(*(*arr)[i]);
+    delete (*arr)[i];
   }
-  delete ta;
+
+  arr.reset();
+  return result;
 }
 
 static std::vector<std::string> TagsToStrings(std::vector<TagInfo> const& tags)
@@ -1666,22 +1673,21 @@ HANDLE WINAPI OpenW(const struct OpenInfo *info)
         String word=GetWord();
         if(word.Length()==0)return nullptr;
         //Msg(word);
-        PTagArray ta = Find(word, fileName.c_str());
-        if(!ta)
+        auto ta = ToTagsCont(TagArrayPtr(Find(word, fileName.c_str())));
+        if(ta.empty())
         {
           Msg(GetMsg(MNotFound));
           return nullptr;
         }
-        TagInfo *ti;
-        if(ta->Count()==1)
+        TagInfo const *ti;
+        if(ta.size()==1)
         {
-          ti=(*ta)[0];
+          ti=&ta.back();
         }else
         {
           ti=TagsMenu(ta);
         }
         if(ti)NavigateTo(ti);
-        FreeTagsArray(ta);
       }break;
       case miUndo:
       {
@@ -1741,15 +1747,14 @@ HANDLE WINAPI OpenW(const struct OpenInfo *info)
       }break;
       case miBrowseFile:
       {
-        PTagArray ta = FindFileSymbols(fileName.c_str());
-        if(!ta)
+        auto ta = ToTagsCont(TagArrayPtr(FindFileSymbols(fileName.c_str())));
+        if(ta.empty())
         {
           Msg(MNothingFound);
           return nullptr;
         }
-        TagInfo *ti=TagsMenu(ta, false);
+        TagInfo const *ti=TagsMenu(ta, false);
         if(ti)NavigateTo(ti);
-        FreeTagsArray(ta);
       }break;
       case miBrowseClass:
       {
@@ -1764,15 +1769,14 @@ HANDLE WINAPI OpenW(const struct OpenInfo *info)
                       L"",buf,sizeof(buf)/sizeof(buf[0]),nullptr,0))return nullptr;
           word=ToStdString(buf).c_str();
         }
-        PTagArray ta = FindClassSymbols(fileName.c_str(), word);
-        if(!ta)
+        auto ta = FindClassMembers(fileName.c_str(), word);
+        if(ta.empty())
         {
           Msg(MNothingFound);
           return nullptr;
         }
-        TagInfo *ti=TagsMenu(ta, false);
+        TagInfo const *ti=TagsMenu(ta, false);
         if(ti)NavigateTo(ti);
-        FreeTagsArray(ta);
       }break;
       case miLookupSymbol:
       {

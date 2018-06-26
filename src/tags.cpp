@@ -900,104 +900,6 @@ void FindFile(TagFileInfo* fi,const char* filename,PTagArray ta)
   fclose(f);
 }
 
-//TODO: Rework: replace with GetMatchedOffsetRange instead
-void FindClass(TagFileInfo* fi,const char* str,PTagArray ta)
-{
-  FILE *g=fi->OpenIndex();
-  if(!g)return;
-  int sz;
-  if (!ReadSignature(g))
-    throw std::logic_error("Signature must be valid");
-
-  fseek(g,sizeof(time_t),SEEK_CUR);
-  std::string repoRoot;
-  if (!ReadRepoRoot(g, repoRoot))
-    throw std::logic_error("Reporoot must be valid");
-
-  fread(&sz,4,1,g);
-  fseek(g,4+sz*4*2+sizeof(IndexFileSignature)+sizeof(uint32_t)+repoRoot.length()+sizeof(time_t),SEEK_SET);
-  fread(&sz,4,1,g);
-  Vector<int> offsets;
-  offsets.Init(sz);
-  if(sz)fread(&offsets[0],4,sz,g);
-  fclose(g);
-  FILE *f=fi->OpenTags();
-  if(!f)return;
-  int len=strlen(str);
-  int left=0;
-  int right=offsets.Count()-1;
-  int cmp=1;
-  int pos;
-  const char *cls;
-  std::string strbuf;
-
-  while(left<=right)
-  {
-    pos=(right+left)/2;
-    fseek(f,offsets[pos],SEEK_SET);
-    GetLine(strbuf, f);
-    if (!(cls=ExtractClassName(FindClassFullQualification(strbuf.c_str()))))
-      //TODO: throw invalid tags format
-      return;
-
-    cmp=ClassNameCmp(str,cls);
-    if(!cmp && !isident(cls[len]))
-    {
-      break;
-    }else if(cmp<=0)
-    {
-      right=pos-1;
-    }else
-    {
-      left=pos+1;
-    }
-  }
-  if(!cmp && !isident(cls[len]))
-  {
-    int endpos=pos;
-    while(pos>0)
-    {
-      fseek(f,offsets[pos-1],SEEK_SET);
-      GetLine(strbuf, f);
-      cls=ExtractClassName(FindClassFullQualification(strbuf.c_str()));
-      if(cls && !ClassNameCmp(str,cls) && !isident(cls[len]))
-      {
-        pos--;
-      }else
-      {
-        break;
-      }
-    }
-    while(endpos<offsets.Count()-1)
-    {
-      fseek(f,offsets[endpos+1],SEEK_SET);
-      GetLine(strbuf, f);
-      cls=ExtractClassName(FindClassFullQualification(strbuf.c_str()));
-      if(cls && !ClassNameCmp(str,cls) && !isident(cls[len]))
-      {
-        endpos++;
-      }else
-      {
-        break;
-      }
-    }
-    //TODO: refactor duplicated code
-    std::set<std::string> lines;
-    for(int i=pos;i<=endpos;i++)
-    {
-      fseek(f,offsets[i],SEEK_SET);
-      GetLine(strbuf, f);
-      lines.insert(strbuf);
-    }
-    for(auto const& line : lines)
-    {
-      TagInfo *ti=ParseLine(line.c_str(),*fi);
-      if(ti)ta->Push(ti);
-    }
-  }
-  fclose(f);
-}
-
 PTagArray Find(const char* symbol,const char* file)
 {
   TagArrayPtr ta(new TagArray);
@@ -1293,13 +1195,6 @@ PTagArray FindFileSymbols(const char* file)
     FindFile(repos.get(), repos->IsFullPathRepo() ? file : relativePath, ta.get());
   }
 
-  return !ta->Count() ? nullptr : ta.release();
-}
-
-PTagArray FindClassSymbols(const char* file,const char* classname)
-{
-  TagArrayPtr ta(new TagArray);
-  ForEachFileRepository(file, std::bind(FindClass, std::placeholders::_1, classname, ta.get()));
   return !ta->Count() ? nullptr : ta.release();
 }
 
