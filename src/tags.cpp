@@ -1082,6 +1082,40 @@ private:
   std::string Part;
 };
 
+class ClassMemberMatch : public MatchVisitor
+{
+public:
+  ClassMemberMatch(char const* classname)
+    : Classname(classname)
+  {
+    if (Classname.empty())
+      throw std::invalid_argument("Empty classname");
+  }
+  
+  bool Empty() const
+  {
+    return false;
+  }
+
+  int Compare(std::string const& strbuf) const
+  {
+    auto cls = ExtractClassName(FindClassFullQualification(strbuf.c_str()));
+    if (!cls)
+      //TODO: throw Error()
+      throw std::runtime_error("Tags file modified");
+
+    return ClassNameCmp(Classname.c_str(), cls);
+  }
+
+  bool ExactMatch(std::string const& strbuf) const
+  {
+    return true;
+  }
+
+private:
+  std::string Classname;
+};
+
 //TODO: support case insensitive search
 static std::pair<size_t, size_t> GetMatchedOffsetRange(FILE* f, Vector<int> const& offsets, MatchVisitor const& visitor, size_t maxCount)
 {
@@ -1171,7 +1205,7 @@ static std::vector<TagInfo> GetMatchedTags(TagFileInfo* fi, Vector<int> const& o
 static void FindPartiallyMatchedTagsImpl(TagFileInfo* fi, const char* part, size_t maxCount, std::vector<TagInfo>& result)
 {
   auto tags = GetMatchedTags(fi, fi->offsets, TagsMatch(part), maxCount);
-  std::copy(tags.begin(), tags.end(), std::back_inserter(result));
+  std::move(tags.begin(), tags.end(), std::back_inserter(result));
 }
 
 std::vector<TagInfo> FindPartiallyMatchedTags(const char* file, const char* part, size_t maxCount)
@@ -1213,6 +1247,37 @@ std::vector<std::string> FindPartiallyMatchedFile(const char* file, const char* 
   std::vector<std::string> result;
   ForEachFileRepository(file, std::bind(FindPartiallyMatchedFileImpl, std::placeholders::_1, part, maxCount, std::ref(result)));
   std::sort(result.begin(), result.end());
+  return result;
+}
+
+static void FindClassMembersImpl(TagFileInfo* fi, const char* classname, std::vector<TagInfo>& result)
+{
+  FILE *g=fi->OpenIndex();
+  if(!g)return;
+  int sz;
+  if (!ReadSignature(g))
+    throw std::logic_error("Signature must be valid");
+
+  fseek(g,sizeof(time_t),SEEK_CUR);
+  std::string repoRoot;
+  if (!ReadRepoRoot(g, repoRoot))
+    throw std::logic_error("Reporoot must be valid");
+
+  fread(&sz,4,1,g);
+  fseek(g,4+sz*4*2+sizeof(IndexFileSignature)+sizeof(uint32_t)+repoRoot.length()+sizeof(time_t),SEEK_SET);
+  fread(&sz,4,1,g);
+  Vector<int> offsets;
+  offsets.Init(sz);
+  if(sz)fread(&offsets[0],4,sz,g);
+  fclose(g);
+  auto tags = GetMatchedTags(fi, offsets, ClassMemberMatch(classname), 0);
+  std::move(tags.begin(), tags.end(), std::back_inserter(result));
+}
+
+std::vector<TagInfo> FindClassMembers(const char* file, const char* classname)
+{
+  std::vector<TagInfo> result;
+  ForEachFileRepository(file, std::bind(FindClassMembersImpl, std::placeholders::_1, classname, std::ref(result)));
   return result;
 }
 

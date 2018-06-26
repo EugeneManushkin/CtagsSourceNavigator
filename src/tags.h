@@ -135,6 +135,7 @@ void UnloadTags(int idx);
 PTagArray Find(const char* symbol,const char* filename);
 std::vector<TagInfo> FindPartiallyMatchedTags(const char* file, const char* part, size_t maxCount);
 std::vector<std::string> FindPartiallyMatchedFile(const char* file, const char* part, size_t maxCount);
+std::vector<TagInfo> FindClassMembers(const char* file, const char* classname);
 PTagArray FindFileSymbols(const char* file);
 PTagArray FindClassSymbols(const char* file,const char* classname);
 void Autoload(const char* fn);

@@ -260,7 +260,7 @@ namespace TESTS
     void LookupClassMembers(std::string const& className, MetaTagCont const& expectedMembers)
     {
       ASSERT_FALSE(expectedMembers.empty());
-      auto tags = ToTagsCont(TagArrayPtr(FindClassSymbols(expectedMembers.back().FullPath.c_str(), className.c_str())));
+      auto tags = FindClassMembers(expectedMembers.back().FullPath.c_str(), className.c_str());
       for (auto const& metaTag : expectedMembers)
       {
         EXPECT_FALSE(std::find(tags.begin(), tags.end(), metaTag) == tags.end()) << "Class: " << className << ", member: " << metaTag;
