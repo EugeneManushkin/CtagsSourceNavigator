@@ -74,7 +74,7 @@ static bool FileExists(char const* filename)
   return GetFileAttributesA(filename) != INVALID_FILE_ATTRIBUTES;
 }
 
-static bool IsPathSeparator(std::string::value_type c)
+inline bool IsPathSeparator(std::string::value_type c)
 {
     return c == '/' || c == '\\';
 }
@@ -149,29 +149,6 @@ static std::string GetDirOfFile(std::string const& filePath)
 {
     auto pos = filePath.find_last_of("\\/");
     return !pos || pos == std::string::npos ? std::string() : filePath.substr(0, pos);
-}
-
-//TODO: path comparation must be reworked
-static int CompareFilenames(char const* left, char const* &right, size_t len)
-{
-  int cmp = 0;
-  while (len > 0)
-  {
-    if (IsPathSeparator(*left) && IsPathSeparator(*right))
-    {
-      while (IsPathSeparator(*(right + 1)))
-        ++right;
-    }
-    else if ((cmp = strnicmp(left, right, 1)) != 0)
-    {
-      return cmp;
-    }
-    --len;
-    ++left;
-    ++right;
-  }
-
-  return 0;
 }
 
 static void ForEachFileRepository(char const* fileFullPath, std::function<void(TagFileInfo*)> func)
@@ -349,17 +326,22 @@ struct LineInfo{
   char const *cls;
 };
 
-static bool IsFieldEnd(char c)
+inline bool IsFieldEnd(char c)
 {
   return !c || c == '\r' || c == '\n' || c == '\t';
 }
 
-int FieldCmp(char const* left, char const* right)
+inline int CharCmp(int left, int right, bool caseInsensitive)
 {
-  for (; left && !IsFieldEnd(*left) && right && !IsFieldEnd(*right) && *left == *right; ++left, ++right);
+  return caseInsensitive ? tolower(left) - tolower(right) : left - right;
+}
+
+int FieldCmp(char const* left, char const* right, bool caseInsensitive = false)
+{
+  for (; left && !IsFieldEnd(*left) && right && !IsFieldEnd(*right) && !CharCmp(*left, *right, caseInsensitive); ++left, ++right);
   int leftChar = left && !IsFieldEnd(*left) ? *left : 0;
   int rightChar = right && !IsFieldEnd(*right) ? *right : 0;
-  return leftChar - rightChar;
+  return CharCmp(leftChar, rightChar, caseInsensitive);
 }
 
 int LinesCmp(const void* v1,const void* v2)
@@ -373,9 +355,7 @@ int FilesCmp(const void* v1,const void* v2)
 {
   LineInfo *a=*(LineInfo**)v1;
   LineInfo *b=*(LineInfo**)v2;
-  int cmp=stricmp(a->fn,b->fn);
-  if(cmp!=0)return cmp;
-  return strcmp(a->line,b->line);
+  return FieldCmp(a->fn,b->fn,true);
 }
 
 int ClsCmp(const void* v1,const void* v2)
@@ -385,31 +365,15 @@ int ClsCmp(const void* v1,const void* v2)
   return FieldCmp(a->cls,b->cls);
 }
 
-int StrCmp(const void* v1,const void* v2)
-{
-  return strcmp(*(char**)v1,*(char**)v2);
-}
-
-//TODO: Rework: all paths must be compared by CompareFilenames
-static int CompareTabPaths(char const* left, char const* right)
-{
-  int cmp = 0;
-  for(; (*left && *left != '\t') || (*right && *right != '\t'); ++left, ++right)
-    if ((cmp = strnicmp(left, right, 1)) != 0)
-      return cmp;
-
-  return 0;
-}
-
 static bool PathsEqual(LineInfo const* left, LineInfo const* right)
 {
-  return !CompareTabPaths(left->fn, right->fn);
+  return !FieldCmp(left->fn, right->fn, true);
 }
 
 static char const* GetFilename(char const* path)
 {
   char const* pos = path;
-  for (; *path && *path != '\t'; ++path)
+  for (; !IsFieldEnd(*path); ++path)
     pos = IsPathSeparator(*path) ? path : pos;
 
   for (; *pos && IsPathSeparator(*pos); ++pos);
@@ -418,7 +382,30 @@ static char const* GetFilename(char const* path)
 
 static int FilenameCmp(void const* left, void const* right)
 {
-  return CompareTabPaths(GetFilename((*static_cast<LineInfo* const*>(left))->fn), GetFilename((*static_cast<LineInfo* const*>(right))->fn));
+  return FieldCmp(GetFilename((*static_cast<LineInfo* const*>(left))->fn), GetFilename((*static_cast<LineInfo* const*>(right))->fn));
+}
+
+//TODO: path comparation must be reworked
+static int CompareFilenames(char const* left, char const* &right, size_t len)
+{
+  int cmp = 0;
+  while (len > 0)
+  {
+    if (IsPathSeparator(*left) && IsPathSeparator(*right))
+    {
+      while (IsPathSeparator(*(right + 1)))
+        ++right;
+    }
+    else if ((cmp = CharCmp(*left, *right, true)) != 0)
+    {
+      return cmp;
+    }
+    --len;
+    ++left;
+    ++right;
+  }
+
+  return 0;
 }
 
 static char const* FindClassFullQualification(char const* str)
