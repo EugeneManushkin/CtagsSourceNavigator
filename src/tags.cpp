@@ -355,6 +355,36 @@ int FieldCmp(char const* left, char const* right, bool caseInsensitive = CaseSen
   return FieldCompare(left, right, caseInsensitive, FullCompare);
 }
 
+int PathCompare(char const* left, char const* &right, bool partialCompare)
+{
+  int cmp = 0;
+  while (left && !IsFieldEnd(*left) && right && !IsFieldEnd(*right) && !cmp)
+  {
+    if (IsPathSeparator(*left) && IsPathSeparator(*right))
+    {
+      while (IsPathSeparator(*(++right)));
+      while (IsPathSeparator(*(++left)));
+    }
+    else if (!(cmp = CharCmp(*left, *right, CaseInsensitive)))
+    {
+      ++left;
+      ++right;
+    }
+  }
+
+  int leftChar = left && !IsFieldEnd(*left) ? *left : 0;
+  leftChar = IsPathSeparator(leftChar) ? '\\' : leftChar;
+  int rightChar = right && !IsFieldEnd(*right) ? *right : 0;
+  rightChar = partialCompare && !leftChar ? 0 : rightChar;
+  rightChar = IsPathSeparator(rightChar) ? '\\' : rightChar;
+  return CharCmp(leftChar, rightChar, CaseInsensitive);
+}
+
+int PathCompare(char const* left, char const* right)
+{
+  return PathCompare(left, right, FullCompare);
+}
+
 int LinesCmp(const void* v1,const void* v2)
 {
   LineInfo *a=*(LineInfo**)v1;
@@ -366,7 +396,7 @@ int FilesCmp(const void* v1,const void* v2)
 {
   LineInfo *a=*(LineInfo**)v1;
   LineInfo *b=*(LineInfo**)v2;
-  return FieldCmp(a->fn,b->fn,true);
+  return PathCompare(a->fn,b->fn);
 }
 
 int ClsCmp(const void* v1,const void* v2)
@@ -378,7 +408,7 @@ int ClsCmp(const void* v1,const void* v2)
 
 static bool PathsEqual(LineInfo const* left, LineInfo const* right)
 {
-  return !FieldCmp(left->fn, right->fn, CaseInsensitive);
+  return !PathCompare(left->fn, right->fn);
 }
 
 static char const* GetFilename(char const* path)
@@ -394,29 +424,6 @@ static char const* GetFilename(char const* path)
 static int FilenameCmp(void const* left, void const* right)
 {
   return FieldCmp(GetFilename((*static_cast<LineInfo* const*>(left))->fn), GetFilename((*static_cast<LineInfo* const*>(right))->fn));
-}
-
-//TODO: path comparation must be reworked
-static int CompareFilenames(char const* left, char const* &right, size_t len)
-{
-  int cmp = 0;
-  while (len > 0)
-  {
-    if (IsPathSeparator(*left) && IsPathSeparator(*right))
-    {
-      while (IsPathSeparator(*(right + 1)))
-        ++right;
-    }
-    else if ((cmp = CharCmp(*left, *right, CaseInsensitive)) != 0)
-    {
-      return cmp;
-    }
-    --len;
-    ++left;
-    ++right;
-  }
-
-  return 0;
 }
 
 static char const* FindClassFullQualification(char const* str)
@@ -707,7 +714,7 @@ char const* TagFileInfo::GetRelativePath(char const* fileName) const
   if (reporoot.empty() || IsPathSeparator(reporoot.back()))
     throw std::logic_error("Invalid reporoot");
 
-  if (!!CompareFilenames(reporoot.c_str(), fileName, reporoot.length()) || (*fileName && !IsPathSeparator(*fileName)))
+  if (!!PathCompare(reporoot.c_str(), fileName, PartialCompare) || (*fileName && !IsPathSeparator(*fileName)))
     return nullptr;
 
   for (; IsPathSeparator(*fileName); ++fileName);
@@ -722,7 +729,7 @@ std::string TagFileInfo::GetFullPath(std::string const& relativePath) const
 bool TagFileInfo::HasName(char const* fileName) const
 {
   // filename.back() is not path separator
-  return !CompareFilenames(filename.c_str(), fileName, filename.length()) && !*fileName;
+  return !PathCompare(filename.c_str(), fileName);
 }
 
 //TODO: rework: must return error instead of message id (message id coud be zero)
@@ -738,100 +745,6 @@ int Load(const char* filename, size_t& symbolsLoaded)
 
   symbolsLoaded = fi->offsets.Count();
   return 0;
-}
-
-void FindFile(TagFileInfo* fi,const char* filename,std::vector<TagInfo>& result)
-{
-  FILE *g=fi->OpenIndex();
-  if(!g)return;
-  char filePathSeparator = '\\';
-  if (!ReadSignature(g))
-    throw std::logic_error("Signature must be valid");
-
-  fseek(g, sizeof(time_t), SEEK_CUR);
-  std::string repoRoot;
-  if (!ReadRepoRoot(g, repoRoot))
-    throw std::logic_error("Reporoot must be valid");
-
-  int sz;
-  fread(&sz,4,1,g);
-  fseek(g,4+sz*4+sizeof(IndexFileSignature)+sizeof(uint32_t)+repoRoot.length()+sizeof(time_t),SEEK_SET);
-  Vector<int> offsets;
-  offsets.Init(sz);
-  if(sz)fread(&offsets[0],4,sz,g);
-  fclose(g);
-  FILE *f=fi->OpenTags();
-  if(!f)return;
-
-  int len=strlen(filename);
-  int left=0;
-  int right=offsets.Count()-1;
-  int cmp=1;
-  int pos;
-  char const*file;
-  while(left<=right)
-  {
-    pos=(right+left)/2;
-    fseek(f,offsets[pos],SEEK_SET);
-    fgets(strbuf,sizeof(strbuf),f);
-    file=strchr(strbuf,'\t')+1;
-    cmp=CompareFilenames(filename,file,len);
-    if(!cmp && *file=='\t')
-    {
-      break;
-    }else if(cmp<=0)
-    {
-      right=pos-1;
-    }else
-    {
-      left=pos+1;
-    }
-  }
-  if(!cmp && *file=='\t')
-  {
-    int endpos=pos;
-    while(pos>0)
-    {
-      fseek(f,offsets[pos-1],SEEK_SET);
-      fgets(strbuf,sizeof(strbuf),f);
-      file=strchr(strbuf,'\t')+1;
-      if(!CompareFilenames(filename,file,len) && *file=='\t')
-      {
-        pos--;
-      }else
-      {
-        break;
-      }
-    }
-    while(endpos<offsets.Count()-1)
-    {
-      fseek(f,offsets[endpos+1],SEEK_SET);
-      fgets(strbuf,sizeof(strbuf),f);
-      file=strchr(strbuf,'\t')+1;
-      if(!CompareFilenames(filename,file,len) && *file=='\t')
-      {
-        endpos++;
-      }else
-      {
-        break;
-      }
-    }
-    std::set<std::string> lines;
-    int i;
-    for(i=pos;i<=endpos;i++)
-    {
-      fseek(f,offsets[i],SEEK_SET);
-      fgets(strbuf,sizeof(strbuf),f);
-      lines.insert(strbuf);
-    }
-    for(auto const& line : lines)
-    {
-      std::unique_ptr<TagInfo> tag(ParseLine(line.c_str(), *fi));
-      if (tag)
-        result.push_back(*tag);
-    }
-  }
-  fclose(f);
 }
 
 class MatchVisitor
@@ -909,6 +822,26 @@ public:
       throw std::runtime_error("Tags file modified");
 
     return FieldCompare(GetPattern().c_str(), strbuf, CaseSensitive, FullCompare);
+  }
+};
+
+class PathMatch : public MatchVisitor
+{
+public:
+  PathMatch(char const* path)
+    : MatchVisitor(path)
+  {
+  }
+
+  int Compare(char const*& strbuf) const override
+  {
+    for (; !IsFieldEnd(*strbuf); ++strbuf);
+    if (!*strbuf)
+    //TODO: replace with Error(MNotTagFile)
+      throw std::runtime_error("Invalid tags file format");
+
+    ++strbuf;
+    return PathCompare(GetPattern().c_str(), strbuf, FullCompare);
   }
 };
 
@@ -1092,6 +1025,30 @@ std::vector<TagInfo> FindClassMembers(const char* file, const char* classname)
   return result;
 }
 
+void FindFileSymbolsImpl(TagFileInfo* fi, const char* path, std::vector<TagInfo>& result)
+{
+  FILE *g=fi->OpenIndex();
+  if(!g)return;
+  char filePathSeparator = '\\';
+  if (!ReadSignature(g))
+    throw std::logic_error("Signature must be valid");
+
+  fseek(g, sizeof(time_t), SEEK_CUR);
+  std::string repoRoot;
+  if (!ReadRepoRoot(g, repoRoot))
+    throw std::logic_error("Reporoot must be valid");
+
+  int sz;
+  fread(&sz,4,1,g);
+  fseek(g,4+sz*4+sizeof(IndexFileSignature)+sizeof(uint32_t)+repoRoot.length()+sizeof(time_t),SEEK_SET);
+  Vector<int> offsets;
+  offsets.Init(sz);
+  if(sz)fread(&offsets[0],4,sz,g);
+  fclose(g);
+  auto tags = GetMatchedTags(fi, offsets, PathMatch(path), 0);
+  std::move(tags.begin(), tags.end(), std::back_inserter(result)); 
+}
+
 std::vector<TagInfo> FindFileSymbols(const char* file)
 {
   std::vector<TagInfo> result;
@@ -1101,7 +1058,7 @@ std::vector<TagInfo> FindFileSymbols(const char* file)
     if (!relativePath || !*relativePath)
       continue;
 
-    FindFile(repos.get(), repos->IsFullPathRepo() ? file : relativePath, result);
+    FindFileSymbolsImpl(repos.get(), repos->IsFullPathRepo() ? file : relativePath, result);
   }
 
   return result;
