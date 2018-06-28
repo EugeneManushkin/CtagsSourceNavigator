@@ -326,6 +326,11 @@ struct LineInfo{
   char const *cls;
 };
 
+static bool CaseInsensitive = true;
+static bool CaseSensitive = !CaseInsensitive;
+static bool PartialCompare = true;
+static bool FullCompare = !PartialCompare;
+
 inline bool IsFieldEnd(char c)
 {
   return !c || c == '\r' || c == '\n' || c == '\t';
@@ -336,12 +341,18 @@ inline int CharCmp(int left, int right, bool caseInsensitive)
   return caseInsensitive ? tolower(left) - tolower(right) : left - right;
 }
 
-int FieldCmp(char const* left, char const* right, bool caseInsensitive = false)
+int FieldCompare(char const* left, char const*& right, bool caseInsensitive, bool partialCompare)
 {
   for (; left && !IsFieldEnd(*left) && right && !IsFieldEnd(*right) && !CharCmp(*left, *right, caseInsensitive); ++left, ++right);
   int leftChar = left && !IsFieldEnd(*left) ? *left : 0;
   int rightChar = right && !IsFieldEnd(*right) ? *right : 0;
+  rightChar = partialCompare && !leftChar ? 0 : rightChar;
   return CharCmp(leftChar, rightChar, caseInsensitive);
+}
+
+int FieldCmp(char const* left, char const* right, bool caseInsensitive = CaseSensitive)
+{
+  return FieldCompare(left, right, caseInsensitive, FullCompare);
 }
 
 int LinesCmp(const void* v1,const void* v2)
@@ -367,7 +378,7 @@ int ClsCmp(const void* v1,const void* v2)
 
 static bool PathsEqual(LineInfo const* left, LineInfo const* right)
 {
-  return !FieldCmp(left->fn, right->fn, true);
+  return !FieldCmp(left->fn, right->fn, CaseInsensitive);
 }
 
 static char const* GetFilename(char const* path)
@@ -396,7 +407,7 @@ static int CompareFilenames(char const* left, char const* &right, size_t len)
       while (IsPathSeparator(*(right + 1)))
         ++right;
     }
-    else if ((cmp = CharCmp(*left, *right, true)) != 0)
+    else if ((cmp = CharCmp(*left, *right, CaseInsensitive)) != 0)
     {
       return cmp;
     }
@@ -451,10 +462,10 @@ char const* GetLine(char const* &str, std::string& buffer, FILE *f)
   return str;
 }
 
-void GetLine(std::string& buffer, FILE *f)
+char const* GetLine(std::string& buffer, FILE *f)
 {
   char const* tmp = 0;
-  GetLine(tmp, buffer, f);
+  return GetLine(tmp, buffer, f);
 }
 
 static std::string GetIntersection(char const* left, char const* right)
@@ -826,141 +837,79 @@ void FindFile(TagFileInfo* fi,const char* filename,std::vector<TagInfo>& result)
 class MatchVisitor
 {
 public:
-  virtual bool Empty() const = 0;
-  virtual int Compare(std::string const& str) const = 0;
-  virtual bool ExactMatch(std::string const& str) const = 0;
+  MatchVisitor(std::string const& pattern)
+    : Pattern(pattern)
+  {
+  }
+
+  virtual ~MatchVisitor() = default;
+
+  std::string const& GetPattern() const
+  {
+    return Pattern;
+  }
+
+  virtual int Compare(char const*& strbuf) const = 0;
+
+private:
+  std::string Pattern;
 };
 
 class NameMatch : public MatchVisitor
 {
 public:
-  NameMatch(char const* name)
-    : Name(name)
+  NameMatch(char const* name, bool comparationType)
+    : MatchVisitor(name)
+    , ComparationType(comparationType)
   {
-    if (Name.empty())
-      throw std::invalid_argument("Empty name");
-  }
-  
-  bool Empty() const
-  {
-    return false;
   }
 
-  int Compare(std::string const& strbuf) const
+  int Compare(char const*& strbuf) const override
   {
-    return FieldCmp(Name.c_str(), strbuf.c_str());
-  }
-
-  bool ExactMatch(std::string const& strbuf) const
-  {
-    return true;
+    return FieldCompare(GetPattern().c_str(), strbuf, CaseSensitive, ComparationType);
   }
 
 private:
-  std::string Name;
+  bool ComparationType;
 };
 
-class NamePartialMatch : public MatchVisitor
+class FilenamePatrialMatch : public MatchVisitor
 {
 public:
-  NamePartialMatch(char const* part)
-    : Part(part)
+  FilenamePatrialMatch(char const* part)
+    : MatchVisitor(part)
   {
-  }
-  
-  bool Empty() const
-  {
-    return Part.empty();
   }
 
-  int Compare(std::string const& strbuf) const
+  int Compare(char const*& strbuf) const override
   {
-    return strncmp(Part.c_str(), strbuf.c_str(), Part.length());
-  }
-
-  bool ExactMatch(std::string const& strbuf) const
-  {
-    return strbuf.length() == Part.length() || strbuf[Part.length()] == '\t';
-  }
-
-private:
-  std::string Part;
-};
-
-class FileMatch : public MatchVisitor
-{
-public:
-  FileMatch(char const* part)
-    : Part(part)
-  {
-  }
-  
-  bool Empty() const
-  {
-    return Part.empty();
-  }
-
-  int Compare(std::string const& strbuf) const
-  {
-    //TODO: Rework: all paths must be compared by CompareFilenames
-    return stricmp(Part.c_str(), GetFilenamePart(strbuf, Part.length()).c_str());
-  }
-
-  bool ExactMatch(std::string const& strbuf) const
-  {
-    return GetFilenamePart(strbuf, 0).length() == Part.length();
-  }
-
-private:
-  std::string GetFilenamePart(std::string const& strbuf, size_t maxLength) const
-  {
-    auto pos = strbuf.find('\t');
-    if (pos == std::string::npos || pos == strbuf.length() - 1)
+    for (; !IsFieldEnd(*strbuf); ++strbuf);
+    if (!*strbuf)
     //TODO: replace with Error(MNotTagFile)
       throw std::runtime_error("Invalid tags file format");
 
-    auto fileName = GetFilename(strbuf.c_str() + pos + 1);
-    auto fileNameEnd = std::find(fileName, strbuf.c_str() + strbuf.length(), '\t');
-    auto len = fileNameEnd - fileName;
-    len = !maxLength ? len : std::min<size_t>(len, maxLength);
-    return std::string(fileName, fileName + len);
+    strbuf = GetFilename(++strbuf);
+    return FieldCompare(GetPattern().c_str(), strbuf, CaseInsensitive, PartialCompare);
   }
-
-  std::string Part;
 };
 
 class ClassMemberMatch : public MatchVisitor
 {
 public:
   ClassMemberMatch(char const* classname)
-    : Classname(classname)
+    : MatchVisitor(classname)
   {
-    if (Classname.empty())
-      throw std::invalid_argument("Empty classname");
-  }
-  
-  bool Empty() const
-  {
-    return false;
   }
 
-  int Compare(std::string const& strbuf) const
+  int Compare(char const*& strbuf) const override
   {
-    auto cls = ExtractClassName(FindClassFullQualification(strbuf.c_str()));
-    if (!cls)
+    strbuf = ExtractClassName(FindClassFullQualification(strbuf));
+    if (!strbuf)
       //TODO: throw Error()
       throw std::runtime_error("Tags file modified");
 
-    return FieldCmp(Classname.c_str(), cls);
+    return FieldCompare(GetPattern().c_str(), strbuf, CaseSensitive, FullCompare);
   }
-
-  bool ExactMatch(std::string const& strbuf) const
-  {
-    return true;
-  }
-
-private:
-  std::string Classname;
 };
 
 //TODO: support case insensitive search
@@ -969,19 +918,20 @@ static std::pair<size_t, size_t> GetMatchedOffsetRange(FILE* f, Vector<int> cons
   if (!offsets.Count())
     return std::make_pair(0, 0);
 
-  if (visitor.Empty())
+  if (visitor.GetPattern().empty())
     return std::make_pair(0, std::min(static_cast<size_t>(offsets.Count()), maxCount));
 
   size_t pos;
   size_t left=0;
   size_t right=offsets.Count();
   int cmp;
-  std::string strbuf;
+  std::string buffer;
+  char const* strbuf = nullptr;
   while(left < right)
   {
     pos=(right+left)/2;
     fseek(f,offsets[pos],SEEK_SET);
-    GetLine(strbuf,f);
+    strbuf = GetLine(buffer,f);
     cmp=visitor.Compare(strbuf);
     if(!cmp)
     {
@@ -997,15 +947,15 @@ static std::pair<size_t, size_t> GetMatchedOffsetRange(FILE* f, Vector<int> cons
   if(!cmp)
   {
     size_t endpos=pos;
-    size_t exactmatchend=visitor.ExactMatch(strbuf) ? pos + 1 : pos;
+    size_t exactmatchend=IsFieldEnd(*strbuf) ? pos + 1 : pos;
     while(pos>0)
     {
       fseek(f,offsets[pos-1],SEEK_SET);
-      GetLine(strbuf,f);
+      strbuf = GetLine(buffer,f);
       if(!visitor.Compare(strbuf))
       {
         pos--;
-        exactmatchend = !visitor.ExactMatch(strbuf) ? pos : exactmatchend;
+        exactmatchend = !IsFieldEnd(*strbuf) ? pos : exactmatchend;
       }else
       {
         break;
@@ -1014,11 +964,11 @@ static std::pair<size_t, size_t> GetMatchedOffsetRange(FILE* f, Vector<int> cons
     while(endpos<offsets.Count()-1)
     {
       fseek(f,offsets[endpos+1],SEEK_SET);
-      GetLine(strbuf, f);
+      strbuf = GetLine(buffer,f);
       if(!visitor.Compare(strbuf))
       {
         endpos++;
-        exactmatchend = visitor.ExactMatch(strbuf) ? endpos + 1 : exactmatchend;
+        exactmatchend = IsFieldEnd(*strbuf) ? endpos + 1 : exactmatchend;
       }else
       {
         break;
@@ -1052,7 +1002,7 @@ static std::vector<TagInfo> GetMatchedTags(TagFileInfo* fi, Vector<int> const& o
 //TODO: refactor duplicated code: use one function (fi, visitor, result) instead of ...Impl functions
 static void FindImpl(TagFileInfo* fi, const char* name, std::vector<TagInfo>& result)
 {
-  auto tags = GetMatchedTags(fi, fi->offsets, NameMatch(name), 0);
+  auto tags = GetMatchedTags(fi, fi->offsets, NameMatch(name, FullCompare), 0);
   std::move(tags.begin(), tags.end(), std::back_inserter(result));
 }
 
@@ -1065,7 +1015,7 @@ std::vector<TagInfo> Find(const char* name, const char* file)
 
 static void FindPartiallyMatchedTagsImpl(TagFileInfo* fi, const char* part, size_t maxCount, std::vector<TagInfo>& result)
 {
-  auto tags = GetMatchedTags(fi, fi->offsets, NamePartialMatch(part), maxCount);
+  auto tags = GetMatchedTags(fi, fi->offsets, NameMatch(part, PartialCompare), maxCount);
   std::move(tags.begin(), tags.end(), std::back_inserter(result));
 }
 
@@ -1099,7 +1049,7 @@ void FindPartiallyMatchedFileImpl(TagFileInfo* fi, const char* part, size_t maxC
   offsets.Init(uniqueFilesCount);
   if(uniqueFilesCount)fread(&offsets[0],4,uniqueFilesCount,g);
   fclose(g);
-  auto tags = GetMatchedTags(fi, offsets, FileMatch(part), maxCount);
+  auto tags = GetMatchedTags(fi, offsets, FilenamePatrialMatch(part), maxCount);
   std::transform(tags.begin(), tags.end(), std::back_inserter(paths), [](TagInfo const& tag) {return tag.file.Str();}); 
 }
 
