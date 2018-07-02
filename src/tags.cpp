@@ -31,7 +31,6 @@
 #include <windows.h>
 #include "Hash.hpp"
 #include "String.hpp"
-#include "Array.hpp"
 #include "tags.h"
 
 const size_t Config::max_history_len = 100;
@@ -79,6 +78,16 @@ inline bool IsPathSeparator(std::string::value_type c)
     return c == '/' || c == '\\';
 }
 
+using OffsetType = uint32_t;
+using OffsetCont = std::vector<OffsetType>;
+enum class IndexType
+{
+  Names = 0,
+  Paths,
+  Classes,
+  Filenames,
+};
+
 struct TagFileInfo{
   TagFileInfo(char const* fname)
     : filename(fname)
@@ -89,7 +98,7 @@ struct TagFileInfo{
       throw std::logic_error("Invalid tags file name");
   }
 
-  Vector<int> offsets;
+  OffsetCont offsets;
 
   char const* GetRelativePath(char const* fileName) const;
 
@@ -113,17 +122,18 @@ struct TagFileInfo{
     return !Load() ? fopen(filename.c_str(), "rb") : nullptr;
   }
 
-  FILE* OpenIndex()
-  {
-    modtm = !FileExists(indexFile.c_str()) ? 0 : modtm;
-    return !Load() ? fopen(indexFile.c_str(), "rb") : nullptr;
-  }
+  OffsetCont GetOffsets(IndexType type);
 
   int Load();
 
 private:
   int CreateIndex(time_t tagsModTime);
   bool LoadIndex(time_t tagsModTime);
+  FILE* OpenIndex()
+  {
+    modtm = !FileExists(indexFile.c_str()) ? 0 : modtm;
+    return !Load() ? fopen(indexFile.c_str(), "rb") : nullptr;
+  }
 
   std::string filename;
   std::string indexFile;
@@ -161,7 +171,7 @@ static void ForEachFileRepository(char const* fileFullPath, std::function<void(T
   }
 }
 
-char const IndexFileSignature[] = "tags.idx.v4";
+char const IndexFileSignature[] = "tags.idx.v5";
 
 static bool ReadSignature(FILE* f)
 {
@@ -178,7 +188,7 @@ static bool ReadSignature(FILE* f)
 static bool ReadRepoRoot(FILE* f, std::string& repoRoot)
 {
   uint32_t rootLen = 0;
-  if (fread(&rootLen, 1, sizeof(rootLen), f) != sizeof(rootLen))
+  if (fread(&rootLen, sizeof(rootLen), 1, f) != 1)
     return false;
 
   if (rootLen > 0)
@@ -485,6 +495,54 @@ static std::string GetIntersection(char const* left, char const* right)
   return std::string(begining, left);
 }
 
+static void WriteOffsets(FILE* f, std::vector<LineInfo*>::iterator begin, std::vector<LineInfo*>::iterator end)
+{
+  OffsetType sz = static_cast<OffsetType>(std::distance(begin, end));
+  fwrite(&sz, sizeof(sz), 1, f);
+  for (; begin != end; ++begin)
+  {
+    fwrite(&(*begin)->pos, sizeof((*begin)->pos), 1, f);
+  }
+}
+
+static bool ReadOffsets(FILE* f, OffsetCont& offsets)
+{
+  OffsetType sz;
+  if (fread(&sz, sizeof(sz), 1, f) != 1)
+    return false;
+
+  offsets.resize(sz);
+  return !sz ? true : fread(&offsets[0], sizeof(offsets[0]), sz, f) == offsets.size();
+}
+
+OffsetCont TagFileInfo::GetOffsets(IndexType type)
+{
+  FILE *f = OpenIndex();
+  std::shared_ptr<void> fileCloser(0, [&](void*){ fclose(f); });
+  if (!f || !ReadSignature(f))
+    throw std::logic_error("Signature must be valid");
+
+  fseek(f, sizeof(time_t), SEEK_CUR);
+  std::string repoRoot;
+  if (!ReadRepoRoot(f, repoRoot))
+    throw std::logic_error("Reporoot must be valid");
+
+  for (int i = 0; i != static_cast<int>(type); ++i)
+  {
+    OffsetType sz;
+    if (fread(&sz, sizeof(sz), 1, f) != 1)
+      throw std::runtime_error("Invalid file format");
+
+    fseek(f, sizeof(OffsetType) * sz, SEEK_CUR);
+  }
+
+  OffsetCont result;
+  if (!ReadOffsets(f, result))
+    throw std::runtime_error("Invalid file format");
+
+  return result;
+}
+
 int TagFileInfo::CreateIndex(time_t tagsModTime)
 {
   TagFileInfo* fi = this;
@@ -495,11 +553,11 @@ int TagFileInfo::CreateIndex(time_t tagsModTime)
   fseek(f,0,SEEK_END);
   int sz=ftell(f);
   fseek(f,0,SEEK_SET);
-  fi->offsets.Clean();
+  fi->offsets.clear();
 //  fi->offsets.SetSize(sz/80);
-  Vector<LineInfo*> lines;
-  Vector<LineInfo*> classes;
-  lines.SetSize(sz/80);
+  std::vector<LineInfo*> lines;
+  std::vector<LineInfo*> classes;
+  lines.reserve(sz/80);
 
   std::string buffer;
   char const* strbuf;
@@ -559,7 +617,7 @@ int TagFileInfo::CreateIndex(time_t tagsModTime)
     if(strbuf[len-1]==0x0d || strbuf[len-1]==0x0a)len--;
     memcpy(li->line,strbuf,len);
     li->line[len]=0;
-    if(sorted && lines.Count()>1 && strcmp(li->line,lines[-1]->line)<0)
+    if(sorted && lines.size()>1 && strcmp(li->line,lines.back()->line)<0)
     {
       sorted=false;
     }
@@ -570,9 +628,9 @@ int TagFileInfo::CreateIndex(time_t tagsModTime)
     file.Set(li->fn,0,strchr(li->fn,'\t')-li->fn);
     pathIntersection = IsFullPath(file.Str(), file.Length()) ? GetIntersection(pathIntersection.c_str(), file.Str()) : pathIntersection;
     if (li->cls = ExtractClassName(FindClassFullQualification(li->line)))
-      classes.Push(li);
+      classes.push_back(li);
 
-    lines.Push(li);
+    lines.push_back(li);
 //    fi->offsets.Push(pos);
     pos=ftell(f);
   }
@@ -592,16 +650,11 @@ int TagFileInfo::CreateIndex(time_t tagsModTime)
     }
     return 0;
   }
-  if(lines.Count())
-    qsort(&lines[0],lines.Count(),sizeof(LineInfo*),LinesCmp);
+  if(!lines.empty())
+    qsort(&lines[0],lines.size(),sizeof(LineInfo*),LinesCmp);
   //fi->offsets.Clean();
-  fi->offsets.Init(lines.Count());
-  int i;
-  for(i=0;i<lines.Count();i++)
-  {
-    fi->offsets[i]=lines[i]->pos;
-  }
-  int cnt=fi->offsets.Count();
+  fi->offsets.reserve(lines.size());
+  std::transform(lines.begin(), lines.end(), std::back_inserter(fi->offsets), [](LineInfo* line){ return line->pos; });
   fwrite(IndexFileSignature, 1, sizeof(IndexFileSignature), g);
   fwrite(&tagsModTime,sizeof(tagsModTime),1,g);
   uint32_t rootLen = fullpathrepo ? reporoot.length() : 0;
@@ -609,38 +662,22 @@ int TagFileInfo::CreateIndex(time_t tagsModTime)
   if (fullpathrepo)
     fwrite(reporoot.c_str(), 1, reporoot.length(), g);
 
-  fwrite(&cnt,4,1,g);
-  if (fi->offsets.Count())
-    fwrite(&fi->offsets[0],4,fi->offsets.Count(),g);
+  WriteOffsets(g, lines.begin(), lines.end());
+  if(!lines.empty())
+    qsort(&lines[0],lines.size(),sizeof(LineInfo*),FilesCmp);
 
-  if(lines.Count())
-    qsort(&lines[0],lines.Count(),sizeof(LineInfo*),FilesCmp);
-  for(i=0;i<lines.Count();i++)
-  {
-    fwrite(&lines[i]->pos,4,1,g);
-//    free(lines[i].line);
-  }
-  if(classes.Count())
-    qsort(&classes[0],classes.Count(),sizeof(LineInfo*),ClsCmp);
-  sz=classes.Count();
-  fwrite(&sz,4,1,g);
-  for(i=0;i<classes.Count();i++)
-  {
-    fwrite(&classes[i]->pos,4,1,g);
-  }
+  WriteOffsets(g, lines.begin(), lines.end());
+  if(!classes.empty())
+    qsort(&classes[0],classes.size(),sizeof(LineInfo*),ClsCmp);
 
-  uint32_t uniqueFilesCount = 0;
-  if (lines.Count())
+  WriteOffsets(g, classes.begin(), classes.end());
+  auto linesEnd = lines.end();
+  if (!lines.empty())
   {
-    auto linesEnd = std::unique(&lines[0], &lines[0] + lines.Count(), PathsEqual);
-    qsort(&lines[0], linesEnd - &lines[0], sizeof(LineInfo*), FilenameCmp);
-    uniqueFilesCount = static_cast<uint32_t>(linesEnd - &lines[0]);
+    linesEnd = std::unique(lines.begin(), lines.end(), PathsEqual);
+    qsort(&lines[0], std::distance(lines.begin(), linesEnd), sizeof(LineInfo*), FilenameCmp);
   }
-  fwrite(&uniqueFilesCount, sizeof(uniqueFilesCount), 1, g);
-  for(i = 0; i < uniqueFilesCount; i++)
-  {
-    fwrite(&lines[i]->pos, sizeof(lines[i]->pos), 1, g);
-  }
+  WriteOffsets(g, lines.begin(), linesEnd);
 
   delete [] linespool;
   while(poolfirst)
@@ -666,7 +703,6 @@ bool TagFileInfo::LoadIndex(time_t tagsModTime)
     return false;
 
   std::shared_ptr<void> fileCloser(0, [&](void*){ fclose(f); });
-  int sz;
   if(!ReadSignature(f))
     return false;
 
@@ -680,14 +716,9 @@ bool TagFileInfo::LoadIndex(time_t tagsModTime)
 
   fullpathrepo = !reporoot.empty();
   reporoot = reporoot.empty() ? GetDirOfFile(filename) : reporoot;
-  fread(&sz,4,1,f);
-  fi->offsets.Clean();
-  fi->offsets.Init(sz);
-  if (sz > 0)
-    fread(&fi->offsets[0],4,sz,f);
-
+  bool result = ReadOffsets(f, fi->offsets);
   fclose(f);
-  return true;
+  return result;
 }
 
 int TagFileInfo::Load()
@@ -743,7 +774,7 @@ int Load(const char* filename, size_t& symbolsLoaded)
   if (iter == files.end())
     files.push_back(fi);
 
-  symbolsLoaded = fi->offsets.Count();
+  symbolsLoaded = fi->offsets.size();
   return 0;
 }
 
@@ -846,17 +877,17 @@ public:
 };
 
 //TODO: support case insensitive search
-static std::pair<size_t, size_t> GetMatchedOffsetRange(FILE* f, Vector<int> const& offsets, MatchVisitor const& visitor, size_t maxCount)
+static std::pair<size_t, size_t> GetMatchedOffsetRange(FILE* f, OffsetCont const& offsets, MatchVisitor const& visitor, size_t maxCount)
 {
-  if (!offsets.Count())
+  if (offsets.empty())
     return std::make_pair(0, 0);
 
   if (visitor.GetPattern().empty())
-    return std::make_pair(0, std::min(static_cast<size_t>(offsets.Count()), maxCount));
+    return std::make_pair(0, std::min(static_cast<size_t>(offsets.size()), maxCount));
 
   size_t pos;
   size_t left=0;
-  size_t right=offsets.Count();
+  size_t right=offsets.size();
   int cmp;
   std::string buffer;
   char const* strbuf = nullptr;
@@ -894,7 +925,7 @@ static std::pair<size_t, size_t> GetMatchedOffsetRange(FILE* f, Vector<int> cons
         break;
       }
     }
-    while(endpos<offsets.Count()-1)
+    while(endpos<offsets.size()-1)
     {
       fseek(f,offsets[endpos+1],SEEK_SET);
       strbuf = GetLine(buffer,f);
@@ -913,7 +944,7 @@ static std::pair<size_t, size_t> GetMatchedOffsetRange(FILE* f, Vector<int> cons
   return std::make_pair(0, 0);
 }
 
-static std::vector<TagInfo> GetMatchedTags(TagFileInfo* fi, Vector<int> const& offsets, MatchVisitor const& visitor, size_t maxCount)
+static std::vector<TagInfo> GetMatchedTags(TagFileInfo* fi, OffsetCont const& offsets, MatchVisitor const& visitor, size_t maxCount)
 {
   std::vector<TagInfo> result;
   FILE *f=fi->OpenTags();
@@ -961,27 +992,7 @@ std::vector<TagInfo> FindPartiallyMatchedTags(const char* file, const char* part
 
 void FindPartiallyMatchedFileImpl(TagFileInfo* fi, const char* part, size_t maxCount, std::vector<std::string>& paths)
 {
-  FILE *g=fi->OpenIndex();
-  if(!g)return;
-  int sz;
-  if (!ReadSignature(g))
-    throw std::logic_error("Signature must be valid");
-
-  fseek(g,sizeof(time_t),SEEK_CUR);
-  std::string repoRoot;
-  if (!ReadRepoRoot(g, repoRoot))
-    throw std::logic_error("Reporoot must be valid");
-
-  fread(&sz,4,1,g);
-  fseek(g,4+sz*4*2+sizeof(IndexFileSignature)+sizeof(uint32_t)+repoRoot.length()+sizeof(time_t),SEEK_SET);
-  fread(&sz,4,1,g);
-  fseek(g,sz*4,SEEK_CUR);
-  uint32_t uniqueFilesCount = 0;
-  fread(&uniqueFilesCount,4,1,g);
-  Vector<int> offsets;
-  offsets.Init(uniqueFilesCount);
-  if(uniqueFilesCount)fread(&offsets[0],4,uniqueFilesCount,g);
-  fclose(g);
+  auto offsets = fi->GetOffsets(IndexType::Filenames);
   auto tags = GetMatchedTags(fi, offsets, FilenamePatrialMatch(part), maxCount);
   std::transform(tags.begin(), tags.end(), std::back_inserter(paths), [](TagInfo const& tag) {return tag.file.Str();}); 
 }
@@ -996,24 +1007,7 @@ std::vector<std::string> FindPartiallyMatchedFile(const char* file, const char* 
 
 static void FindClassMembersImpl(TagFileInfo* fi, const char* classname, std::vector<TagInfo>& result)
 {
-  FILE *g=fi->OpenIndex();
-  if(!g)return;
-  int sz;
-  if (!ReadSignature(g))
-    throw std::logic_error("Signature must be valid");
-
-  fseek(g,sizeof(time_t),SEEK_CUR);
-  std::string repoRoot;
-  if (!ReadRepoRoot(g, repoRoot))
-    throw std::logic_error("Reporoot must be valid");
-
-  fread(&sz,4,1,g);
-  fseek(g,4+sz*4*2+sizeof(IndexFileSignature)+sizeof(uint32_t)+repoRoot.length()+sizeof(time_t),SEEK_SET);
-  fread(&sz,4,1,g);
-  Vector<int> offsets;
-  offsets.Init(sz);
-  if(sz)fread(&offsets[0],4,sz,g);
-  fclose(g);
+  auto offsets = fi->GetOffsets(IndexType::Classes);
   auto tags = GetMatchedTags(fi, offsets, ClassMemberMatch(classname), 0);
   std::move(tags.begin(), tags.end(), std::back_inserter(result));
 }
@@ -1027,24 +1021,7 @@ std::vector<TagInfo> FindClassMembers(const char* file, const char* classname)
 
 void FindFileSymbolsImpl(TagFileInfo* fi, const char* path, std::vector<TagInfo>& result)
 {
-  FILE *g=fi->OpenIndex();
-  if(!g)return;
-  char filePathSeparator = '\\';
-  if (!ReadSignature(g))
-    throw std::logic_error("Signature must be valid");
-
-  fseek(g, sizeof(time_t), SEEK_CUR);
-  std::string repoRoot;
-  if (!ReadRepoRoot(g, repoRoot))
-    throw std::logic_error("Reporoot must be valid");
-
-  int sz;
-  fread(&sz,4,1,g);
-  fseek(g,4+sz*4+sizeof(IndexFileSignature)+sizeof(uint32_t)+repoRoot.length()+sizeof(time_t),SEEK_SET);
-  Vector<int> offsets;
-  offsets.Init(sz);
-  if(sz)fread(&offsets[0],4,sz,g);
-  fclose(g);
+  auto offsets = fi->GetOffsets(IndexType::Paths);
   auto tags = GetMatchedTags(fi, offsets, PathMatch(path), 0);
   std::move(tags.begin(), tags.end(), std::back_inserter(result)); 
 }
