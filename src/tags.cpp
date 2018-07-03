@@ -161,16 +161,6 @@ static std::string GetDirOfFile(std::string const& filePath)
     return !pos || pos == std::string::npos ? std::string() : filePath.substr(0, pos);
 }
 
-static void ForEachFileRepository(char const* fileFullPath, std::function<void(TagFileInfo*)> func)
-{
-  std::vector<TagFileInfoPtr> result;
-  for (auto const& repos : files)
-  {
-    if (repos->GetRelativePath(fileFullPath))
-      func(repos.get());
-  }
-}
-
 char const IndexFileSignature[] = "tags.idx.v5";
 
 static bool ReadSignature(FILE* f)
@@ -963,67 +953,43 @@ static std::vector<TagInfo> GetMatchedTags(TagFileInfo* fi, OffsetCont const& of
   return result;
 }
 
-//TODO: refactor duplicated code: use one function (fi, visitor, result) instead of ...Impl functions
-static void FindImpl(TagFileInfo* fi, const char* name, std::vector<TagInfo>& result)
+static std::vector<TagInfo> ForEachFileRepository(char const* fileFullPath, IndexType index, MatchVisitor const& visitor, size_t maxCount)
 {
-  auto tags = GetMatchedTags(fi, fi->offsets, NameMatch(name, FullCompare), 0);
-  std::move(tags.begin(), tags.end(), std::back_inserter(result));
+  std::vector<TagInfo> result;
+  for (auto const& repos : files)
+  {
+    if (!repos->GetRelativePath(fileFullPath))
+      continue;
+
+    auto tags = GetMatchedTags(repos.get(), index == IndexType::Names ? repos->offsets : repos->GetOffsets(index), visitor, maxCount);
+    std::move(tags.begin(), tags.end(), std::back_inserter(result));
+  }
+
+  return result;
 }
 
 std::vector<TagInfo> Find(const char* name, const char* file)
 {
-  std::vector<TagInfo> result;
-  ForEachFileRepository(file, std::bind(FindImpl, std::placeholders::_1, name, std::ref(result)));
-  return result;
-}
-
-static void FindPartiallyMatchedTagsImpl(TagFileInfo* fi, const char* part, size_t maxCount, std::vector<TagInfo>& result)
-{
-  auto tags = GetMatchedTags(fi, fi->offsets, NameMatch(part, PartialCompare), maxCount);
-  std::move(tags.begin(), tags.end(), std::back_inserter(result));
+  return ForEachFileRepository(file, IndexType::Names, NameMatch(name, FullCompare), 0);
 }
 
 std::vector<TagInfo> FindPartiallyMatchedTags(const char* file, const char* part, size_t maxCount)
 {
-  std::vector<TagInfo> result;
-  ForEachFileRepository(file, std::bind(FindPartiallyMatchedTagsImpl, std::placeholders::_1, part, maxCount, std::ref(result)));
-  return result;
-}
-
-void FindPartiallyMatchedFileImpl(TagFileInfo* fi, const char* part, size_t maxCount, std::vector<std::string>& paths)
-{
-  auto offsets = fi->GetOffsets(IndexType::Filenames);
-  auto tags = GetMatchedTags(fi, offsets, FilenamePatrialMatch(part), maxCount);
-  std::transform(tags.begin(), tags.end(), std::back_inserter(paths), [](TagInfo const& tag) {return tag.file.Str();}); 
+  return ForEachFileRepository(file, IndexType::Names, NameMatch(part, PartialCompare), maxCount);
 }
 
 std::vector<std::string> FindPartiallyMatchedFile(const char* file, const char* part, size_t maxCount)
 {
+  auto tags = ForEachFileRepository(file, IndexType::Filenames, FilenamePatrialMatch(part), maxCount);
   std::vector<std::string> result;
-  ForEachFileRepository(file, std::bind(FindPartiallyMatchedFileImpl, std::placeholders::_1, part, maxCount, std::ref(result)));
+  std::transform(tags.begin(), tags.end(), std::back_inserter(result), [](TagInfo const& tag) {return tag.file.Str();}); 
   std::sort(result.begin(), result.end());
   return result;
 }
 
-static void FindClassMembersImpl(TagFileInfo* fi, const char* classname, std::vector<TagInfo>& result)
-{
-  auto offsets = fi->GetOffsets(IndexType::Classes);
-  auto tags = GetMatchedTags(fi, offsets, ClassMemberMatch(classname), 0);
-  std::move(tags.begin(), tags.end(), std::back_inserter(result));
-}
-
 std::vector<TagInfo> FindClassMembers(const char* file, const char* classname)
 {
-  std::vector<TagInfo> result;
-  ForEachFileRepository(file, std::bind(FindClassMembersImpl, std::placeholders::_1, classname, std::ref(result)));
-  return result;
-}
-
-void FindFileSymbolsImpl(TagFileInfo* fi, const char* path, std::vector<TagInfo>& result)
-{
-  auto offsets = fi->GetOffsets(IndexType::Paths);
-  auto tags = GetMatchedTags(fi, offsets, PathMatch(path), 0);
-  std::move(tags.begin(), tags.end(), std::back_inserter(result)); 
+  return ForEachFileRepository(file, IndexType::Classes, ClassMemberMatch(classname), 0);
 }
 
 std::vector<TagInfo> FindFileSymbols(const char* file)
@@ -1035,7 +1001,8 @@ std::vector<TagInfo> FindFileSymbols(const char* file)
     if (!relativePath || !*relativePath)
       continue;
 
-    FindFileSymbolsImpl(repos.get(), repos->IsFullPathRepo() ? file : relativePath, result);
+    auto tags = GetMatchedTags(repos.get(), repos->GetOffsets(IndexType::Paths), PathMatch(repos->IsFullPathRepo() ? file : relativePath), 0);
+    std::move(tags.begin(), tags.end(), std::back_inserter(result));
   }
 
   return result;
