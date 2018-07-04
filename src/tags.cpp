@@ -232,7 +232,7 @@ static void QuoteMeta(std::string& str)
     }
   }
   std::string dst;
-  int i=1;
+  size_t i=1;
   dst+=str[0];
   if(str[1]=='^')
   {
@@ -240,7 +240,7 @@ static void QuoteMeta(std::string& str)
     dst+=str[1];
   }
 
-  int j=1;
+  size_t j=1;
   if(str.length() >= 2 && str[str.length() - 2]=='$')j=2;
   for(;i<str.length()-j;i++)
   {
@@ -258,8 +258,7 @@ static void QuoteMeta(std::string& str)
 static void ReplaceSpaces(std::string& str)
 {
   std::string dst;
-  int i;
-  for(i=0;i<str.length();i++)
+  for(size_t i=0;i<str.length();i++)
   {
     if(str[i]==' ')
     {
@@ -571,7 +570,7 @@ int TagFileInfo::CreateIndex(time_t tagsModTime)
   poolfirst=new LIPool(sz/100);
   pool=poolfirst;
   char *linespool=new char[sz+16];
-  int linespoolpos=0;
+  size_t linespoolpos=0;
 
 
   pos=ftell(f);
@@ -585,7 +584,7 @@ int TagFileInfo::CreateIndex(time_t tagsModTime)
       continue;
     }
     li=pool->getNext(pool);
-    int len=strlen(strbuf);
+    auto len=buffer.length();
     li->line=linespool+linespoolpos;
     if(strbuf[len-1]==0x0d || strbuf[len-1]==0x0a)len--;
     memcpy(li->line,strbuf,len);
@@ -625,7 +624,7 @@ int TagFileInfo::CreateIndex(time_t tagsModTime)
   }
   fwrite(IndexFileSignature, 1, sizeof(IndexFileSignature), g);
   fwrite(&tagsModTime,sizeof(tagsModTime),1,g);
-  uint32_t rootLen = fullpathrepo ? reporoot.length() : 0;
+  uint32_t rootLen = static_cast<uint32_t>(fullpathrepo ? reporoot.length() : 0);
   fwrite(&rootLen, 1, sizeof(rootLen), g);
   if (fullpathrepo)
     fwrite(reporoot.c_str(), 1, reporoot.length(), g);

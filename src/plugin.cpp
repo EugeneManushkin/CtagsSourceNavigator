@@ -37,14 +37,13 @@
 #pragma comment(lib,"user32.lib")
 #define _FAR_NO_NAMELESS_UNIONS
 #include <plugin_sdk/plugin.hpp>
-#include "Array.hpp"
 #include "String.hpp"
-#include "List.hpp"
 #include "tags.h"
 #include "RegExp.hpp"
 #include "resource.h"
 
 #include <algorithm>
+#include <deque>
 #include <functional>
 #include <iterator>
 #include <string>
@@ -70,13 +69,13 @@ Config config;
 
 struct SUndoInfo{
   String file;
-  int line;
-  int pos;
-  int top;
-  int left;
+  intptr_t line;
+  intptr_t pos;
+  intptr_t top;
+  intptr_t left;
 };
 
-Array<SUndoInfo> UndoArray;
+std::deque<SUndoInfo> UndoArray;
 
 using WideString = std::basic_string<wchar_t>;
 
@@ -227,23 +226,23 @@ int const MaxMenuWidth = 120;
 
 WideString ToString(std::string const& str, UINT codePage = CP_ACP)
 {
-  auto sz = MultiByteToWideChar(codePage, 0, str.c_str(), str.length(), nullptr, 0);
+  auto sz = MultiByteToWideChar(codePage, 0, str.c_str(), static_cast<int>(str.length()), nullptr, 0);
   if (!sz)
     return WideString();
 
   std::vector<wchar_t> buffer(sz);
-  MultiByteToWideChar(codePage, 0, str.c_str(), str.length(), &buffer[0], sz);
+  MultiByteToWideChar(codePage, 0, str.c_str(), static_cast<int>(str.length()), &buffer[0], sz);
   return WideString(buffer.begin(), buffer.end());
 }
 
 std::string ToStdString(WideString const& str, UINT codePage = CP_ACP)
 {
-  auto sz = WideCharToMultiByte(codePage, 0, str.c_str(), str.length(), nullptr, 0, nullptr, nullptr);
+  auto sz = WideCharToMultiByte(codePage, 0, str.c_str(), static_cast<int>(str.length()), nullptr, 0, nullptr, nullptr);
   if (!sz)
     return std::string();
 
   std::vector<char> buffer(sz);
-  WideCharToMultiByte(codePage, 0, str.c_str(), str.length(), &buffer[0], sz, nullptr, nullptr);
+  WideCharToMultiByte(codePage, 0, str.c_str(), static_cast<int>(str.length()), &buffer[0], sz, nullptr, nullptr);
   return std::string(buffer.begin(), buffer.end());
 }
 
@@ -885,9 +884,7 @@ using MenuList = std::list<MI>;
 //TODO: consider pass const& lst
 int Menu(const wchar_t *title,MenuList& lst,int sel,int flags=MF_LABELS,const void* param=NULL)
 {
-  Vector<FarMenuItem> menu;
-  size_t const lstSize = lst.size();
-  menu.Init(lstSize);
+  std::vector<FarMenuItem> menu(lst.size());
   wchar_t const labels[]=L"1234567890ABCDEFGHIJKLMNOPQRSTUVWXYZ";
   int const labelsCount=sizeof(labels)-1;
   ZeroMemory(&menu[0],sizeof(FarMenuItem)*lst.size());
@@ -911,9 +908,9 @@ int Menu(const wchar_t *title,MenuList& lst,int sel,int flags=MF_LABELS,const vo
     menu[i].Flags |= lstItem.IsDisabled() ? MIF_DISABLE | MIF_GRAYED : 0;
     ++i;
   }
-    WideString bottomText = flags&MF_SHOWCOUNT ? GetMsg(MItemsCount) + ToString(std::to_string(lstSize)) : L"";
-    int res=I.Menu(&PluginGuid, &CtagsMenuGuid, -1, -1, 0, FMENU_WRAPMODE, title, bottomText.c_str(),
-                   L"content",NULL,NULL,&menu[0],lstSize);
+    WideString bottomText = flags&MF_SHOWCOUNT ? GetMsg(MItemsCount) + ToString(std::to_string(lst.size())) : L"";
+    auto res=I.Menu(&PluginGuid, &CtagsMenuGuid, -1, -1, 0, FMENU_WRAPMODE, title, bottomText.c_str(),
+                   L"content",NULL,NULL,&menu[0],lst.size());
     if (res == -1)
       return -1;
 
@@ -972,10 +969,7 @@ bool IsCtrlC(FarKey const& key)
 
 int FilterMenu(const wchar_t *title,MenuList const& lst,int sel,int flags=MF_LABELS,const void* param=NULL)
 {
-  Vector<FarMenuItem> menu;
-  size_t const lstSize = lst.size();
-  menu.Init(lstSize);
-
+    std::vector<FarMenuItem> menu(lst.size());
     String filter=param?(char*)param:"";
     std::string filterkeys = "1234567890abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_$\\\x08-_=|;':\",./<>?[]*&^%#@!~";
     std::vector<FarKey> fk = GetFarKeys(filterkeys);
@@ -1008,7 +1002,7 @@ int FilterMenu(const wchar_t *title,MenuList const& lst,int sel,int flags=MF_LAB
       intptr_t bkey;
       WideString ftitle = filter.Length() > 0 ? L"[Filter: " + ToString(filter.Str()) + L"]" : WideString(L" [") + title + L"]";
       WideString bottomText = flags&MF_SHOWCOUNT ? GetMsg(MItemsCount) + ToString(std::to_string(j)) : L"";
-      int res = I.Menu(&PluginGuid, &CtagsMenuGuid,-1,-1,0,FMENU_WRAPMODE|FMENU_SHOWAMPERSAND,ftitle.c_str(),
+      auto res = I.Menu(&PluginGuid, &CtagsMenuGuid,-1,-1,0,FMENU_WRAPMODE|FMENU_SHOWAMPERSAND,ftitle.c_str(),
                        bottomText.c_str(),L"content",&fk[0],&bkey,&menu[0],j);
       if(res==-1 && bkey==-1)return -1;
       if(bkey==-1)
@@ -1022,7 +1016,7 @@ int FilterMenu(const wchar_t *title,MenuList const& lst,int sel,int flags=MF_LAB
 
         return -1;
       }
-      if (bkey >= filterkeys.length())
+      if (static_cast<size_t>(bkey) >= filterkeys.length())
       {
         filter += GetClipboardText().c_str();
         continue;
@@ -1034,7 +1028,6 @@ int FilterMenu(const wchar_t *title,MenuList const& lst,int sel,int flags=MF_LAB
         continue;
       }
       filter+=(char)key;
-      sel=res;
     }
 
   return -1;
@@ -1043,15 +1036,15 @@ int FilterMenu(const wchar_t *title,MenuList const& lst,int sel,int flags=MF_LAB
 String TrimFilename(const String& file,int maxlength)
 {
   if(file.Length()<=maxlength)return file;
-  size_t const prefixLen = 3;
+  int const prefixLen = 3;
   String const junction = "...";
-  size_t const beginingLen = prefixLen + junction.Length();
+  int const beginingLen = prefixLen + junction.Length();
   return maxlength > beginingLen ? file.Substr(0, prefixLen) + junction + file.Substr(file.Length() - maxlength + beginingLen)
                                  : file.Substr(file.Length() - maxlength);
 }
 
 //TODO: rework
-WideString FormatTagInfo(TagInfo const& ti, int maxid, int maxDeclaration, int maxfile, bool displayFile)
+WideString FormatTagInfo(TagInfo const& ti, size_t maxid, size_t maxDeclaration, size_t maxfile, bool displayFile)
 {
   std::string declaration = ti.declaration.substr(0, maxDeclaration);
   String s;
@@ -1062,23 +1055,10 @@ WideString FormatTagInfo(TagInfo const& ti, int maxid, int maxDeclaration, int m
   if (displayFile || ti.lineno >= 0)
   {
     auto lineNumber = ti.lineno >= 0 ? ":" + std::to_string(ti.lineno + 1) : std::string();
-    s += String(" ") + TrimFilename((displayFile ? String(ti.file.c_str()) : String("Line")) + lineNumber.c_str(),maxfile);
+    s += String(" ") + TrimFilename((displayFile ? String(ti.file.c_str()) : String("Line")) + lineNumber.c_str(), static_cast<int>(maxfile));
   }
 
   return ToString(s.Str());
-}
-
-//TODO: rework this awful stuff
-void GetMaxParams(std::vector<TagInfo> const& ta, int& maxid, int& maxDeclaration)
-{
-  maxid=0;
-  maxDeclaration=0;
-  for (auto const& ti : ta)
-  {
-    if(ti.name.length()>maxid)maxid=ti.name.length();
-    if(ti.declaration.length()>maxDeclaration)maxDeclaration=ti.declaration.length();
-    //if(ti->file.Length()>maxfile)
-  }
 }
 
 class LookupMenuVisitor
@@ -1098,11 +1078,16 @@ public:
     const int maxInfoWidth = currentWidth / 5;
     Tags = FindPartiallyMatchedTags(file, filter, maxCount);
     //TODO: rework
-    int maxid = 0;
-    int maxinfo = 0;
-    GetMaxParams(Tags, maxid, maxinfo);
-    maxinfo = std::min(maxinfo, maxInfoWidth);
-    int maxfile = currentWidth - 8 - maxid - maxinfo - 1 - 1 - 1 - 1;
+    size_t maxid = 0;
+    size_t maxinfo = 0;   
+    for (auto const& ti : Tags)
+    {
+      if(ti.name.length()>maxid)maxid=ti.name.length();
+      if(ti.declaration.length()>maxinfo)maxinfo=ti.declaration.length();
+    }
+
+    maxinfo = std::min<size_t>(maxinfo, maxInfoWidth);
+    size_t maxfile = currentWidth - 8 - maxid - maxinfo - 1 - 1 - 1 - 1;
     std::vector<WideString> menuStrings;
     for (auto const& i : Tags)
     {
@@ -1178,7 +1163,7 @@ bool LookupTagsMenu(char const* file, size_t maxCount, TagInfo& tag, LookupMenuV
     intptr_t bkey;
     WideString ftitle = filter.Length() > 0 ? L"[Filter: " + ToString(filter.Str()) + L"]" : WideString(L" [") + title + L"]";
     WideString bottomText = L"";
-    int res = I.Menu(&PluginGuid, &CtagsMenuGuid,-1,-1,0,FMENU_WRAPMODE|FMENU_SHOWAMPERSAND,ftitle.c_str(),
+    auto res = I.Menu(&PluginGuid, &CtagsMenuGuid,-1,-1,0,FMENU_WRAPMODE|FMENU_SHOWAMPERSAND,ftitle.c_str(),
                      bottomText.c_str(),L"content",&fk[0],&bkey, menu.empty() ? nullptr : &menu[0],menu.size());
     if(res==-1 && bkey==-1)return false;
     if(bkey==-1)
@@ -1193,7 +1178,7 @@ bool LookupTagsMenu(char const* file, size_t maxCount, TagInfo& tag, LookupMenuV
 
       return false;
     }
-    if (bkey >= filterkeys.length())
+    if (static_cast<size_t>(bkey) >= filterkeys.length())
     {
       filter += GetClipboardText().c_str();
       continue;
@@ -1230,16 +1215,16 @@ static String GetWord(int offset=0)
   EditorGetString egs = {sizeof(EditorGetString)};
   egs.StringNumber=-1;
   I.EditorControl(ei.EditorID, ECTL_GETSTRING, 0, &egs);
-  int pos=ei.CurPos-offset;
+  intptr_t pos=ei.CurPos-offset;
   if(pos<0)pos=0;
   if(pos>egs.StringLength)return "";
   if(!isident(egs.StringText[pos]))return "";
-  int start=pos,end=pos;
+  intptr_t start=pos,end=pos;
   while(start>0 && isident(egs.StringText[start-1]))start--;
   while(end<egs.StringLength-1 && isident(egs.StringText[end+1]))end++;
   if(start==end || (!isident(egs.StringText[start])))return "";
   String rv;
-  rv.Set(ToStdString(egs.StringText).c_str(),start,end-start+1);
+  rv.Set(ToStdString(egs.StringText).c_str(),static_cast<int>(start),static_cast<int>(end-start+1));
   return rv;
 }
 
@@ -1266,7 +1251,7 @@ static String GetWord(int offset=0)
 */
 static void chomp(char* str)
 {
-  int i=strlen(str)-1;
+  auto i=strlen(str)-1;
   while(i>=0 && (unsigned char)str[i]<32)
   {
     str[i]=0;
@@ -1274,7 +1259,7 @@ static void chomp(char* str)
   }
 }
 
-int SetPos(std::string const& filename,int line,int col,int top,int left);
+int SetPos(std::string const& filename,intptr_t line,intptr_t col,intptr_t top,intptr_t left);
 
 static void NotFound(std::string const& fn,int line)
 {
@@ -1284,8 +1269,8 @@ static void NotFound(std::string const& fn,int line)
 
 bool GotoOpenedFile(std::string const& file)
 {
-  int c = I.AdvControl(&PluginGuid, ACTL_GETWINDOWCOUNT, 0, nullptr);
-  for(int i=0;i<c;i++)
+  auto c = I.AdvControl(&PluginGuid, ACTL_GETWINDOWCOUNT, 0, nullptr);
+  for(decltype(c) i=0;i<c;i++)
   {
     WindowInfo wi = {sizeof(WindowInfo)};
     wi.Pos=i;
@@ -1318,7 +1303,7 @@ static void NavigateTo(TagInfo const* info, bool setPanelDir = false)
     ui.pos=ei.CurPos;
     ui.top=ei.TopScreenLine;
     ui.left=ei.LeftPos;
-    UndoArray.Push(ui);
+    UndoArray.push_back(ui);
   }
 
   if (info->name.empty())
@@ -1468,7 +1453,7 @@ static void NavigateTo(TagInfo const* info, bool setPanelDir = false)
   I.EditorControl(ei.EditorID, ECTL_REDRAW, 0, nullptr);
 }
 
-int SetPos(std::string const& filename,int line,int col,int top,int left)
+int SetPos(std::string const& filename,intptr_t line,intptr_t col,intptr_t top,intptr_t left)
 {
   if(!GotoOpenedFile(filename))
   {
@@ -1493,17 +1478,17 @@ static TagInfo const* TagsMenu(std::vector<TagInfo> const& ta, bool displayFile 
 {
   MenuList sm;
   String s;
-  int maxid=0,maxDeclaration=0;
-  const int currentWidth = std::min<intptr_t>(GetFarWidth(), MaxMenuWidth);
-  const int maxDeclarationWidth = currentWidth / 5;
+  size_t maxid=0,maxDeclaration=0;
+  const intptr_t currentWidth = std::min<intptr_t>(GetFarWidth(), MaxMenuWidth);
+  const intptr_t maxDeclarationWidth = currentWidth / 5;
   for(auto const& ti : ta)
   {
     if(ti.name.length()>maxid)maxid=ti.name.length();
     if(ti.declaration.length()>maxDeclaration)maxDeclaration=ti.declaration.length();
     //if(ti->file.Length()>maxfile)
   }
-  maxDeclaration = std::min(maxDeclaration, maxDeclarationWidth);
-  int maxfile=currentWidth-8-maxid-maxDeclaration-1-1-1-1;
+  maxDeclaration = std::min<size_t>(maxDeclaration, maxDeclarationWidth);
+  size_t maxfile=currentWidth-8-maxid-maxDeclaration-1-1-1-1;
   int i = 0;
   for(auto const& ti : ta)
   {
@@ -1523,7 +1508,7 @@ static WideString SelectFromHistory()
     return WideString();
   }
 
-  size_t i = 0;
+  int i = 0;
   MenuList menuList;
   for (auto const& file : VisitedTags)
   {
@@ -1581,8 +1566,9 @@ static std::string SearchTagsFile(std::string const& fileName)
     throw Error(MTagsNotFound);
 
   MenuList lst;
-  for (auto i = foundTags.begin(); i != foundTags.end(); ++i)
-    lst.push_back(MI(*i, std::distance(foundTags.begin(), i)));
+  int i = 0;
+  for (auto const& tagsFile : foundTags)
+    lst.push_back(MI(tagsFile, i++));
 
   auto res = Menu(GetMsg(MSelectTags), lst, 0, 0);
   if (res < 0)
@@ -1668,7 +1654,7 @@ HANDLE WINAPI OpenW(const struct OpenInfo *info)
     MenuList ml = {
         MI(MFindSymbol,miFindSymbol)
       , MI(MCompleteSymbol,miComplete)
-      , MI(MUndoNavigation,miUndo,UndoArray.Count() == 0)
+      , MI(MUndoNavigation,miUndo,UndoArray.empty())
       , MI::Separator()
       , MI(MBrowseClass,miBrowseClass)
       , MI(MBrowseSymbolsInFile,miBrowseFile)
@@ -1713,7 +1699,7 @@ HANDLE WINAPI OpenW(const struct OpenInfo *info)
       }break;
       case miUndo:
       {
-        if(UndoArray.Count()==0)return nullptr;
+        if(UndoArray.empty())return nullptr;
         /*char b[32];
         sprintf(b,"%d",ei.CurState);
         Msg(b);*/
@@ -1722,13 +1708,13 @@ HANDLE WINAPI OpenW(const struct OpenInfo *info)
           I.EditorControl(ei.EditorID, ECTL_QUIT, 0, nullptr);
           I.AdvControl(&PluginGuid, ACTL_COMMIT, 0, nullptr);
         }
-        SUndoInfo ui;
-        UndoArray.Pop(ui);
+        SUndoInfo ui = UndoArray.back();
+        UndoArray.pop_back();
         SetPos(ui.file.Str(),ui.line,ui.pos,ui.top,ui.left);
       }break;
       case miResetUndo:
       {
-        UndoArray.Clean();
+        UndoArray.clear();
       }break;
       case miComplete:
       {
@@ -1953,7 +1939,7 @@ struct InitDialogItem
   unsigned char Type;
   unsigned char X1,Y1,X2,Y2;
   unsigned char Focus;
-  unsigned int Selected;
+  intptr_t Selected;
   unsigned int Flags;
   unsigned char DefaultButton;
   intptr_t MessageID;
@@ -1988,7 +1974,7 @@ static void InitDialogItems(struct InitDialogItem *Init,struct FarDialogItem *It
   }
 }
 
-std::string SelectedToString(int selected)
+std::string SelectedToString(intptr_t selected)
 {
   return !!selected ? "true" : "false";
 }
@@ -2022,7 +2008,7 @@ HANDLE ConfigureDialog = 0;
 //TODO: rework
 InitDialogItem* DlgItems = 0;
 
-WideString get_text(unsigned ctrl_id) {
+WideString get_text(intptr_t ctrl_id) {
   FarDialogItemData item = { sizeof(FarDialogItemData) };
   item.PtrLength = I.SendDlgMessage(ConfigureDialog, DM_GETTEXT, ctrl_id, 0);
   std::vector<wchar_t> buf(item.PtrLength + 1);
