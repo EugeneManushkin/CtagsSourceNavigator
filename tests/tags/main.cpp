@@ -104,9 +104,9 @@ namespace
 
     bool operator == (TagInfo const& tag) const
     {
-      return Name == tag.name.Str()
-          && File.length() <= tag.file.Length()
-          && PathsEqual(File, std::string(tag.file.Str() + tag.file.Length() - File.length()))
+      return Name == tag.name
+          && File.length() <= tag.file.length()
+          && PathsEqual(File, tag.file.substr(tag.file.length() - File.length()))
           && Line == tag.lineno;
     }
 

@@ -37,10 +37,11 @@
 #pragma comment(lib,"user32.lib")
 #define _FAR_NO_NAMELESS_UNIONS
 #include <plugin_sdk/plugin.hpp>
+#include "Array.hpp"
 #include "String.hpp"
 #include "List.hpp"
-#include "XTools.hpp"
 #include "tags.h"
+#include "RegExp.hpp"
 #include "resource.h"
 
 #include <algorithm>
@@ -52,7 +53,7 @@
 #include <map>
 #include <unordered_map>
 
-using std::auto_ptr;
+using namespace XClasses;
 
 static struct PluginStartupInfo I;
 FarStandardFunctions FSF;
@@ -563,7 +564,7 @@ int TagDirectory(WideString const& dir)
   if (!(GetFileAttributesW(dir.c_str()) & FILE_ATTRIBUTE_DIRECTORY))
     throw std::runtime_error("Selected item is not a direcory");
 
-  ExecuteScript(ToString(ExpandEnvString(config.exe.Str())), ToString(config.opt.Str()), dir, WideString(GetMsg(MTagingCurrentDirectory)) + L"\n" + dir);
+  ExecuteScript(ToString(ExpandEnvString(config.exe)), ToString(config.opt), dir, WideString(GetMsg(MTagingCurrentDirectory)) + L"\n" + dir);
   return 1;
 }
 
@@ -667,7 +668,7 @@ static void LoadHistory(std::string const& fileName)
   }
 }
 
-static void SaveHistory(std::string fileName)
+static void SaveHistory(std::string const& fileName)
 {
   std::ofstream file;
   file.exceptions(std::ifstream::goodbit);
@@ -683,14 +684,14 @@ static void SynchronizeTagsHistory(bool force)
 {
   static FileSynchronizer historySynchronizer("", &LoadHistory);
   if (config.history_len > 0)
-    historySynchronizer.Synchronize(ExpandEnvString(config.history_file.Str()), force);
+    historySynchronizer.Synchronize(ExpandEnvString(config.history_file), force);
 }
 
 static void VisitTags(WideString const& tagsFile)
 {
   SynchronizeTagsHistory(false);
   VisitedTags.Access(tagsFile);
-  SaveHistory(ExpandEnvString(config.history_file.Str()));
+  SaveHistory(ExpandEnvString(config.history_file));
 }
 
 static void LoadConfig(std::string const& fileName)
@@ -746,7 +747,7 @@ static void LoadConfig(std::string const& fileName)
     }
   }
 
-  config.history_len = !config.history_file.Length() ? 0 : config.history_len;
+  config.history_len = config.history_file.empty() ? 0 : config.history_len;
   VisitedTags = VisitedTagsLru(config.history_len);
   SynchronizeTagsHistory(true);
 }
@@ -757,14 +758,76 @@ static void SynchronizeConfig()
   configSynchronizer.Synchronize();
 }
 
+//TODO: remove
+static void SaveStrings(std::vector<std::string> const& strings, std::string const& fileName)
+{
+  std::ofstream file;
+  file.exceptions(std::ifstream::goodbit);
+  file.open(fileName);
+  std::shared_ptr<void> fileCloser(0, [&](void*) { file.close(); });
+  for (auto const& str : strings)
+    file << str << std::endl;
+}
+
+//TODO: remove
+static std::vector<std::string> LoadStrings(std::string const& fileName)
+{
+  std::ifstream file;
+  file.exceptions(std::ifstream::goodbit);
+  file.open(fileName);
+  std::shared_ptr<void> fileCloser(0, [&](void*) { file.close(); });
+  std::string buf;
+  std::vector<std::string> result;
+  while (std::getline(file, buf))
+  {
+    if (!buf.empty())
+      result.push_back(buf);
+  }
+
+  return result;
+}
+
+//TODO: remove
+static void Autoload(std::string const& fileName)
+{
+  for(auto const& str : LoadStrings(fileName))
+  {
+    if (str.length() > 1 || str[1] == ':')
+    {
+      size_t symbolsLoaded;
+      Load(str.c_str(), symbolsLoaded);
+    }
+  }
+}
+
+//TODO: remove
 static void LazyAutoload()
 {
   if (config.autoload_changed)
   {
-    Autoload(ExpandEnvString(config.autoload.Str()).c_str());
+    Autoload(ExpandEnvString(config.autoload));
   }
 
   config.autoload_changed = false;
+}
+
+//TODO: remove
+static int AddToAutoload(std::string const& fname)
+{
+  if (!IsTagFile(fname.c_str()))
+    return MNotTagFile;
+
+  auto autoloadFilename = ExpandEnvString(config.autoload);
+  auto strings = LoadStrings(autoloadFilename);
+  for (auto const& str : strings)
+  {
+    if (!fname.compare(str))
+      return 0;
+  }
+  strings.push_back(fname.c_str());
+  SaveStrings(strings, autoloadFilename);
+  config.autoload_changed = true;
+  return 0;
 }
 
 static size_t LoadTagsImpl(std::string const& tagsFile)
@@ -784,27 +847,6 @@ static void LoadTags(std::string const& tagsFile, bool silent)
     InfoMessage(GetMsg(MLoadOk) + WideString(L":") + ToString(std::to_string(symbolsLoaded)));
 
   VisitTags(ToString(tagsFile));
-}
-
-static int AddToAutoload(std::string const& fname)
-{
-  if (!IsTagFile(fname.c_str()))
-    return MNotTagFile;
-
-  auto autoloadFilename = ExpandEnvString(config.autoload.Str());
-  StrList sl;
-  sl.LoadFromFile(autoloadFilename.c_str());
-  for (int i = 0; i<sl.Count(); i++)
-  {
-    if (!fname.compare(sl[i].Str()))
-      return 0;
-  }
-  sl.Insert(fname.c_str());
-  if (!sl.SaveToFile(autoloadFilename.c_str()))
-    return MFailedSaveAutoload;
-
-  config.autoload_changed = true;
-  return 0;
 }
 
 struct MI{
@@ -1011,16 +1053,16 @@ String TrimFilename(const String& file,int maxlength)
 //TODO: rework
 WideString FormatTagInfo(TagInfo const& ti, int maxid, int maxDeclaration, int maxfile, bool displayFile)
 {
-  std::string declaration = ti.declaration.Substr(0, maxDeclaration).Str();
+  std::string declaration = ti.declaration.substr(0, maxDeclaration);
   String s;
-  s.Sprintf("%c:%s%*s %s%*s",ti.type,ti.name.Str(),maxid-ti.name.Length(),"",
+  s.Sprintf("%c:%s%*s %s%*s",ti.type,ti.name.c_str(),maxid-ti.name.length(),"",
     declaration.c_str(),maxDeclaration-declaration.length(),""
   );
 
   if (displayFile || ti.lineno >= 0)
   {
     auto lineNumber = ti.lineno >= 0 ? ":" + std::to_string(ti.lineno + 1) : std::string();
-    s += String(" ") + TrimFilename((displayFile ? ti.file : String("Line")) + lineNumber.c_str(),maxfile);
+    s += String(" ") + TrimFilename((displayFile ? String(ti.file.c_str()) : String("Line")) + lineNumber.c_str(),maxfile);
   }
 
   return ToString(s.Str());
@@ -1033,8 +1075,8 @@ void GetMaxParams(std::vector<TagInfo> const& ta, int& maxid, int& maxDeclaratio
   maxDeclaration=0;
   for (auto const& ti : ta)
   {
-    if(ti.name.Length()>maxid)maxid=ti.name.Length();
-    if(ti.declaration.Length()>maxDeclaration)maxDeclaration=ti.declaration.Length();
+    if(ti.name.length()>maxid)maxid=ti.name.length();
+    if(ti.declaration.length()>maxDeclaration)maxDeclaration=ti.declaration.length();
     //if(ti->file.Length()>maxfile)
   }
 }
@@ -1072,7 +1114,7 @@ public:
 
   virtual std::string GetClipboardText(intptr_t index) const
   {
-    return Tags[index].name.Str();
+    return Tags[index].name;
   }
 
   virtual TagInfo GetTag(intptr_t index) const
@@ -1232,15 +1274,15 @@ static void chomp(char* str)
   }
 }
 
-int SetPos(const char *filename,int line,int col,int top,int left);
+int SetPos(std::string const& filename,int line,int col,int top,int left);
 
-static void NotFound(const char* fn,int line)
+static void NotFound(std::string const& fn,int line)
 {
   if(YesNoCalncelDialog(GetMsg(MNotFoundAsk)) == YesNoCancel::Yes)
   SetPos(fn,line,0,-1,-1);
 }
 
-bool GotoOpenedFile(const char* file)
+bool GotoOpenedFile(std::string const& file)
 {
   int c = I.AdvControl(&PluginGuid, ACTL_GETWINDOWCOUNT, 0, nullptr);
   for(int i=0;i<c;i++)
@@ -1279,25 +1321,23 @@ static void NavigateTo(TagInfo const* info, bool setPanelDir = false)
     UndoArray.Push(ui);
   }
 
-  if (!info->name.Length())
+  if (info->name.empty())
   {
     if (setPanelDir)
-      SelectFile(ToString(info->file.Str()));
+      SelectFile(ToString(info->file));
 
-    if (!GotoOpenedFile(info->file.Str()))
-      SetPos(info->file.Str(), -1, -1, -1, -1);
+    if (!GotoOpenedFile(info->file))
+      SetPos(info->file, -1, -1, -1, -1);
 
     return;
   }
 
-  String file=info->file.Str();
-  file.Replace('/', '\\');
-  int havere=info->re.Length()>0;
+  bool havere=!info->re.empty();
   RegExp& re = RegexInstance;
-  if(havere)re.Compile(info->re);
-  if(!GotoOpenedFile(file))
+  if(havere)re.Compile(info->re.c_str());
+  if(!GotoOpenedFile(info->file))
   {
-    FILE *f=fopen(file,"rt");
+    FILE *f=fopen(info->file.c_str(),"rt");
     if(!f)
     {
       Msg(MEFailedToOpen);
@@ -1322,7 +1362,7 @@ static void NavigateTo(TagInfo const* info, bool setPanelDir = false)
     {
       if(!havere)
       {
-        NotFound(file,info->lineno);
+        NotFound(info->file,info->lineno);
         fclose(f);
         return;
       }
@@ -1340,16 +1380,16 @@ static void NavigateTo(TagInfo const* info, bool setPanelDir = false)
       }
       if(feof(f))
       {
-        NotFound(file,info->lineno);
+        NotFound(info->file,info->lineno);
         fclose(f);
         return;
       }
     }
     fclose(f);
     if (setPanelDir)
-      SelectFile(ToString(info->file.Str()));
+      SelectFile(ToString(info->file));
 
-    I.Editor(ToString(file.Str()).c_str(), L"", 0, 0, -1, -1, EF_NONMODAL, line + 1, 1, CP_DEFAULT);
+    I.Editor(ToString(info->file).c_str(), L"", 0, 0, -1, -1, EF_NONMODAL, line + 1, 1, CP_DEFAULT);
     return;
   }
   EditorSetPosition esp = {sizeof(EditorSetPosition)};
@@ -1385,7 +1425,7 @@ static void NavigateTo(TagInfo const* info, bool setPanelDir = false)
       esp.CurLine=ei.CurLine;
       esp.TopScreenLine=ei.TopScreenLine;
       I.EditorControl(ei.EditorID, ECTL_SETPOSITION, 0, &esp);
-      NotFound(file,info->lineno);
+      NotFound(info->file,info->lineno);
       return;
     }
     line=0;
@@ -1411,13 +1451,13 @@ static void NavigateTo(TagInfo const* info, bool setPanelDir = false)
       esp.CurLine=info->lineno==-1?ei.CurLine:info->lineno-1;
       esp.TopScreenLine=ei.TopScreenLine;
       I.EditorControl(ei.EditorID, ECTL_SETPOSITION, 0, &esp);
-      NotFound(file,info->lineno);
+      NotFound(info->file,info->lineno);
       return;
     }
   }
 
   if (setPanelDir)
-    SelectFile(ToString(info->file.Str()));
+    SelectFile(ToString(info->file));
 
   esp.CurLine=line;
   esp.TopScreenLine=esp.CurLine-1;
@@ -1428,7 +1468,7 @@ static void NavigateTo(TagInfo const* info, bool setPanelDir = false)
   I.EditorControl(ei.EditorID, ECTL_REDRAW, 0, nullptr);
 }
 
-int SetPos(const char *filename,int line,int col,int top,int left)
+int SetPos(std::string const& filename,int line,int col,int top,int left)
 {
   if(!GotoOpenedFile(filename))
   {
@@ -1458,8 +1498,8 @@ static TagInfo const* TagsMenu(std::vector<TagInfo> const& ta, bool displayFile 
   const int maxDeclarationWidth = currentWidth / 5;
   for(auto const& ti : ta)
   {
-    if(ti.name.Length()>maxid)maxid=ti.name.Length();
-    if(ti.declaration.Length()>maxDeclaration)maxDeclaration=ti.declaration.Length();
+    if(ti.name.length()>maxid)maxid=ti.name.length();
+    if(ti.declaration.length()>maxDeclaration)maxDeclaration=ti.declaration.length();
     //if(ti->file.Length()>maxfile)
   }
   maxDeclaration = std::min(maxDeclaration, maxDeclarationWidth);
@@ -1467,7 +1507,7 @@ static TagInfo const* TagsMenu(std::vector<TagInfo> const& ta, bool displayFile 
   int i = 0;
   for(auto const& ti : ta)
   {
-    sm.push_back(MI(FormatTagInfo(ti, maxid, maxDeclaration, maxfile, displayFile), i++, false, ti.name));
+    sm.push_back(MI(FormatTagInfo(ti, maxid, maxDeclaration, maxfile, displayFile), i++, false, ti.name.c_str()));
   }
   int sel=FilterMenu(GetMsg(MSelectSymbol),sm,0,MF_SHOWCOUNT);
   if(sel==-1)return NULL;
@@ -1509,7 +1549,7 @@ static std::vector<WideString> GetDirectoryTags(WideString const& dir)
   if (handle.get() == INVALID_HANDLE_VALUE)
     return result;
 
-  auto tagsMask = ToString(config.tagsmask.Str());
+  auto tagsMask = ToString(config.tagsmask);
   while (FindNextFileW(handle.get(), &fileData))
   {
     auto curFile = JoinPath(dir, fileData.cFileName);
@@ -1604,7 +1644,7 @@ static void Lookup(std::string const& file, bool setPanelDir, LookupMenuVisitor&
 static std::vector<std::string> TagsToStrings(std::vector<TagInfo> const& tags)
 {
   std::vector<std::string> result;
-  std::transform(tags.begin(), tags.end(), std::back_inserter(result), [](TagInfo const& tag) {return tag.name.Str();});
+  std::transform(tags.begin(), tags.end(), std::back_inserter(result), [](TagInfo const& tag) {return tag.name;});
   std::sort(result.begin(), result.end());
   result.erase(std::unique(result.begin(), result.end()), result.end());
   return result;
@@ -1684,7 +1724,7 @@ HANDLE WINAPI OpenW(const struct OpenInfo *info)
         }
         SUndoInfo ui;
         UndoArray.Pop(ui);
-        SetPos(ui.file,ui.line,ui.pos,ui.top,ui.left);
+        SetPos(ui.file.Str(),ui.line,ui.pos,ui.top,ui.left);
       }break;
       case miResetUndo:
       {
@@ -1809,11 +1849,11 @@ HANDLE WINAPI OpenW(const struct OpenInfo *info)
         {
           ml.clear();
           ml.push_back(MI(MAll, 0));
-          StrList l;
-          GetFiles(l);
-          for(int i=0;i<l.Count();i++)
+          auto files = GetFiles();
+          int i = 0;
+          for(auto const& file : files)
           {
-            ml.push_back(MI(l[i], i + 1));
+            ml.push_back(MI(file.c_str(), ++i));
           }
           int rc=Menu(GetMsg(MUnloadTagsFile),ml,0);
           if(rc==-1)return nullptr;
@@ -1888,7 +1928,7 @@ HANDLE WINAPI OpenW(const struct OpenInfo *info)
 HANDLE WINAPI AnalyseW(const AnalyseInfo* info)
 {
   return info->FileName &&
-         FSF.ProcessName(ToString(config.tagsmask.Str()).c_str(), const_cast<wchar_t*>(info->FileName), 0, PN_CMPNAMELIST | PN_SKIPPATH) != 0 &&
+         FSF.ProcessName(ToString(config.tagsmask).c_str(), const_cast<wchar_t*>(info->FileName), 0, PN_CMPNAMELIST | PN_SKIPPATH) != 0 &&
          IsTagFile(ToStdString(info->FileName).c_str()) ? INVALID_HANDLE_VALUE : nullptr;
 }
 
@@ -2018,21 +2058,21 @@ intptr_t WINAPI ConfigureW(const struct ConfigureInfo *Info)
 //    Type        X1  Y2  X2 Y2  F S           Flags D Data
     DI_DOUBLEBOX, 3, ++y, 64,20, 0,0,              0,0,MPlugin,L"",{},
     DI_TEXT,      5, ++y,  0, 0, 0,0,              0,0,MPathToExe,L"",{},
-    DI_EDIT,      5, ++y, 62, 3, 1,0,              0,0,-1,ToString(config.exe.Str()),{"pathtoexe", true},
+    DI_EDIT,      5, ++y, 62, 3, 1,0,              0,0,-1,ToString(config.exe),{"pathtoexe", true},
     DI_TEXT,      5, ++y,  0, 0, 0,0,              0,0,MCmdLineOptions,L"",{},
-    DI_EDIT,      5, ++y, 62, 5, 1,0,              0,0,-1,ToString(config.opt.Str()),{"commandline"},
+    DI_EDIT,      5, ++y, 62, 5, 1,0,              0,0,-1,ToString(config.opt),{"commandline"},
     DI_TEXT,      5, ++y,  0, 0, 0,0,              0,0,MWordChars,L"",{},
     DI_EDIT,      5, ++y, 62, 9, 1,0,              0,0,-1,ToString(config.GetWordchars()),{"wordchars", true},
     DI_CHECKBOX,  5, ++y, 62,10, 1,config.casesens,0,0,MCaseSensFilt,L"",{"casesensfilt", false, true},
     DI_TEXT,      5, ++y, 62,10, 1,0,DIF_SEPARATOR|DIF_BOXCOLOR,0,-1,L"",{},
     DI_TEXT,      5, ++y,  0, 0, 0,0,              0,0,MTagsMask,L"",{},
-    DI_EDIT,      5, ++y, 62, 9, 1,0,              0,0,-1,ToString(config.tagsmask.Str()),{"tagsmask", true},
+    DI_EDIT,      5, ++y, 62, 9, 1,0,              0,0,-1,ToString(config.tagsmask),{"tagsmask", true},
     DI_TEXT,      5, ++y,  0, 0, 0,0,              0,0,MHistoryFile,L"",{},
-    DI_EDIT,      5, ++y, 62, 9, 1,0,              0,0,-1,ToString(config.history_file.Str()),{"historyfile"},
+    DI_EDIT,      5, ++y, 62, 9, 1,0,              0,0,-1,ToString(config.history_file),{"historyfile"},
     DI_TEXT,      5, ++y,  0, 0, 0,0,              0,0,MHistoryLength,L"",{},
     DI_EDIT,      5, ++y, 62, 9, 1,0,              0,0,-1,ToString(std::to_string(config.history_len)),{"historylen", true},
     DI_TEXT,      5, ++y,  0, 0, 0,0,              0,0,MAutoloadFile,L"",{},
-    DI_EDIT,      5, ++y, 62, 7, 1,0,              0,0,-1,ToString(config.autoload.Str()),{"autoload"},
+    DI_EDIT,      5, ++y, 62, 7, 1,0,              0,0,-1,ToString(config.autoload),{"autoload"},
     DI_TEXT,      5, ++y, 62,10, 1,0,DIF_SEPARATOR|DIF_BOXCOLOR,0,-1,L"",{},
     DI_BUTTON,    0, ++y,  0, 0, 0,0,DIF_CENTERGROUP,1,MOk,L"",{},
     DI_BUTTON,    0,   y,  0, 0, 0,0,DIF_CENTERGROUP,0,MCancel,L"",{}

@@ -17,6 +17,7 @@
   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 */
 
+#include <algorithm>
 #include <functional>
 #include <iterator>
 #include <set>
@@ -29,9 +30,10 @@
 #include <memory>
 #define NOMINMAX
 #include <windows.h>
-#include "Hash.hpp"
-#include "String.hpp"
 #include "tags.h"
+#include "RegExp.hpp"
+
+using namespace XClasses;
 
 const size_t Config::max_history_len = 100;
 
@@ -50,7 +52,7 @@ Config::Config()
 
 void Config::SetWordchars(std::string const& str)
 {
-  wordchars = str.c_str();
+  wordchars = str;
   wordCharsMap.reset();
   for (auto c : str)
   {
@@ -60,7 +62,7 @@ void Config::SetWordchars(std::string const& str)
 
 std::string Config::GetWordchars() const
 {
-  return wordchars.Str();
+  return wordchars;
 }
 
 bool Config::isident(int chr) const
@@ -150,9 +152,9 @@ static std::string JoinPath(std::string const& dirPath, std::string const& name)
   return dirPath.empty() || IsPathSeparator(dirPath.back()) ? dirPath + name : dirPath + std::string("\\") + name;
 }
 
-static bool IsFullPath(char const* fn, size_t fsz)
+static bool IsFullPath(char const* fn)
 {
-  return fsz > 1 && fn[1] == ':';
+  return fn && fn[0] && fn[1] == ':';
 }
 
 static std::string GetDirOfFile(std::string const& filePath)
@@ -197,14 +199,27 @@ static bool ReadRepoRoot(FILE* f, std::string& repoRoot)
   return true;
 }
 
-static void SetStr(String& s,const char* buf,SMatch& m)
+static std::string GetStr(const char* buf, SMatch& m)
 {
-  s.Set(buf,m.start,m.end-m.start);
+  return std::string(buf + m.start, buf + m.end);
+}
+
+static int ToInt(std::string const& str)
+{
+  try
+  {
+    return std::stoi(str);
+  }
+  catch(std::exception const&)
+  {
+  }
+
+  return -1;
 }
 
 //int Msg(const char*);
 
-static void QuoteMeta(String& str)
+static void QuoteMeta(std::string& str)
 {
   static char map[256];
   const char *toquote=".$^*()|+[]{}?";
@@ -216,7 +231,7 @@ static void QuoteMeta(String& str)
       toquote++;
     }
   }
-  String dst(str.Length()*2);
+  std::string dst;
   int i=1;
   dst+=str[0];
   if(str[1]=='^')
@@ -226,8 +241,8 @@ static void QuoteMeta(String& str)
   }
 
   int j=1;
-  if(str[-2]=='$')j=2;
-  for(;i<str.Length()-j;i++)
+  if(str.length() >= 2 && str[str.length() - 2]=='$')j=2;
+  for(;i<str.length()-j;i++)
   {
     if(map[(unsigned char)str[i]])
     {
@@ -240,15 +255,15 @@ static void QuoteMeta(String& str)
   str=dst;
 }
 
-static void ReplaceSpaces(String& str)
+static void ReplaceSpaces(std::string& str)
 {
-  String dst;
+  std::string dst;
   int i;
-  for(i=0;i<str.Length();i++)
+  for(i=0;i<str.length();i++)
   {
     if(str[i]==' ')
     {
-      while(i<str.Length() && str[i]==' ')i++;
+      while(i<str.length() && str[i]==' ')i++;
       dst+="\\s+";
     }
     dst+=str[i];
@@ -280,37 +295,37 @@ RegExp reParse("/(.+?)\\t(.*?)\\t(\\d+|\\/.*?\\/(?<=[^\\\\]\\/));\"\\t(\\w)(?:\\
 
 TagInfo* ParseLine(const char* buf, TagFileInfo const& fi)
 {
-  String pos;
-  String file;
+  std::string pos;
+  std::string file;
   SMatch m[10];
   int n=10;
   if(reParse.Match(buf,m,n))
   {
     TagInfo *i=new TagInfo;
-    SetStr(i->name,buf,m[1]);
-    SetStr(file,buf,m[2]);
-    i->file = MakeFilename(fi.GetFullPath(file.Str())).c_str();
-    SetStr(pos,buf,m[3]);
+    i->name = GetStr(buf,m[1]);
+    file = GetStr(buf,m[2]);
+    i->file = MakeFilename(fi.GetFullPath(file));
+    pos = GetStr(buf,m[3]);
     if(pos[0]=='/')
     {
-      i->declaration = MakeDeclaration(pos.Str()).c_str();
+      i->declaration = MakeDeclaration(pos);
       QuoteMeta(pos);
       ReplaceSpaces(pos);
       i->re=pos;
       if(m[5].start!=-1)
       {
-        SetStr(pos,buf,m[5]);
-        i->lineno=pos.ToInt();
+        pos = GetStr(buf,m[5]);
+        i->lineno=ToInt(pos);
       }
     }else
     {
-      i->lineno=pos.ToInt();
+      i->lineno=ToInt(pos);
     }
-    SetStr(pos,buf,m[4]);
+    pos = GetStr(buf,m[4]);
     i->type=pos[0];
     if(m[5].start!=-1)
     {
-      SetStr(i->info,buf,m[6]);
+      i->info = GetStr(buf,m[6]);
     }
     return i;
   }
@@ -481,7 +496,7 @@ static std::string GetIntersection(char const* left, char const* right)
     return right;
 
   auto begining = left;
-  for (; *left && *right && *left == *right; ++left, ++right);
+  for (; *left && !IsFieldEnd(*right) && *left == *right; ++left, ++right);
   return std::string(begining, left);
 }
 
@@ -537,7 +552,6 @@ int TagFileInfo::CreateIndex(time_t tagsModTime)
 {
   TagFileInfo* fi = this;
   int pos=0;
-  String file;
   FILE *f=fopen(fi->filename.c_str(),"rb");
   if(!f)return 0;
   fseek(f,0,SEEK_END);
@@ -614,9 +628,9 @@ int TagFileInfo::CreateIndex(time_t tagsModTime)
     linespoolpos+=len+1;
     //strdup(strbuf);
     li->pos=pos;
-    li->fn=strchr(li->line,'\t')+1;
-    file.Set(li->fn,0,strchr(li->fn,'\t')-li->fn);
-    pathIntersection = IsFullPath(file.Str(), file.Length()) ? GetIntersection(pathIntersection.c_str(), file.Str()) : pathIntersection;
+    for(li->fn = li->line; !IsFieldEnd(*li->fn); ++li->fn);
+    li->fn += *li->fn ? 1 : 0;
+    pathIntersection = IsFullPath(li->fn) ? GetIntersection(pathIntersection.c_str(), li->fn) : pathIntersection;
     if (li->cls = ExtractClassName(FindClassFullQualification(li->line)))
       classes.push_back(li);
 
@@ -744,7 +758,7 @@ char const* TagFileInfo::GetRelativePath(char const* fileName) const
 
 std::string TagFileInfo::GetFullPath(std::string const& relativePath) const
 {
-  return IsFullPath(relativePath.c_str(), relativePath.size()) ? relativePath : JoinPath(reporoot, relativePath);
+  return IsFullPath(relativePath.c_str()) ? relativePath : JoinPath(reporoot, relativePath);
 }
 
 bool TagFileInfo::HasName(char const* fileName) const
@@ -982,7 +996,7 @@ std::vector<std::string> FindPartiallyMatchedFile(const char* file, const char* 
 {
   auto tags = ForEachFileRepository(file, IndexType::Filenames, FilenamePatrialMatch(part), maxCount);
   std::vector<std::string> result;
-  std::transform(tags.begin(), tags.end(), std::back_inserter(result), [](TagInfo const& tag) {return tag.file.Str();}); 
+  std::transform(tags.begin(), tags.end(), std::back_inserter(result), [](TagInfo const& tag) {return std::move(tag.file);});
   std::sort(result.begin(), result.end());
   return result;
 }
@@ -1008,30 +1022,11 @@ std::vector<TagInfo> FindFileSymbols(const char* file)
   return result;
 }
 
-void Autoload(const char* fn)
+std::vector<std::string> GetFiles()
 {
-  String dir = fn;
-  //DebugBreak();
-  StrList sl;
-  if(FileExists(dir))
-  {
-    sl.LoadFromFile(dir);
-    for(int i=0;i<sl.Count();i++)
-    {
-      String fn=sl[i];
-      if(fn.Length()==0 || !IsFullPath(fn, fn.Length()))continue;
-      size_t symbolsLoaded = 0;
-      Load(fn, symbolsLoaded);
-    }
-  }
-}
-
-void GetFiles(StrList& dst)
-{
-  for(int i=0;i<files.size();i++)
-  {
-    dst<<files[i]->GetName().c_str();
-  }
+  std::vector<std::string> result;
+  std::transform(files.begin(), files.end(), std::back_inserter(result), [](TagFileInfoPtr const& file) {return file->GetName();});
+  return result;
 }
 
 void UnloadTags(int idx)

@@ -20,14 +20,9 @@
 #ifndef __TAGS_H__
 #define __TAGS_H__
 
-#include "RegExp.hpp"
-#include "Array.hpp"
-#include "XTools.hpp"
 #include <string>
 #include <bitset>
 #include <vector>
-
-using namespace XClasses;
 
 enum{
   MPlugin=0,
@@ -95,31 +90,31 @@ struct Config{
   void SetWordchars(std::string const& str);
   std::string GetWordchars() const;
   bool isident(int chr) const;
-  String exe;
-  String opt;
-  String autoload;
-  String tagsmask;
-  String history_file;
+  std::string exe;
+  std::string opt;
+  std::string autoload;
+  std::string tagsmask;
+  std::string history_file;
   size_t history_len;
   bool casesens;
   bool autoload_changed;
   static const size_t max_history_len;
 
 private:
-  String wordchars;
+  std::string wordchars;
   std::bitset<256> wordCharsMap;
 };
 
 extern Config config;
 
 struct TagInfo{
-  String name;
-  String file;
-  String declaration;
-  String re;
+  std::string name;
+  std::string file;
+  std::string declaration;
+  std::string re;
   int lineno;
   char type;
-  String info;
+  std::string info;
 
   TagInfo():lineno(-1){}
 };
@@ -135,7 +130,7 @@ std::vector<std::string> FindPartiallyMatchedFile(const char* file, const char* 
 std::vector<TagInfo> FindClassMembers(const char* file, const char* classname);
 std::vector<TagInfo> FindFileSymbols(const char* file);
 void Autoload(const char* fn);
-void GetFiles(StrList& dst);
+std::vector<std::string> GetFiles();
 bool IsTagFile(const char* file);
 bool TagsLoadedForFile(const char* file);
 #endif
