@@ -356,7 +356,7 @@ inline int CharCmp(int left, int right, bool caseInsensitive)
   return caseInsensitive ? tolower(left) - tolower(right) : left - right;
 }
 
-int FieldCompare(char const* left, char const*& right, bool caseInsensitive, bool partialCompare)
+inline int FieldCompare(char const* left, char const*& right, bool caseInsensitive, bool partialCompare)
 {
   for (; left && !IsFieldEnd(*left) && right && !IsFieldEnd(*right) && !CharCmp(*left, *right, caseInsensitive); ++left, ++right);
   int leftChar = left && !IsFieldEnd(*left) ? *left : 0;
@@ -365,12 +365,12 @@ int FieldCompare(char const* left, char const*& right, bool caseInsensitive, boo
   return CharCmp(leftChar, rightChar, caseInsensitive);
 }
 
-int FieldCmp(char const* left, char const* right, bool caseInsensitive = CaseSensitive)
+inline bool FieldLess(char const* left, char const* right, bool caseInsensitive = false)
 {
-  return FieldCompare(left, right, caseInsensitive, FullCompare);
+  return FieldCompare(left, right, caseInsensitive, FullCompare) < 0;
 }
 
-int PathCompare(char const* left, char const* &right, bool partialCompare)
+inline int PathCompare(char const* left, char const* &right, bool partialCompare)
 {
   int cmp = 0;
   while (left && !IsFieldEnd(*left) && right && !IsFieldEnd(*right) && !cmp)
@@ -395,35 +395,9 @@ int PathCompare(char const* left, char const* &right, bool partialCompare)
   return CharCmp(leftChar, rightChar, CaseInsensitive);
 }
 
-int PathCompare(char const* left, char const* right)
+inline bool PathLess(char const* left, char const* right)
 {
-  return PathCompare(left, right, FullCompare);
-}
-
-int LinesCmp(const void* v1,const void* v2)
-{
-  LineInfo *a=*(LineInfo**)v1;
-  LineInfo *b=*(LineInfo**)v2;
-  return FieldCmp(a->line,b->line);
-}
-
-int FilesCmp(const void* v1,const void* v2)
-{
-  LineInfo *a=*(LineInfo**)v1;
-  LineInfo *b=*(LineInfo**)v2;
-  return PathCompare(a->fn,b->fn);
-}
-
-int ClsCmp(const void* v1,const void* v2)
-{
-  LineInfo *a=*(LineInfo**)v1;
-  LineInfo *b=*(LineInfo**)v2;
-  return FieldCmp(a->cls,b->cls);
-}
-
-static bool PathsEqual(LineInfo const* left, LineInfo const* right)
-{
-  return !PathCompare(left->fn, right->fn);
+  return PathCompare(left, right, FullCompare) < 0;
 }
 
 static char const* GetFilename(char const* path)
@@ -434,11 +408,6 @@ static char const* GetFilename(char const* path)
 
   for (; *pos && IsPathSeparator(*pos); ++pos);
   return pos;
-}
-
-static int FilenameCmp(void const* left, void const* right)
-{
-  return FieldCmp(GetFilename((*static_cast<LineInfo* const*>(left))->fn), GetFilename((*static_cast<LineInfo* const*>(right))->fn));
 }
 
 static char const* FindClassFullQualification(char const* str)
@@ -654,11 +623,6 @@ int TagFileInfo::CreateIndex(time_t tagsModTime)
     }
     return 0;
   }
-  if(!lines.empty())
-    qsort(&lines[0],lines.size(),sizeof(LineInfo*),LinesCmp);
-  //fi->offsets.Clean();
-  fi->offsets.reserve(lines.size());
-  std::transform(lines.begin(), lines.end(), std::back_inserter(fi->offsets), [](LineInfo* line){ return line->pos; });
   fwrite(IndexFileSignature, 1, sizeof(IndexFileSignature), g);
   fwrite(&tagsModTime,sizeof(tagsModTime),1,g);
   uint32_t rootLen = fullpathrepo ? reporoot.length() : 0;
@@ -666,21 +630,16 @@ int TagFileInfo::CreateIndex(time_t tagsModTime)
   if (fullpathrepo)
     fwrite(reporoot.c_str(), 1, reporoot.length(), g);
 
+  std::sort(lines.begin(), lines.end(), [](LineInfo* left, LineInfo* right) { return FieldLess(left->line, right->line); });
   WriteOffsets(g, lines.begin(), lines.end());
-  if(!lines.empty())
-    qsort(&lines[0],lines.size(),sizeof(LineInfo*),FilesCmp);
-
+  fi->offsets.reserve(lines.size());
+  std::transform(lines.begin(), lines.end(), std::back_inserter(fi->offsets), [](LineInfo* line){ return line->pos; });
+  std::sort(lines.begin(), lines.end(), [](LineInfo* left, LineInfo* right) { return PathLess(left->fn, right->fn); });
   WriteOffsets(g, lines.begin(), lines.end());
-  if(!classes.empty())
-    qsort(&classes[0],classes.size(),sizeof(LineInfo*),ClsCmp);
-
+  std::sort(classes.begin(), classes.end(), [](LineInfo* left, LineInfo* right) { return FieldLess(left->cls, right->cls); });
   WriteOffsets(g, classes.begin(), classes.end());
-  auto linesEnd = lines.end();
-  if (!lines.empty())
-  {
-    linesEnd = std::unique(lines.begin(), lines.end(), PathsEqual);
-    qsort(&lines[0], std::distance(lines.begin(), linesEnd), sizeof(LineInfo*), FilenameCmp);
-  }
+  auto linesEnd = std::unique(lines.begin(), lines.end(), [](LineInfo* left, LineInfo* right) { return !PathLess(left->fn, right->fn); });
+  std::sort(lines.begin(), linesEnd, [](LineInfo* left, LineInfo* right) { return FieldLess(GetFilename(left->fn), GetFilename(right->fn)); });
   WriteOffsets(g, lines.begin(), linesEnd);
 
   delete [] linespool;
@@ -764,7 +723,7 @@ std::string TagFileInfo::GetFullPath(std::string const& relativePath) const
 bool TagFileInfo::HasName(char const* fileName) const
 {
   // filename.back() is not path separator
-  return !PathCompare(filename.c_str(), fileName);
+  return !PathCompare(filename.c_str(), fileName, FullCompare);
 }
 
 //TODO: rework: must return error instead of message id (message id coud be zero)
