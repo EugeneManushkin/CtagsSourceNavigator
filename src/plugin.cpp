@@ -45,6 +45,7 @@
 #include <deque>
 #include <functional>
 #include <iterator>
+#include <regex>
 #include <string>
 #include <vector>
 #include <list>
@@ -59,6 +60,8 @@ FarStandardFunctions FSF;
 static const wchar_t* APPNAME = CTAGS_PRODUCT_NAME;
 
 static const wchar_t* ConfigFileName=L"config";
+
+static const std::wregex MatchAny(L".");
 
 RegExp RegexInstance;
 
@@ -934,6 +937,11 @@ HKL GetAsciiLayout()
   return 0;
 }
 
+inline std::string GetFilterKeys()
+{
+  return "1234567890abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_$\\\x08-_=|;':\",./<>?[]()+*&^%#@!~";
+}
+
 std::vector<FarKey> GetFarKeys(std::string const& filterkeys)
 {
   std::vector<FarKey> fk;
@@ -964,11 +972,26 @@ bool IsCtrlC(FarKey const& key)
       || (key.VirtualKeyCode == 0x43 && key.ControlKeyState == RIGHT_CTRL_PRESSED);
 }
 
+static std::wregex GetRegex(WideString const& filter, bool caseInsensitive)
+{
+  try
+  {
+    std::regex_constants::syntax_option_type regexFlags = std::regex_constants::ECMAScript;
+    regexFlags = caseInsensitive ? regexFlags | std::regex_constants::icase : regexFlags;
+    return std::wregex(filter, regexFlags);
+  }
+  catch(std::exception const&)
+  {
+  }
+
+  return MatchAny;
+}
+
 int FilterMenu(const wchar_t *title,MenuList const& lst,int sel,int flags=MF_LABELS,std::string const& param="")
 {
     std::vector<FarMenuItem> menu(lst.size());
     std::string filter=param;
-    std::string filterkeys = "1234567890abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_$\\\x08-_=|;':\",./<>?[]*&^%#@!~";
+    std::string filterkeys = GetFilterKeys();
     std::vector<FarKey> fk = GetFarKeys(filterkeys);
 #ifdef DEBUG
     //DebugBreak();
@@ -976,21 +999,13 @@ int FilterMenu(const wchar_t *title,MenuList const& lst,int sel,int flags=MF_LAB
     for(;;)
     {
       int j=0;
-      std::string match;
-      int minit=0;
-      size_t fnd=std::string::npos;
-      std::multimap<int, MI const*> idx;
+      std::wregex regexFilter = GetRegex(ToString(filter), !config.casesens);
+      std::multimap<WideString::difference_type, MI const*> idx;
       for (auto& lstItem : lst)
       {
-        std::string current = ToStdString(lstItem.item);
-//        current.SetNoCase(!config.casesens); // TODO: support case insensitive find
-        if(!filter.empty() && (fnd=current.find(filter))==std::string::npos)continue;
-        if(!minit && fnd!=std::string::npos)
-        {
-          match=current.substr(fnd);
-          minit=1;
-        }
-        idx.insert(std::make_pair(fnd, &lstItem));
+        std::wsmatch matchResult;
+        if (filter.empty() || (std::regex_search(lstItem.item, matchResult, regexFilter) && !matchResult.empty()))
+          idx.insert(std::make_pair(filter.empty() ? 0 : matchResult.position(), &lstItem));
       }
       for (auto const& i : idx)
       {
@@ -1147,7 +1162,7 @@ bool LookupTagsMenu(char const* file, size_t maxCount, TagInfo& tag, LookupMenuV
   std::string filter;
   auto title = GetMsg(MSelectSymbol);
 //TODO: Support platform path chars
-  std::string filterkeys = "1234567890abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_$\\\x08-_=|;':\",./<>?[]*&^%#@!~";
+  std::string filterkeys = GetFilterKeys();
   std::vector<FarKey> fk = GetFarKeys(filterkeys);
   const int currentWidth = std::min(GetFarWidth(), MaxMenuWidth);
   while(true)
