@@ -46,6 +46,7 @@
 #include <functional>
 #include <iterator>
 #include <regex>
+#include <sstream> 
 #include <string>
 #include <vector>
 #include <list>
@@ -1059,19 +1060,15 @@ std::string TrimFilename(const std::string& file,size_t maxlength)
 WideString FormatTagInfo(TagInfo const& ti, size_t maxid, size_t maxDeclaration, size_t maxfile, bool displayFile)
 {
   std::string declaration = ti.declaration.substr(0, maxDeclaration);
-  std::vector<char> buf(sizeof(ti.type) + 1 + maxid + 1 + maxDeclaration + 1);
-  sprintf(&buf[0],"%c:%s%*s %s%*s",ti.type,ti.name.c_str(),maxid-ti.name.length(),"",
-    declaration.c_str(),maxDeclaration-declaration.length(),""
-  );
-  std::string s = &buf[0];
-
+  std::stringstream str;
+  str << ti.type << ":" << ti.name << std::string(maxid - ti.name.length(), ' ') << " " << declaration << std::string(maxDeclaration - declaration.length(), ' ');
   if (displayFile || ti.lineno >= 0)
   {
     auto lineNumber = ti.lineno >= 0 ? ":" + std::to_string(ti.lineno + 1) : std::string();
-    s += std::string(" ") + TrimFilename((displayFile ? ti.file : std::string("Line")) + lineNumber, maxfile);
+    str << " " << TrimFilename((displayFile ? ti.file : std::string("Line")) + lineNumber, maxfile);
   }
 
-  return ToString(s);
+  return ToString(str.str());
 }
 
 class LookupMenuVisitor
@@ -1088,7 +1085,7 @@ class LookupTagsVisitor : public LookupMenuVisitor
 public:
   std::vector<WideString> Search(char const* file, char const* filter, size_t maxCount, size_t currentWidth) override
   {
-    const int maxInfoWidth = currentWidth / 5;
+    const size_t maxInfoWidth = currentWidth / 5;
     Tags = FindPartiallyMatchedTags(file, filter, maxCount);
     //TODO: rework
     size_t maxid = 0;
@@ -1164,7 +1161,7 @@ bool LookupTagsMenu(char const* file, size_t maxCount, TagInfo& tag, LookupMenuV
 //TODO: Support platform path chars
   std::string filterkeys = GetFilterKeys();
   std::vector<FarKey> fk = GetFarKeys(filterkeys);
-  const int currentWidth = std::min(GetFarWidth(), MaxMenuWidth);
+  const size_t currentWidth = std::min(GetFarWidth(), MaxMenuWidth);
   while(true)
   {
     auto menuStrings = visitor.Search(file, filter.c_str(), maxCount, currentWidth);
