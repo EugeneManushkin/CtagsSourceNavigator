@@ -436,6 +436,13 @@ static size_t GetFarWidth()
   return rect.Right > rect.Left ? rect.Right - rect.Left : 0;
 }
 
+static size_t GetMenuWidth()
+{
+  size_t const borderLen = 8 + 1 + 1 + 1 + 1;
+  size_t const width = std::min(GetFarWidth(), MaxMenuWidth);
+  return borderLen > width ? 0 : width - borderLen;
+}
+
 static std::string ExpandEnvString(std::string const& str)
 {
   auto sz = ::ExpandEnvironmentStringsA(str.c_str(), nullptr, 0);
@@ -1059,9 +1066,10 @@ std::string TrimFilename(const std::string& file,size_t maxlength)
 //TODO: rework
 WideString FormatTagInfo(TagInfo const& ti, size_t maxid, size_t maxDeclaration, size_t maxfile, bool displayFile)
 {
+  std::string name = ti.name.substr(0, maxid);
   std::string declaration = ti.declaration.substr(0, maxDeclaration);
   std::stringstream str;
-  str << ti.type << ":" << ti.name << std::string(maxid - ti.name.length(), ' ') << " " << declaration << std::string(maxDeclaration - declaration.length(), ' ');
+  str << ti.type << ":" << name << std::string(maxid - name.length(), ' ') << " " << declaration << std::string(maxDeclaration - declaration.length(), ' ');
   if (displayFile || ti.lineno >= 0)
   {
     auto lineNumber = ti.lineno >= 0 ? ":" + std::to_string(ti.lineno + 1) : std::string();
@@ -1071,10 +1079,37 @@ WideString FormatTagInfo(TagInfo const& ti, size_t maxid, size_t maxDeclaration,
   return ToString(str.str());
 }
 
+//TODO: rework
+std::vector<WideString> GetMenuStrings(std::vector<TagInfo> const& tags, bool displayFile)
+{
+  const size_t currentWidth = GetMenuWidth();
+  const size_t maxInfoWidth = currentWidth / 5;
+  size_t maxid = 0;
+  size_t maxinfo = 0;
+  for (auto const& ti : tags)
+  {
+    if (ti.name.length() > maxid)maxid = ti.name.length();
+    if (ti.declaration.length() > maxinfo)maxinfo = ti.declaration.length();
+  }
+
+  maxid = std::min(maxid, currentWidth);
+  maxinfo = std::min(maxinfo, maxInfoWidth);
+  maxinfo = std::min(maxinfo, currentWidth - maxid);
+  size_t len = maxid + maxinfo;
+  size_t maxfile = len > currentWidth ? 0 : currentWidth - len;
+  std::vector<WideString> result;
+  for (auto const& i : tags)
+  {
+    result.push_back(FormatTagInfo(i, maxid, maxinfo, maxfile, displayFile));
+  }
+
+  return result;
+}
+
 class LookupMenuVisitor
 {
 public:
-  virtual std::vector<WideString> Search(char const* file, char const* filter, size_t maxCount, size_t currentWidth) = 0;
+  virtual std::vector<WideString> Search(char const* file, char const* filter, size_t maxCount) = 0;
   virtual std::string GetClipboardText(intptr_t index) const = 0;
 //TODO: Rework this interface
   virtual TagInfo GetTag(intptr_t index) const = 0;
@@ -1083,28 +1118,10 @@ public:
 class LookupTagsVisitor : public LookupMenuVisitor
 {
 public:
-  std::vector<WideString> Search(char const* file, char const* filter, size_t maxCount, size_t currentWidth) override
+  std::vector<WideString> Search(char const* file, char const* filter, size_t maxCount) override
   {
-    const size_t maxInfoWidth = currentWidth / 5;
     Tags = FindPartiallyMatchedTags(file, filter, maxCount);
-    //TODO: rework
-    size_t maxid = 0;
-    size_t maxinfo = 0;   
-    for (auto const& ti : Tags)
-    {
-      if(ti.name.length()>maxid)maxid=ti.name.length();
-      if(ti.declaration.length()>maxinfo)maxinfo=ti.declaration.length();
-    }
-
-    maxinfo = std::min<size_t>(maxinfo, maxInfoWidth);
-    size_t maxfile = currentWidth - 8 - maxid - maxinfo - 1 - 1 - 1 - 1;
-    std::vector<WideString> menuStrings;
-    for (auto const& i : Tags)
-    {
-      menuStrings.push_back(FormatTagInfo(i, maxid, maxinfo, maxfile, true));
-    }
-
-    return menuStrings;
+    return GetMenuStrings(Tags, true);
   }
 
   virtual std::string GetClipboardText(intptr_t index) const
@@ -1124,11 +1141,11 @@ private:
 class SearchPathVisitor : public LookupMenuVisitor
 {
 public:
-  std::vector<WideString> Search(char const* file, char const* filter, size_t maxCount, size_t currentWidth) override
+  std::vector<WideString> Search(char const* file, char const* filter, size_t maxCount) override
   {
     Paths = FindPartiallyMatchedFile(file, filter, maxCount);
     std::vector<WideString> menuStrings;
-    size_t maxfile = currentWidth - 8 - 1 - 1 - 1 - 1;
+    size_t maxfile = GetMenuWidth();
     for (auto const& path : Paths)
     {
       menuStrings.push_back(ToString(TrimFilename(path, maxfile)));
@@ -1161,10 +1178,9 @@ bool LookupTagsMenu(char const* file, size_t maxCount, TagInfo& tag, LookupMenuV
 //TODO: Support platform path chars
   std::string filterkeys = GetFilterKeys();
   std::vector<FarKey> fk = GetFarKeys(filterkeys);
-  const size_t currentWidth = std::min(GetFarWidth(), MaxMenuWidth);
   while(true)
   {
-    auto menuStrings = visitor.Search(file, filter.c_str(), maxCount, currentWidth);
+    auto menuStrings = visitor.Search(file, filter.c_str(), maxCount);
     std::vector<FarMenuItem> menu;
     for (auto const& i : menuStrings)
     {
@@ -1486,22 +1502,14 @@ int SetPos(std::string const& filename,intptr_t line,intptr_t col,intptr_t top,i
 static TagInfo const* TagsMenu(std::vector<TagInfo> const& ta, bool displayFile = true)
 {
   MenuList sm;
-  size_t maxid=0,maxDeclaration=0;
-  const intptr_t currentWidth = std::min<intptr_t>(GetFarWidth(), MaxMenuWidth);
-  const intptr_t maxDeclarationWidth = currentWidth / 5;
-  for(auto const& ti : ta)
-  {
-    if(ti.name.length()>maxid)maxid=ti.name.length();
-    if(ti.declaration.length()>maxDeclaration)maxDeclaration=ti.declaration.length();
-    //if(ti->file.Length()>maxfile)
-  }
-  maxDeclaration = std::min<size_t>(maxDeclaration, maxDeclarationWidth);
-  size_t maxfile=currentWidth-8-maxid-maxDeclaration-1-1-1-1;
+  auto menuStrings = GetMenuStrings(ta, displayFile);
   int i = 0;
   for(auto const& ti : ta)
   {
-    sm.push_back(MI(FormatTagInfo(ti, maxid, maxDeclaration, maxfile, displayFile), i++, false, ti.name.c_str()));
+    sm.push_back(MI(menuStrings[i], i, false, ti.name.c_str()));
+    ++i;
   }
+
   int sel=FilterMenu(GetMsg(MSelectSymbol),sm,0,MF_SHOWCOUNT);
   if(sel==-1)return NULL;
   return &ta[sel];
