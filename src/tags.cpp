@@ -638,9 +638,8 @@ int TagFileInfo::CreateIndex(time_t tagsModTime)
   std::sort(classes.begin(), classes.end(), [](LineInfo* left, LineInfo* right) { return FieldLess(left->cls, right->cls); });
   WriteOffsets(g, classes.begin(), classes.end());
   auto linesEnd = std::unique(lines.begin(), lines.end(), [](LineInfo* left, LineInfo* right) { return !PathLess(left->fn, right->fn); });
-  std::sort(lines.begin(), linesEnd, [](LineInfo* left, LineInfo* right) { return FieldLess(GetFilename(left->fn), GetFilename(right->fn)); });
+  std::sort(lines.begin(), linesEnd, [](LineInfo* left, LineInfo* right) { return FieldLess(GetFilename(left->fn), GetFilename(right->fn), CaseInsensitive); });
   WriteOffsets(g, lines.begin(), linesEnd);
-
   delete [] linespool;
   while(poolfirst)
   {
