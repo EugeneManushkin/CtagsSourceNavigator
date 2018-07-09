@@ -939,28 +939,52 @@ static std::vector<TagInfo> ForEachFileRepository(char const* fileFullPath, Inde
   return result;
 }
 
+inline bool DefaultLess(TagInfo const& left, TagInfo const& right)
+{
+  if (auto nameCmp = left.name.compare(right.name))
+    return nameCmp < 0;
+
+  if (auto fileCmp = left.file.compare(right.file))
+    return fileCmp < 0;
+
+  return left.lineno < right.lineno;
+}
+
+inline bool SamePath(TagInfo const& tag, char const* file)
+{
+  return !PathCompare(tag.file.c_str(), file, FullCompare);
+}
+
+static std::vector<TagInfo> DefaultSortTags(std::vector<TagInfo>&& tags, char const* file)
+{
+  auto bound = std::partition(tags.begin(), tags.end(), [=](TagInfo const& tag) { return SamePath(tag, file); });
+  std::sort(tags.begin(), bound, [](TagInfo const& left, TagInfo const& right) { return DefaultLess(left, right); });
+  std::sort(bound, tags.end(), [](TagInfo const& left, TagInfo const& right) { return DefaultLess(left, right); });
+  return std::move(tags);
+}
+
 std::vector<TagInfo> Find(const char* name, const char* file)
 {
-  return ForEachFileRepository(file, IndexType::Names, NameMatch(name, FullCompare), 0);
+  return DefaultSortTags(ForEachFileRepository(file, IndexType::Names, NameMatch(name, FullCompare), 0), file);
 }
 
 std::vector<TagInfo> FindPartiallyMatchedTags(const char* file, const char* part, size_t maxCount)
 {
-  return ForEachFileRepository(file, IndexType::Names, NameMatch(part, PartialCompare), maxCount);
+  return DefaultSortTags(ForEachFileRepository(file, IndexType::Names, NameMatch(part, PartialCompare), maxCount), file);
 }
 
 std::vector<std::string> FindPartiallyMatchedFile(const char* file, const char* part, size_t maxCount)
 {
   auto tags = ForEachFileRepository(file, IndexType::Filenames, FilenamePatrialMatch(part), maxCount);
   std::vector<std::string> result;
-  std::transform(tags.begin(), tags.end(), std::back_inserter(result), [](TagInfo const& tag) {return std::move(tag.file);});
-  std::sort(result.begin(), result.end());
+  std::transform(tags.begin(), tags.end(), std::back_inserter(result), [](TagInfo const& tag) { return std::move(tag.file); });
+  std::sort(result.begin(), result.end(), [](std::string const& left, std::string const& right) { return FieldLess(GetFilename(left.c_str()), GetFilename(right.c_str()), CaseInsensitive); });
   return result;
 }
 
 std::vector<TagInfo> FindClassMembers(const char* file, const char* classname)
 {
-  return ForEachFileRepository(file, IndexType::Classes, ClassMemberMatch(classname), 0);
+  return DefaultSortTags(ForEachFileRepository(file, IndexType::Classes, ClassMemberMatch(classname), 0), file);
 }
 
 std::vector<TagInfo> FindFileSymbols(const char* file)
@@ -976,7 +1000,7 @@ std::vector<TagInfo> FindFileSymbols(const char* file)
     std::move(tags.begin(), tags.end(), std::back_inserter(result));
   }
 
-  return result;
+  return DefaultSortTags(std::move(result), file);
 }
 
 std::vector<std::string> GetFiles()
