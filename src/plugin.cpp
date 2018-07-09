@@ -1799,7 +1799,7 @@ HANDLE WINAPI OpenW(const struct OpenInfo *info)
                       L"",buf,sizeof(buf)/sizeof(buf[0]),nullptr,0))return nullptr;
           word=ToStdString(buf);
         }
-        SafeCall([&]{ NavigateToTag(FindClassMembers(fileName.c_str(), word.c_str()), FormatTagFlag::NotDisplayFile); });
+        SafeCall([&]{ NavigateToTag(FindClassMembers(fileName.c_str(), word.c_str()), FormatTagFlag::DisplayFile); });
       }break;
       case miLookupSymbol:
       {
