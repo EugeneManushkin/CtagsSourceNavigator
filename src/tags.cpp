@@ -939,8 +939,18 @@ static std::vector<TagInfo> ForEachFileRepository(char const* fileFullPath, Inde
   return result;
 }
 
-inline bool DefaultLess(TagInfo const& left, TagInfo const& right)
+inline bool SamePath(TagInfo const& tag, char const* file)
 {
+  return !PathCompare(tag.file.c_str(), file, FullCompare);
+}
+
+inline bool DefaultLess(TagInfo const& left, TagInfo const& right, char const* file)
+{
+  auto leftSamePath = SamePath(left, file);
+  auto rightSamePath = SamePath(right, file);
+  if (leftSamePath != rightSamePath)
+    return leftSamePath && !rightSamePath;
+
   if (auto nameCmp = left.name.compare(right.name))
     return nameCmp < 0;
 
@@ -950,16 +960,9 @@ inline bool DefaultLess(TagInfo const& left, TagInfo const& right)
   return left.lineno < right.lineno;
 }
 
-inline bool SamePath(TagInfo const& tag, char const* file)
-{
-  return !PathCompare(tag.file.c_str(), file, FullCompare);
-}
-
 static std::vector<TagInfo> DefaultSortTags(std::vector<TagInfo>&& tags, char const* file)
 {
-  auto bound = std::partition(tags.begin(), tags.end(), [=](TagInfo const& tag) { return SamePath(tag, file); });
-  std::sort(tags.begin(), bound, [](TagInfo const& left, TagInfo const& right) { return DefaultLess(left, right); });
-  std::sort(bound, tags.end(), [](TagInfo const& left, TagInfo const& right) { return DefaultLess(left, right); });
+  std::sort(tags.begin(), tags.end(), [=](TagInfo const& left, TagInfo const& right) { return DefaultLess(left, right, file); });
   return std::move(tags);
 }
 
