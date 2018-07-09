@@ -978,7 +978,7 @@ std::vector<std::string> FindPartiallyMatchedFile(const char* file, const char* 
   auto tags = ForEachFileRepository(file, IndexType::Filenames, FilenamePatrialMatch(part), maxCount);
   std::vector<std::string> result;
   std::transform(tags.begin(), tags.end(), std::back_inserter(result), [](TagInfo const& tag) { return std::move(tag.file); });
-  std::sort(result.begin(), result.end(), [](std::string const& left, std::string const& right) { return FieldLess(GetFilename(left.c_str()), GetFilename(right.c_str()), CaseInsensitive); });
+  std::sort(result.begin(), result.end());
   return result;
 }
 
