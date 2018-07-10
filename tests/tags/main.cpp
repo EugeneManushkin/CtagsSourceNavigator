@@ -174,7 +174,7 @@ namespace
         if (!current.first.empty())
           result.push_back(std::move(current));
 
-        std::swap(current, MetaClassCont::value_type());
+        current = MetaClassCont::value_type();
         current.first = buf.substr(1, std::string::npos);
       }
       else
