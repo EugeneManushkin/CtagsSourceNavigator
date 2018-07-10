@@ -51,6 +51,11 @@ namespace
     return std::string(&result[0]);
   }
 
+  std::string MixCase(std::string const& str)
+  {
+    return ToUpper(str.substr(0, str.length() / 2)) + ToLower(str.substr(str.length() / 2));
+  }
+
   std::string AddExtraSlashes(std::string const& str)
   {
     std::string result;
@@ -249,16 +254,25 @@ namespace TESTS
       }
     }
 
-    void LookupAllPartiallyMatchedNames(MetaTag const& metaTag)
+    void LookupAllPartiallyMatchedNames(MetaTag const& metaTag, std::string const& name, bool caseInsensitive)
     {
-      std::string part = metaTag.Name + "extra";
+      std::string part = name + "extra";
       while (!part.empty())
       {
-        auto tags = FindPartiallyMatchedTags(metaTag.FullPath.c_str(), part.c_str(), 0);
+        auto tags = FindPartiallyMatchedTags(metaTag.FullPath.c_str(), part.c_str(), 0, caseInsensitive);
         ASSERT_EQ(part.length() > metaTag.Name.length(), tags.empty()) << "Part: " << part;
         ASSERT_EQ(part.length() > metaTag.Name.length(), std::find(tags.begin(), tags.end(), metaTag) == tags.end()) << "Part: " << part;
         part.resize(part.length() - 1);
       }
+    }
+
+    void LookupAllPartiallyMatchedNamesEachCase(MetaTag const& metaTag)
+    {
+      LookupAllPartiallyMatchedNames(metaTag, metaTag.Name, false);
+      LookupAllPartiallyMatchedNames(metaTag, metaTag.Name, true);
+      LookupAllPartiallyMatchedNames(metaTag, ToLower(metaTag.Name), true);
+      LookupAllPartiallyMatchedNames(metaTag, ToUpper(metaTag.Name), true);
+      LookupAllPartiallyMatchedNames(metaTag, MixCase(metaTag.Name), true);
     }
 
     void LookupAllPartiallyMatchedFilanames(MetaTag const& metaTag)
@@ -284,7 +298,7 @@ namespace TESTS
       {
         EXPECT_NO_FATAL_FAILURE(LookupMetaTag(metaTag)) << "Tag info: " << metaTag << ", tags file: " << tagsFile;
         EXPECT_NO_FATAL_FAILURE(LookupMetaTagInFile(metaTag)) << "Tag info: " << metaTag << ", tags file: " << tagsFile;
-        EXPECT_NO_FATAL_FAILURE(LookupAllPartiallyMatchedNames(metaTag)) << "Tag info: " << metaTag << ", tags file: " << tagsFile;
+        EXPECT_NO_FATAL_FAILURE(LookupAllPartiallyMatchedNamesEachCase(metaTag)) << "Tag info: " << metaTag << ", tags file: " << tagsFile;
         EXPECT_NO_FATAL_FAILURE(LookupAllPartiallyMatchedFilanames(metaTag)) << "Tag info: " << metaTag << ", tags file: " << tagsFile;
       }
     }

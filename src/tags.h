@@ -125,7 +125,7 @@ int isident(int chr);
 int Load(const char* filename, size_t& symbolsLoaded);
 void UnloadTags(int idx);
 std::vector<TagInfo> Find(const char* name, const char* filename);
-std::vector<TagInfo> FindPartiallyMatchedTags(const char* file, const char* part, size_t maxCount);
+std::vector<TagInfo> FindPartiallyMatchedTags(const char* file, const char* part, size_t maxCount, bool caseInsensitive);
 std::vector<std::string> FindPartiallyMatchedFile(const char* file, const char* part, size_t maxCount);
 std::vector<TagInfo> FindClassMembers(const char* file, const char* classname);
 std::vector<TagInfo> FindFileSymbols(const char* file);

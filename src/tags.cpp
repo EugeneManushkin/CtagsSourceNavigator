@@ -85,6 +85,7 @@ using OffsetCont = std::vector<OffsetType>;
 enum class IndexType
 {
   Names = 0,
+  NamesCaseInsensitive,
   Paths,
   Classes,
   Filenames,
@@ -163,7 +164,7 @@ static std::string GetDirOfFile(std::string const& filePath)
     return !pos || pos == std::string::npos ? std::string() : filePath.substr(0, pos);
 }
 
-char const IndexFileSignature[] = "tags.idx.v5";
+char const IndexFileSignature[] = "tags.idx.v6";
 
 static bool ReadSignature(FILE* f)
 {
@@ -633,6 +634,8 @@ int TagFileInfo::CreateIndex(time_t tagsModTime)
   WriteOffsets(g, lines.begin(), lines.end());
   fi->offsets.reserve(lines.size());
   std::transform(lines.begin(), lines.end(), std::back_inserter(fi->offsets), [](LineInfo* line){ return line->pos; });
+  std::sort(lines.begin(), lines.end(), [](LineInfo* left, LineInfo* right) { return FieldLess(left->line, right->line, CaseInsensitive); });
+  WriteOffsets(g, lines.begin(), lines.end());
   std::sort(lines.begin(), lines.end(), [](LineInfo* left, LineInfo* right) { return PathLess(left->fn, right->fn); });
   WriteOffsets(g, lines.begin(), lines.end());
   std::sort(classes.begin(), classes.end(), [](LineInfo* left, LineInfo* right) { return FieldLess(left->cls, right->cls); });
@@ -763,19 +766,21 @@ private:
 class NameMatch : public MatchVisitor
 {
 public:
-  NameMatch(char const* name, bool comparationType)
+  NameMatch(char const* name, bool comparationType, bool caseSensitivity)
     : MatchVisitor(name)
     , ComparationType(comparationType)
+    , CaseSensitivity(caseSensitivity)
   {
   }
 
   int Compare(char const*& strbuf) const override
   {
-    return FieldCompare(GetPattern().c_str(), strbuf, CaseSensitive, ComparationType);
+    return FieldCompare(GetPattern().c_str(), strbuf, CaseSensitivity, ComparationType);
   }
 
 private:
   bool ComparationType;
+  bool CaseSensitivity;
 };
 
 class FilenamePatrialMatch : public MatchVisitor
@@ -968,12 +973,12 @@ static std::vector<TagInfo> DefaultSortTags(std::vector<TagInfo>&& tags, char co
 
 std::vector<TagInfo> Find(const char* name, const char* file)
 {
-  return DefaultSortTags(ForEachFileRepository(file, IndexType::Names, NameMatch(name, FullCompare), 0), file);
+  return DefaultSortTags(ForEachFileRepository(file, IndexType::Names, NameMatch(name, FullCompare, CaseSensitive), 0), file);
 }
 
-std::vector<TagInfo> FindPartiallyMatchedTags(const char* file, const char* part, size_t maxCount)
+std::vector<TagInfo> FindPartiallyMatchedTags(const char* file, const char* part, size_t maxCount, bool caseInsensitive)
 {
-  return DefaultSortTags(ForEachFileRepository(file, IndexType::Names, NameMatch(part, PartialCompare), maxCount), file);
+  return DefaultSortTags(ForEachFileRepository(file, caseInsensitive ? IndexType::NamesCaseInsensitive : IndexType::Names, NameMatch(part, PartialCompare, caseInsensitive), maxCount), file);
 }
 
 std::vector<std::string> FindPartiallyMatchedFile(const char* file, const char* part, size_t maxCount)

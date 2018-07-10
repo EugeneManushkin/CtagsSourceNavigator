@@ -1083,7 +1083,7 @@ public:
 
   std::vector<WideString> ApplyFilter(char const* filter) override
   {
-    Tags = FindPartiallyMatchedTags(File.c_str(), filter, MaxMenuItems);
+    Tags = FindPartiallyMatchedTags(File.c_str(), filter, MaxMenuItems, !config.casesens);
     return GetMenuStrings(Tags);
   }
 
@@ -1684,7 +1684,7 @@ static void CompleteName(char const* fileName, EditorInfo const& ei)
   if(word.empty())
     return;
 
-  auto tags = FindPartiallyMatchedTags(fileName, word.c_str(), 0);
+  auto tags = FindPartiallyMatchedTags(fileName, word.c_str(), 0, !config.casesens);
   if(tags.empty())
     throw Error(MNothingFound);
 
