@@ -2014,17 +2014,12 @@ static bool SaveConfig(InitDialogItem const* dlgItems, size_t count)
   return true;
 }
 
-//TODO: rework
-HANDLE ConfigureDialog = 0;
-//TODO: rework
-InitDialogItem* DlgItems = 0;
-
-WideString get_text(intptr_t ctrl_id) {
+WideString get_text(HANDLE hDlg, intptr_t ctrl_id) {
   FarDialogItemData item = { sizeof(FarDialogItemData) };
-  item.PtrLength = I.SendDlgMessage(ConfigureDialog, DM_GETTEXT, ctrl_id, 0);
+  item.PtrLength = I.SendDlgMessage(hDlg, DM_GETTEXT, ctrl_id, 0);
   std::vector<wchar_t> buf(item.PtrLength + 1);
   item.PtrData = buf.data();
-  I.SendDlgMessage(ConfigureDialog, DM_GETTEXT, ctrl_id, &item);
+  I.SendDlgMessage(hDlg, DM_GETTEXT, ctrl_id, &item);
   return WideString(item.PtrData, item.PtrLength);
 }
 
@@ -2034,14 +2029,16 @@ intptr_t WINAPI ConfigureDlgProc(
     intptr_t Param1,
     void* Param2)
 {
+  InitDialogItem* items = reinterpret_cast<InitDialogItem*>(I.SendDlgMessage(hDlg, DM_GETDLGDATA, 0, nullptr));
+
   if (Msg == DN_EDITCHANGE)
   {
-    DlgItems[Param1].MessageText = get_text(Param1);
+    items[Param1].MessageText = get_text(hDlg, Param1);
   }
 
   if (Msg == DN_BTNCLICK)
   {
-      DlgItems[Param1].Selected = reinterpret_cast<intptr_t>(Param2);
+    items[Param1].Selected = reinterpret_cast<intptr_t>(Param2);
   }
 
   return I.DefDlgProc(hDlg, Msg, Param1, Param2);
@@ -2078,7 +2075,6 @@ intptr_t WINAPI ConfigureW(const struct ConfigureInfo *Info)
   constexpr size_t itemsCount = sizeof(initItems)/sizeof(initItems[0]);
   struct FarDialogItem DialogItems[itemsCount];
   InitDialogItems(initItems,DialogItems,itemsCount);
-  DlgItems = initItems;
   auto handle = I.DialogInit(
                &PluginGuid,
                &InteractiveDialogGuid,
@@ -2092,12 +2088,11 @@ intptr_t WINAPI ConfigureW(const struct ConfigureInfo *Info)
                0,
                FDLG_NONE,
                &ConfigureDlgProc,
-               nullptr);
+               initItems);
 
   if (handle == INVALID_HANDLE_VALUE)
     return FALSE;
 
-  ConfigureDialog = handle;
   std::shared_ptr<void> handleHolder(handle, [](void* h){I.DialogFree(h);});
   auto ExitCode = I.DialogRun(handle);
   if(ExitCode!=18)return FALSE;
