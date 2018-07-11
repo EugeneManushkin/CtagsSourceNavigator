@@ -5,7 +5,7 @@
 :: Usage: run.bat cmake_generator [repository_path]. If repository_path is not specified the repository will be cloned. Examples:
 ::  build_script\run.bat "Visual Studio 14 2015" .\
 ::  <repository_root>\build_script\run.bat "Visual Studio XX XXXX" <repository_root>
-::  copy build_script c:\<some_folder> && c:\<some_folder>\build_script\run.bat "Visual Studio XX XXXX"
+::  copy build_script\run.bat c:\<some_folder> && c:\<some_folder>\run.bat "Visual Studio XX XXXX"
 
 set GENERATOR=%~1
 set REPO_ROOT=%~dpnx2
@@ -24,21 +24,21 @@ call :BuildPlatform x64
 exit /b
 
 :CleanRoot
-  rmdir /S /Q %ROOT%
-  md %ROOT%
+  rmdir /S /Q "%ROOT%"
+  md "%ROOT%"
 exit /b
 
 :Clone
   set REPO_ROOT=%ROOT%\CtagsSourceNavigator
-  cd %ROOT%
+  cd "%ROOT%"
   git clone https://github.com/EugeneManushkin/CtagsSourceNavigator.git || exit /b 1
   cd CtagsSourceNavigator
   git submodule update --init || exit /b 1
 exit /b
 
 :GetBuildNumber
-  md %ROOT%\get_build_number && cd %ROOT%\get_build_number || exit /b 1
-  cmake -DREPO_ROOT="%REPO_ROOT%\." -G "%GENERATOR%" ..\..\get_build_number || exit /b 1
+  md "%ROOT%"\get_build_number && cd "%ROOT%"\get_build_number || exit /b 1
+  cmake -DREPO_ROOT="%REPO_ROOT%"\. -G "%GENERATOR%" "%REPO_ROOT%"\build_script\get_build_number || exit /b 1
   cmake --build ./ --config Release || exit /b 1
   for /F %%G in ('Release\getbuild.exe') do set BUILD_NUM=%%G
   if "%BUILD_NUM%"=="" exit /b 1
@@ -46,7 +46,7 @@ exit /b
 
 :BuildPlatform
   set BUILD_ROOT=%ROOT%\%BUILD_NUM%\%1
-  md %BUILD_ROOT% && cd %BUILD_ROOT% || exit /b 1
+  md "%BUILD_ROOT%" && cd "%BUILD_ROOT%" || exit /b 1
   if %1==x64 (
     set CMAKE_GENERATOR="%GENERATOR% Win64"
   ) else (
@@ -57,13 +57,13 @@ exit /b
   cmake --build ./ --config Release  || exit /b 1
   cd Release\ctags || exit /b 1
   %ARCHIVER% a ctags-%BUILD_NUM%-%1.zip * || exit /b 1
-  move ctags-%BUILD_NUM%-%1.zip %ROOT% || exit /b 1
+  move ctags-%BUILD_NUM%-%1.zip "%ROOT%" || exit /b 1
   call :RunTests %1 "%BUILD_ROOT%"\tests\Release
 exit /b
 
 :RunTests
   cd %2
-  for %%G in (%REPO_ROOT%\tests\tags\*.zip) do ( cmake -E tar xzvf "%%G" || exit 1 )
-  tags_tests.exe > %ROOT%\tags_tests-%1.txt 2>&1
-  tags_tests.exe --CheckIdxFiles > %ROOT%\tags_tests_idx-%1.txt 2>&1
+  for %%G in ("%REPO_ROOT%"\tests\tags\*.zip) do ( cmake -E tar xzvf "%%G" || exit 1 )
+  tags_tests.exe > "%ROOT%"\tags_tests-%1.txt 2>&1
+  tags_tests.exe --CheckIdxFiles > "%ROOT%"\tags_tests_idx-%1.txt 2>&1
 exit /b
