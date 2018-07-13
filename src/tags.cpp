@@ -949,36 +949,51 @@ inline bool SamePath(TagInfo const& tag, char const* file)
   return !PathCompare(tag.file.c_str(), file, FullCompare);
 }
 
-inline bool DefaultLess(TagInfo const& left, TagInfo const& right, char const* file)
+class TagsLess
 {
-  auto leftSamePath = SamePath(left, file);
-  auto rightSamePath = SamePath(right, file);
-  if (leftSamePath != rightSamePath)
-    return leftSamePath && !rightSamePath;
+public:
+  TagsLess(char const* file, int sortOptions)
+    : File(file)
+    , Options(sortOptions)
+  {
+  }
 
-  if (auto nameCmp = left.name.compare(right.name))
-    return nameCmp < 0;
+  bool operator() (TagInfo const& left, TagInfo const& right) const
+  {
+    auto leftSamePath = !!(Options & SortOptions::CurFileFirst) && SamePath(left, File);
+    auto rightSamePath = !!(Options & SortOptions::CurFileFirst) && SamePath(right, File);
+    if (leftSamePath != rightSamePath)
+      return leftSamePath && !rightSamePath;
+  
+    int cmp = 0;
+    if (!!(Options & SortOptions::SortByName) && (cmp = left.name.compare(right.name)))
+    return cmp < 0;
 
-  if (auto fileCmp = left.file.compare(right.file))
-    return fileCmp < 0;
+    if (cmp = left.file.compare(right.file))
+      return cmp < 0;
 
-  return left.lineno < right.lineno;
-}
+    return left.lineno < right.lineno;
+  }
 
-static std::vector<TagInfo> DefaultSortTags(std::vector<TagInfo>&& tags, char const* file)
+private:
+  char const* File;
+  int const Options;
+};
+
+static std::vector<TagInfo> SortTags(std::vector<TagInfo>&& tags, char const* file, int sortOptions)
 {
-  std::sort(tags.begin(), tags.end(), [=](TagInfo const& left, TagInfo const& right) { return DefaultLess(left, right, file); });
+  std::sort(tags.begin(), tags.end(), TagsLess(file, sortOptions));
   return std::move(tags);
 }
 
-std::vector<TagInfo> Find(const char* name, const char* file)
+std::vector<TagInfo> Find(const char* name, const char* file, int sortOptions)
 {
-  return DefaultSortTags(ForEachFileRepository(file, IndexType::Names, NameMatch(name, FullCompare, CaseSensitive), 0), file);
+  return SortTags(ForEachFileRepository(file, IndexType::Names, NameMatch(name, FullCompare, CaseSensitive), 0), file, sortOptions);
 }
 
-std::vector<TagInfo> FindPartiallyMatchedTags(const char* file, const char* part, size_t maxCount, bool caseInsensitive)
+std::vector<TagInfo> FindPartiallyMatchedTags(const char* file, const char* part, size_t maxCount, bool caseInsensitive, int sortOptions)
 {
-  return DefaultSortTags(ForEachFileRepository(file, caseInsensitive ? IndexType::NamesCaseInsensitive : IndexType::Names, NameMatch(part, PartialCompare, caseInsensitive), maxCount), file);
+  return SortTags(ForEachFileRepository(file, caseInsensitive ? IndexType::NamesCaseInsensitive : IndexType::Names, NameMatch(part, PartialCompare, caseInsensitive), maxCount), file, sortOptions);
 }
 
 std::vector<std::string> FindPartiallyMatchedFile(const char* file, const char* part, size_t maxCount)
@@ -990,9 +1005,9 @@ std::vector<std::string> FindPartiallyMatchedFile(const char* file, const char* 
   return result;
 }
 
-std::vector<TagInfo> FindClassMembers(const char* file, const char* classname)
+std::vector<TagInfo> FindClassMembers(const char* file, const char* classname, int sortOptions)
 {
-  return DefaultSortTags(ForEachFileRepository(file, IndexType::Classes, ClassMemberMatch(classname), 0), file);
+  return SortTags(ForEachFileRepository(file, IndexType::Classes, ClassMemberMatch(classname), 0), file, sortOptions);
 }
 
 std::vector<TagInfo> FindFileSymbols(const char* file)
@@ -1008,7 +1023,7 @@ std::vector<TagInfo> FindFileSymbols(const char* file)
     std::move(tags.begin(), tags.end(), std::back_inserter(result));
   }
 
-  return DefaultSortTags(std::move(result), file);
+  return SortTags(std::move(result), file, SortOptions::Default);
 }
 
 std::vector<std::string> GetFiles()

@@ -121,13 +121,23 @@ struct TagInfo{
 
 int isident(int chr);
 
+class SortOptions
+{
+public:
+  enum
+  {
+    SortByName = 1 << 0,
+    CurFileFirst = 1 << 1,
+    Default = SortByName | CurFileFirst,
+  };
+};
 
 int Load(const char* filename, size_t& symbolsLoaded);
 void UnloadTags(int idx);
-std::vector<TagInfo> Find(const char* name, const char* filename);
-std::vector<TagInfo> FindPartiallyMatchedTags(const char* file, const char* part, size_t maxCount, bool caseInsensitive);
-std::vector<std::string> FindPartiallyMatchedFile(const char* file, const char* part, size_t maxCount);
-std::vector<TagInfo> FindClassMembers(const char* file, const char* classname);
+std::vector<TagInfo> Find(const char* name, const char* filename, int sortOptions = SortOptions::Default);
+std::vector<TagInfo> FindPartiallyMatchedTags(const char* file, const char* part, size_t maxCount, bool caseInsensitive, int sortOptions = SortOptions::Default);
+std::vector<std::string> FindPartiallyMatchedFile(const char* file, const char* part, size_t maxCount); 
+std::vector<TagInfo> FindClassMembers(const char* file, const char* classname, int sortOptions = SortOptions::Default);
 std::vector<TagInfo> FindFileSymbols(const char* file);
 void Autoload(const char* fn);
 std::vector<std::string> GetFiles();
