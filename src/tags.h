@@ -98,6 +98,9 @@ struct Config{
   size_t history_len;
   bool casesens;
   bool autoload_changed;
+  size_t max_results;
+  bool cur_file_first;
+  bool sort_class_members_by_name;
   static const size_t max_history_len;
 
 private:
@@ -126,9 +129,10 @@ class SortOptions
 public:
   enum
   {
+    DoNotSort = -1,
+    Default = 0,
     SortByName = 1 << 0,
     CurFileFirst = 1 << 1,
-    Default = SortByName | CurFileFirst,
   };
 };
 

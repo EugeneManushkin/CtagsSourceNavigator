@@ -46,6 +46,10 @@ Config::Config()
   , history_len(10)
   , casesens(true)
   , autoload_changed(true)
+  , max_results(10)
+  , cur_file_first(true)
+  , sort_class_members_by_name(false)
+
 {
   SetWordchars("0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz~$_");
 }
@@ -967,7 +971,7 @@ public:
   
     int cmp = 0;
     if (!!(Options & SortOptions::SortByName) && (cmp = left.name.compare(right.name)))
-    return cmp < 0;
+      return cmp < 0;
 
     if (cmp = left.file.compare(right.file))
       return cmp < 0;
@@ -982,7 +986,9 @@ private:
 
 static std::vector<TagInfo> SortTags(std::vector<TagInfo>&& tags, char const* file, int sortOptions)
 {
-  std::sort(tags.begin(), tags.end(), TagsLess(file, sortOptions));
+  if (sortOptions != SortOptions::DoNotSort)
+    std::sort(tags.begin(), tags.end(), TagsLess(file, sortOptions));
+
   return std::move(tags);
 }
 

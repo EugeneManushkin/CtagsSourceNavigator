@@ -62,8 +62,6 @@ static const wchar_t* APPNAME = CTAGS_PRODUCT_NAME;
 
 static const wchar_t* ConfigFileName=L"config";
 
-static const size_t MaxMenuItems = 10;
-
 RegExp RegexInstance;
 
 Config config;
@@ -1064,6 +1062,11 @@ std::vector<WideString> GetMenuStrings(std::vector<TagInfo> const& tags, FormatT
   return GetMenuStrings(tagsPtrs, formatFlag);
 }
 
+inline int GetSortOptions(Config const& config)
+{
+  return SortOptions::SortByName | (config.cur_file_first ? SortOptions::CurFileFirst : 0);
+}
+
 class LookupMenuVisitor
 {
 public:
@@ -1083,7 +1086,7 @@ public:
 
   std::vector<WideString> ApplyFilter(char const* filter) override
   {
-    Tags = FindPartiallyMatchedTags(File.c_str(), filter, MaxMenuItems, !config.casesens);
+    Tags = FindPartiallyMatchedTags(File.c_str(), filter, config.max_results, !config.casesens, GetSortOptions(config));
     return GetMenuStrings(Tags);
   }
 
@@ -1112,7 +1115,7 @@ public:
 
   std::vector<WideString> ApplyFilter(char const* filter) override
   {
-    Paths = FindPartiallyMatchedFile(File.c_str(), filter, MaxMenuItems);
+    Paths = FindPartiallyMatchedFile(File.c_str(), filter, config.max_results);
     auto maxfile = GetMenuWidth();
     std::vector<WideString> menuStrings;
     std::transform(Paths.begin(), Paths.end(), std::back_inserter(menuStrings), [=](std::string const& path) {return ToString(TrimFilename(path, maxfile));});
@@ -1636,7 +1639,6 @@ static WideString ReindexRepository(std::string const& fileName)
 static void Lookup(std::string const& file, bool setPanelDir, LookupMenuVisitor& visitor)
 {
   EnsureTagsLoaded(file);
-  size_t const maxMenuItems = 10;
   TagInfo selectedTag;
   if (LookupTagsMenu(visitor, selectedTag))
     NavigateTo(&selectedTag, setPanelDir);
@@ -1671,7 +1673,7 @@ static void GotoDeclaration(char const* fileName)
   if(word.empty())
     return;
 
-  auto tags = Find(word.c_str(), fileName);
+  auto tags = Find(word.c_str(), fileName, GetSortOptions(config));
   if (tags.size() == 1)
     NavigateTo(&tags.back());
   else
@@ -1684,7 +1686,7 @@ static void CompleteName(char const* fileName, EditorInfo const& ei)
   if(word.empty())
     return;
 
-  auto tags = FindPartiallyMatchedTags(fileName, word.c_str(), 0, !config.casesens);
+  auto tags = FindPartiallyMatchedTags(fileName, word.c_str(), 0, !config.casesens, SortOptions::DoNotSort);
   if(tags.empty())
     throw Error(MNothingFound);
 
@@ -1799,7 +1801,9 @@ HANDLE WINAPI OpenW(const struct OpenInfo *info)
                       L"",buf,sizeof(buf)/sizeof(buf[0]),nullptr,0))return nullptr;
           word=ToStdString(buf);
         }
-        SafeCall([&]{ NavigateToTag(FindClassMembers(fileName.c_str(), word.c_str()), FormatTagFlag::DisplayFile); });
+        auto options = GetSortOptions(config) & ~SortOptions::SortByName;
+        options |= config.sort_class_members_by_name ? SortOptions::SortByName : 0;
+        SafeCall([&]{ NavigateToTag(FindClassMembers(fileName.c_str(), word.c_str(), options), FormatTagFlag::DisplayFile); });
       }break;
       case miLookupSymbol:
       {
