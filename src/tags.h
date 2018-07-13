@@ -83,6 +83,9 @@ enum{
   MCanceled,
   MSearchFile,
   MLoadingTags,
+  MMaxResults,
+  MSortClassMembersByName,
+  MCurFileFirst,
 };
 
 struct Config{

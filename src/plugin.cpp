@@ -746,9 +746,23 @@ static void LoadConfig(std::string const& fileName)
     }
     else if(key == "historylen")
     {
-      unsigned len = 0;
-      if (sscanf(val.c_str(), "%u", &len) == 1)
+      int len = 0;
+      if (sscanf(val.c_str(), "%d", &len) == 1 && len >= 0)
         config.history_len = std::min(static_cast<size_t>(len), Config::max_history_len);
+    }
+    else if(key == "maxresults")
+    {
+      int maxresults = 0;
+      if (sscanf(val.c_str(), "%d", &maxresults) == 1 && maxresults > 0)
+        config.max_results = maxresults;
+    }
+    else if(key == "curfilefirst")
+    {
+      config.cur_file_first = val == "true";
+    }
+    else if(key == "sortclassmembersbyname")
+    {
+      config.sort_class_members_by_name = val == "true";
     }
   }
 
@@ -2054,14 +2068,19 @@ intptr_t WINAPI ConfigureW(const struct ConfigureInfo *Info)
   unsigned char y = 0;
   struct InitDialogItem initItems[]={
 //    Type        X1  Y2  X2 Y2  F S           Flags D Data
-    DI_DOUBLEBOX, 3, ++y, 64,20, 0,0,              0,0,MPlugin,L"",{},
+    DI_DOUBLEBOX, 3, ++y, 64,25, 0,0,              0,0,MPlugin,L"",{},
     DI_TEXT,      5, ++y,  0, 0, 0,0,              0,0,MPathToExe,L"",{},
     DI_EDIT,      5, ++y, 62, 3, 1,0,              0,0,-1,ToString(config.exe),{"pathtoexe", true},
     DI_TEXT,      5, ++y,  0, 0, 0,0,              0,0,MCmdLineOptions,L"",{},
     DI_EDIT,      5, ++y, 62, 5, 1,0,              0,0,-1,ToString(config.opt),{"commandline"},
+    DI_TEXT,      5, ++y, 62,10, 1,0,DIF_SEPARATOR|DIF_BOXCOLOR,0,-1,L"",{},
+    DI_TEXT,      5, ++y,  0, 0, 0,0,              0,0,MMaxResults,L"",{},
+    DI_EDIT,      5, ++y, 62, 9, 1,0,              0,0,-1,ToString(std::to_string(config.max_results)),{"maxresults", true},
+    DI_CHECKBOX,  5, ++y, 62,10, 1,config.casesens,0,0,MCaseSensFilt,L"",{"casesensfilt", false, true},
+    DI_CHECKBOX,  5, ++y, 62,10, 1,config.sort_class_members_by_name,0,0,MSortClassMembersByName,L"",{"sortclassmembersbyname", false, true},
+    DI_CHECKBOX,  5, ++y, 62,10, 1,config.cur_file_first,0,0,MCurFileFirst,L"",{"curfilefirst", false, true},
     DI_TEXT,      5, ++y,  0, 0, 0,0,              0,0,MWordChars,L"",{},
     DI_EDIT,      5, ++y, 62, 9, 1,0,              0,0,-1,ToString(config.GetWordchars()),{"wordchars", true},
-    DI_CHECKBOX,  5, ++y, 62,10, 1,config.casesens,0,0,MCaseSensFilt,L"",{"casesensfilt", false, true},
     DI_TEXT,      5, ++y, 62,10, 1,0,DIF_SEPARATOR|DIF_BOXCOLOR,0,-1,L"",{},
     DI_TEXT,      5, ++y,  0, 0, 0,0,              0,0,MTagsMask,L"",{},
     DI_EDIT,      5, ++y, 62, 9, 1,0,              0,0,-1,ToString(config.tagsmask),{"tagsmask", true},
@@ -2099,7 +2118,7 @@ intptr_t WINAPI ConfigureW(const struct ConfigureInfo *Info)
 
   std::shared_ptr<void> handleHolder(handle, [](void* h){I.DialogFree(h);});
   auto ExitCode = I.DialogRun(handle);
-  if(ExitCode!=18)return FALSE;
+  if(ExitCode!=23)return FALSE;
   if (SaveConfig(initItems, itemsCount))
     SynchronizeConfig();
 
