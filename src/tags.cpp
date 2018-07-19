@@ -644,7 +644,7 @@ int TagFileInfo::CreateIndex(time_t tagsModTime)
   WriteOffsets(g, lines.begin(), lines.end());
   std::sort(classes.begin(), classes.end(), [](LineInfo* left, LineInfo* right) { return FieldLess(left->cls, right->cls); });
   WriteOffsets(g, classes.begin(), classes.end());
-  auto linesEnd = std::unique(lines.begin(), lines.end(), [](LineInfo* left, LineInfo* right) { return !PathLess(left->fn, right->fn); });
+  auto linesEnd = std::unique(lines.begin(), lines.end(), [](LineInfo* left, LineInfo* right) { return PathsEqual(left->fn, right->fn); });
   std::sort(lines.begin(), linesEnd, [](LineInfo* left, LineInfo* right) { return FieldLess(GetFilename(left->fn), GetFilename(right->fn), CaseInsensitive); });
   WriteOffsets(g, lines.begin(), linesEnd);
   delete [] linespool;
@@ -1066,4 +1066,9 @@ bool IsTagFile(const char* file)
 bool TagsLoadedForFile(const char* file)
 {
   return std::find_if(files.begin(), files.end(), [&](TagFileInfoPtr const& repos) {return repos->GetRelativePath(file); }) != files.end();
+}
+
+bool PathsEqual(const char* left, const char* right)
+{
+  return !PathCompare(left, right, FullCompare);
 }

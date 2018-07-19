@@ -150,4 +150,5 @@ void Autoload(const char* fn);
 std::vector<std::string> GetFiles();
 bool IsTagFile(const char* file);
 bool TagsLoadedForFile(const char* file);
+bool PathsEqual(const char* left, const char* right);
 #endif
