@@ -1368,9 +1368,7 @@ static void NavigateTo(TagInfo const* info, bool setPanelDir = false)
     if (setPanelDir)
       SelectFile(ToString(info->file));
 
-    if (!GotoOpenedFile(info->file))
-      SetPos(info->file, -1, -1, -1, -1);
-
+    SetPos(info->file, -1, -1, -1, -1);
     return;
   }
 
@@ -1514,7 +1512,7 @@ int SetPos(std::string const& filename,intptr_t line,intptr_t col,intptr_t top,i
 {
   if(!GotoOpenedFile(filename))
   {
-    I.Editor(ToString(filename).c_str(), L"", 0, 0, -1, -1,  EF_NONMODAL, line, col, CP_DEFAULT);
+    I.Editor(ToString(filename).c_str(), L"", 0, 0, -1, -1,  EF_NONMODAL, line >= 0 ? line + 1 : -1, col >= 0 ? col + 1 : -1, CP_DEFAULT);
     return 0;
   }
 
