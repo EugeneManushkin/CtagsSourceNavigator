@@ -1681,6 +1681,22 @@ static void NavigateToTag(std::vector<TagInfo>&& ta, FormatTagFlag formatFlag)
     NavigateTo(&tag);
 }
 
+static void AdjustToContext(std::vector<TagInfo>& tags, char const* fileName)
+{
+  EditorInfo ei = GetCurrentEditorInfo();
+  EditorGetString egs = {sizeof(EditorGetString)};
+  egs.StringNumber=-1;
+  if (!I.EditorControl(ei.EditorID, ECTL_GETSTRING, 0, &egs))
+    return;
+
+  auto iter = FindContextTag(tags, fileName, static_cast<int>(ei.CurLine), ToStdString(egs.StringText).c_str());
+  if (iter == tags.end())
+    return;
+
+  tags.erase(iter);
+  //TODO: sort by context
+}
+
 static void GotoDeclaration(char const* fileName)
 {
   auto word = GetWord();
@@ -1688,6 +1704,13 @@ static void GotoDeclaration(char const* fileName)
     return;
 
   auto tags = Find(word.c_str(), fileName, GetSortOptions(config));
+  if (tags.empty())
+    throw Error(MNotFound);
+
+  AdjustToContext(tags, fileName);
+  if (tags.empty())
+    return;
+
   if (tags.size() == 1)
     NavigateTo(&tags.back());
   else

@@ -20,6 +20,7 @@
 #include <algorithm>
 #include <functional>
 #include <iterator>
+#include <regex>
 #include <set>
 #include <stdio.h>
 #include <sys/stat.h>
@@ -222,6 +223,19 @@ static int ToInt(std::string const& str)
   return -1;
 }
 
+static bool LineMatches(char const* lineText, TagInfo const& tag)
+{
+  try
+  {
+    return tag.re.length() > 2 ? std::regex_match(lineText, std::regex(tag.re.substr(1, tag.re.length() - 2))) : false;
+  }
+  catch(std::exception const&)
+  {
+  }
+
+  return false;
+}
+
 //int Msg(const char*);
 
 static void QuoteMeta(std::string& str)
@@ -402,6 +416,11 @@ inline int PathCompare(char const* left, char const* &right, bool partialCompare
 inline bool PathLess(char const* left, char const* right)
 {
   return PathCompare(left, right, FullCompare) < 0;
+}
+
+inline bool PathsEqual(const char* left, const char* right)
+{
+  return !PathCompare(left, right, FullCompare);
 }
 
 static char const* GetFilename(char const* path)
@@ -728,7 +747,7 @@ std::string TagFileInfo::GetFullPath(std::string const& relativePath) const
 bool TagFileInfo::HasName(char const* fileName) const
 {
   // filename.back() is not path separator
-  return !PathCompare(filename.c_str(), fileName, FullCompare);
+  return PathsEqual(filename.c_str(), fileName);
 }
 
 //TODO: rework: must return error instead of message id (message id coud be zero)
@@ -948,11 +967,6 @@ static std::vector<TagInfo> ForEachFileRepository(char const* fileFullPath, Inde
   return result;
 }
 
-inline bool SamePath(TagInfo const& tag, char const* file)
-{
-  return !PathCompare(tag.file.c_str(), file, FullCompare);
-}
-
 class TagsLess
 {
 public:
@@ -964,8 +978,8 @@ public:
 
   bool operator() (TagInfo const& left, TagInfo const& right) const
   {
-    auto leftSamePath = !!(Options & SortOptions::CurFileFirst) && SamePath(left, File);
-    auto rightSamePath = !!(Options & SortOptions::CurFileFirst) && SamePath(right, File);
+    auto leftSamePath = !!(Options & SortOptions::CurFileFirst) && PathsEqual(left.file.c_str(), File);
+    auto rightSamePath = !!(Options & SortOptions::CurFileFirst) && PathsEqual(right.file.c_str(), File);
     if (leftSamePath != rightSamePath)
       return leftSamePath && !rightSamePath;
   
@@ -1068,7 +1082,23 @@ bool TagsLoadedForFile(const char* file)
   return std::find_if(files.begin(), files.end(), [&](TagFileInfoPtr const& repos) {return repos->GetRelativePath(file); }) != files.end();
 }
 
-bool PathsEqual(const char* left, const char* right)
+std::vector<TagInfo>::const_iterator FindContextTag(std::vector<TagInfo> const& tags, char const* fileName, int lineNumber, char const* lineText)
 {
-  return !PathCompare(left, right, FullCompare);
+  auto possibleContext = tags.end();
+  bool possibleContextUniq = true;
+  for (auto i = tags.begin(); i != tags.end(); ++i)
+  {
+    if (!PathsEqual(fileName, i->file.c_str()))
+      continue;
+
+    bool lineEqual = i->lineno > 0 && i->lineno - 1 == lineNumber;
+    bool lineMatches = LineMatches(lineText, *i);
+    if (lineEqual && lineMatches)
+      return i;
+
+    possibleContextUniq = (lineEqual || lineMatches) && possibleContext != tags.end() ? false : possibleContextUniq;
+    possibleContext = lineEqual || lineMatches ? i : possibleContext;
+  }
+
+  return possibleContextUniq ? possibleContext : tags.end();
 }

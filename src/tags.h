@@ -150,5 +150,5 @@ void Autoload(const char* fn);
 std::vector<std::string> GetFiles();
 bool IsTagFile(const char* file);
 bool TagsLoadedForFile(const char* file);
-bool PathsEqual(const char* left, const char* right);
+std::vector<TagInfo>::const_iterator FindContextTag(std::vector<TagInfo> const& tags, char const* fileName, int lineNumber, char const* lineText);
 #endif
