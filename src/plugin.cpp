@@ -1351,9 +1351,10 @@ bool GotoOpenedFile(std::string const& file)
 
 static void NavigateTo(TagInfo const* info, bool setPanelDir = false)
 {
-  auto ei = GetCurrentEditorInfo();
-  std::string fileName = GetFileNameFromEditor(ei.EditorID); // TODO: auto
+  EditorInfo ei = {sizeof(EditorInfo)};
+  if (!!I.EditorControl(-1, ECTL_GETINFO, 0, &ei))
   {
+    auto fileName = GetFileNameFromEditor(ei.EditorID);
     SUndoInfo ui;
     ui.file=fileName.c_str();
     ui.line=ei.CurLine;
