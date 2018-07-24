@@ -1130,12 +1130,15 @@ inline bool TagsOpposite(TagInfo const& left, TagInfo const& right)
 
 std::vector<TagInfo>::const_iterator Reorder(TagInfo const& context, std::vector<TagInfo>& tags)
 {
-  auto bound = tags.begin();
+  size_t bound = 0;
   auto i = tags.end();
-  while (std::distance(bound, tags.end()) > 1 && (i = std::find_if(bound, tags.end(), [&](TagInfo const& tag) { return TagsOpposite(tag, context); })) != tags.end())
+  while (tags.size() - bound > 1 && (i = std::find_if(tags.begin() + bound, tags.end(), [&](TagInfo const& tag) { return TagsOpposite(tag, context); })) != tags.end())
   {
-    std::swap(*bound++, *i);
+    auto foundTag = std::move(*i);
+    tags.erase(i);
+    tags.insert(tags.begin() + bound, std::move(foundTag));
+    ++bound;
   }
 
-  return bound;
+  return tags.cbegin() + bound;
 }
