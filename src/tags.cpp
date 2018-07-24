@@ -27,6 +27,7 @@
 #include <sys/utime.h>
 #include <string>
 #include <string.h>
+#include <unordered_map>
 #include <vector>
 #include <memory>
 #define NOMINMAX
@@ -1101,4 +1102,40 @@ std::vector<TagInfo>::const_iterator FindContextTag(std::vector<TagInfo> const& 
   }
 
   return possibleContextUniq ? possibleContext : tags.end();
+}
+
+inline bool TypesOpposite(char left, char right)
+{
+  std::unordered_map<char, char> const oppositeTypes = {{'f', 'p'}, {'p', 'f'}, {'m', 'm'}};
+  auto t = oppositeTypes.find(left);
+  return t != oppositeTypes.end() && t->second == right;
+}
+
+inline bool InfoEqual(std::string const& left, std::string const& right)
+{
+  std::string leftInfo = "\t" + left;
+  std::string rightInfo = "\t" + right;
+  auto leftClass = FindClassFullQualification(leftInfo.c_str());
+  leftClass = leftClass ? leftClass : left.c_str();
+  auto rightClass = FindClassFullQualification(rightInfo.c_str());
+  rightClass = rightClass ? rightClass : right.c_str();
+  return !strcmp(leftClass, rightClass);
+}
+
+inline bool TagsOpposite(TagInfo const& left, TagInfo const& right)
+{
+  bool tagsNotEqual = left.lineno != right.lineno || !PathsEqual(left.file.c_str(), right.file.c_str());
+  return tagsNotEqual && TypesOpposite(left.type, right.type) && InfoEqual(left.info, right.info);
+}
+
+std::vector<TagInfo>::const_iterator Reorder(TagInfo const& context, std::vector<TagInfo>& tags)
+{
+  auto bound = tags.begin();
+  auto i = tags.end();
+  while (std::distance(bound, tags.end()) > 1 && (i = std::find_if(bound, tags.end(), [&](TagInfo const& tag) { return TagsOpposite(tag, context); })) != tags.end())
+  {
+    std::swap(*bound++, *i);
+  }
+
+  return bound;
 }

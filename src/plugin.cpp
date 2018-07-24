@@ -1692,8 +1692,9 @@ static void AdjustToContext(std::vector<TagInfo>& tags, char const* fileName)
   if (iter == tags.end())
     return;
 
+  auto context = *iter;
   tags.erase(iter);
-  //TODO: sort by context
+  Reorder(context, tags);
 }
 
 static void GotoDeclaration(char const* fileName)
