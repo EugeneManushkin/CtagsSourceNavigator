@@ -1203,7 +1203,7 @@ private:
   std::vector<TagInfo const*> FilteredTags;
 };
 
-static bool LookupTagsMenu(LookupMenuVisitor& visitor, TagInfo& tag)
+static bool LookupTagsMenu(LookupMenuVisitor& visitor, TagInfo& tag, intptr_t separatorPos = -1)
 {
   std::string filter;
   auto title = GetMsg(MSelectSymbol);
@@ -1214,11 +1214,17 @@ static bool LookupTagsMenu(LookupMenuVisitor& visitor, TagInfo& tag)
   {
     auto menuStrings = visitor.ApplyFilter(filter.c_str());
     std::vector<FarMenuItem> menu;
+    intptr_t counter = 0;
     for (auto const& i : menuStrings)
     {
       FarMenuItem item = {MIF_NONE,i.c_str()};
+      item.UserData = counter++;
       menu.push_back(item);
     }
+
+    if (filter.empty() && separatorPos > 0 && static_cast<size_t>(separatorPos) < menu.size())
+      menu.insert(menu.begin() + separatorPos, FarMenuItem({MIF_SEPARATOR}));
+
     intptr_t bkey;
     WideString ftitle = !filter.empty() ? L"[Filter: " + ToString(filter) + L"]" : WideString(L" [") + title + L"]";
     WideString bottomText = L"";
@@ -1227,13 +1233,13 @@ static bool LookupTagsMenu(LookupMenuVisitor& visitor, TagInfo& tag)
     if(res==-1 && bkey==-1)return false;
     if(bkey==-1)
     {
-      tag = visitor.GetTag(res);
+      tag = visitor.GetTag(menu[res].UserData);
       return true;
     }
     if (IsCtrlC(fk[bkey]))
     {
       if (res != -1)
-        SetClipboardText(visitor.GetClipboardText(res));
+        SetClipboardText(visitor.GetClipboardText(menu[res].UserData));
 
       return false;
     }
@@ -1669,32 +1675,37 @@ static void LookupFile(std::string const& file, bool setPanelDir)
   Lookup(file, setPanelDir, visitor);
 }
 
-static void NavigateToTag(std::vector<TagInfo>&& ta, FormatTagFlag formatFlag)
+static void NavigateToTag(std::vector<TagInfo>&& ta, intptr_t separatorPos, FormatTagFlag formatFlag)
 {
   if (ta.empty())
     throw Error(MNotFound);
 
   TagInfo tag;
   FilterMenuVisitor visitor(std::move(ta), !config.casesens, formatFlag);
-  if (LookupTagsMenu(visitor, tag))
+  if (LookupTagsMenu(visitor, tag, separatorPos))
     NavigateTo(&tag);
 }
 
-static void AdjustToContext(std::vector<TagInfo>& tags, char const* fileName)
+static void NavigateToTag(std::vector<TagInfo>&& ta, FormatTagFlag formatFlag)
+{
+  NavigateToTag(std::move(ta), -1, formatFlag);
+}
+
+static std::vector<TagInfo>::const_iterator AdjustToContext(std::vector<TagInfo>& tags, char const* fileName)
 {
   EditorInfo ei = GetCurrentEditorInfo();
   EditorGetString egs = {sizeof(EditorGetString)};
   egs.StringNumber=-1;
   if (!I.EditorControl(ei.EditorID, ECTL_GETSTRING, 0, &egs))
-    return;
+    return tags.cbegin();
 
   auto iter = FindContextTag(tags, fileName, static_cast<int>(ei.CurLine), ToStdString(egs.StringText).c_str());
   if (iter == tags.end())
-    return;
+    return tags.cbegin();
 
   auto context = *iter;
   tags.erase(iter);
-  Reorder(context, tags);
+  return Reorder(context, tags);
 }
 
 static void GotoDeclaration(char const* fileName)
@@ -1707,14 +1718,14 @@ static void GotoDeclaration(char const* fileName)
   if (tags.empty())
     throw Error(MNotFound);
 
-  AdjustToContext(tags, fileName);
+  auto border = AdjustToContext(tags, fileName);
   if (tags.empty())
     return;
 
   if (tags.size() == 1)
     NavigateTo(&tags.back());
   else
-    NavigateToTag(std::move(tags), FormatTagFlag::DisplayFile);
+    NavigateToTag(std::move(tags), static_cast<intptr_t>(std::distance(tags.cbegin(), border)), FormatTagFlag::DisplayFile);
 }
 
 static void CompleteName(char const* fileName, EditorInfo const& ei)
