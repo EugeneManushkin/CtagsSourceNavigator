@@ -1045,8 +1045,6 @@ WideString FormatTagInfo(TagInfo const& ti, size_t maxid, size_t maxDeclaration,
 //TODO: rework
 std::vector<WideString> GetMenuStrings(std::vector<TagInfo const*> const& tags, FormatTagFlag formatFlag)
 {
-  const size_t currentWidth = GetMenuWidth();
-  const size_t maxInfoWidth = currentWidth / 5;
   size_t maxid = 0;
   size_t maxinfo = 0;
   for (auto const& ti : tags)
@@ -1055,9 +1053,9 @@ std::vector<WideString> GetMenuStrings(std::vector<TagInfo const*> const& tags, 
     if (ti->declaration.length() > maxinfo)maxinfo = ti->declaration.length();
   }
 
+  const size_t currentWidth = GetMenuWidth();
   maxid = std::min(maxid, currentWidth);
-  maxinfo = std::min(maxinfo, maxInfoWidth);
-  maxinfo = std::min(maxinfo, currentWidth - maxid);
+  maxinfo = std::min(maxinfo, (currentWidth - maxid) / 2);
   size_t len = maxid + maxinfo;
   size_t maxfile = len > currentWidth ? 0 : currentWidth - len;
   std::vector<WideString> result;
