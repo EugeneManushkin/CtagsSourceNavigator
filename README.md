@@ -16,6 +16,13 @@ This is a [Far Manager](https://www.farmanager.com/) plugin for browsing source 
 + Reindexing repository.
 + Hotkeys macro
 ## What's new 
+### 2.1.0.29
++ Supported case insensitive search in entire repository. Unsetting "Case Sensitive filter" option in plugin configuration menu means case insensitive search in all kind of search including search in entire repository
++ Supported natural ordering of class members. To sort class members by name enable option "Sort class members by name" in plugin configuration menu
++ Supported regex filter in "Search name in opened file" and "Class members" menu options
++ Improved "Open declaration" option
++ Fixed bugs
+### 2.1.0.21
 + Search and open files by name (equivalent to "Open resource" command in Eclipse CDT)
 + Supported tags with absolute paths (ctags.exe ... -R C:\full\path\to\repository)
 + Provided hotkey macro
