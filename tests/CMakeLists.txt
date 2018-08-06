@@ -7,8 +7,6 @@ file(GLOB TAGS_SOURCES
     "../src/tags.h"
     "../src/RegExp.cpp"
     "../src/RegExp.hpp"
-    "../src/XTools.cpp"
-    "../src/XTools.hpp"
 )
 
 add_executable(tags_tests ${TAGS_SOURCES})

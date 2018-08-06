@@ -839,7 +839,6 @@ public:
   }
 };
 
-//TODO: support case insensitive search
 static std::pair<size_t, size_t> GetMatchedOffsetRange(FILE* f, OffsetCont const& offsets, MatchVisitor const& visitor, size_t maxCount)
 {
   if (offsets.empty())

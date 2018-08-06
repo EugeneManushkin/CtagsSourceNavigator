@@ -118,7 +118,6 @@ std::vector<TagInfo> FindPartiallyMatchedTags(const char* file, const char* part
 std::vector<std::string> FindPartiallyMatchedFile(const char* file, const char* part, size_t maxCount); 
 std::vector<TagInfo> FindClassMembers(const char* file, const char* classname, int sortOptions = SortOptions::Default);
 std::vector<TagInfo> FindFileSymbols(const char* file);
-void Autoload(const char* fn);
 std::vector<std::string> GetFiles();
 bool IsTagFile(const char* file);
 bool TagsLoadedForFile(const char* file);
