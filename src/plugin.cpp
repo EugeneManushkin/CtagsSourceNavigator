@@ -42,6 +42,7 @@
 #include "resource.h"
 
 #include <algorithm>
+#include <bitset>
 #include <deque>
 #include <functional>
 #include <iterator>
@@ -63,6 +64,65 @@ static const wchar_t* APPNAME = CTAGS_PRODUCT_NAME;
 static const wchar_t* ConfigFileName=L"config";
 
 RegExp RegexInstance;
+
+struct Config{
+  Config();
+  void SetWordchars(std::string const& str);
+  std::string GetWordchars() const
+  {
+    return wordchars;
+  }
+
+  bool isident(int chr) const
+  {
+    return wordCharsMap[(unsigned char)chr];
+  }
+
+  std::string exe;
+  std::string opt;
+  std::string autoload;
+  std::string tagsmask;
+  std::string history_file;
+  size_t history_len;
+  bool casesens;
+  bool autoload_changed;
+  size_t max_results;
+  bool cur_file_first;
+  bool sort_class_members_by_name;
+  static const size_t max_history_len;
+
+private:
+  std::string wordchars;
+  std::bitset<256> wordCharsMap;
+};
+
+const size_t Config::max_history_len = 100;
+
+Config::Config()
+  : exe("ctags.exe")
+  , opt("--c++-types=+px --c-types=+px --fields=+n -R *")
+  , autoload("%USERPROFILE%\\.tags-autoload")
+  , tagsmask("tags,*.tags")
+  , history_file("%USERPROFILE%\\.tags-history")
+  , history_len(10)
+  , casesens(true)
+  , autoload_changed(true)
+  , max_results(10)
+  , cur_file_first(true)
+  , sort_class_members_by_name(false)
+{
+  SetWordchars("0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz~$_");
+}
+
+void Config::SetWordchars(std::string const& str)
+{
+  wordchars = str;
+  wordCharsMap.reset();
+  for (auto c : str)
+  {
+    wordCharsMap.set((unsigned char)c, true);
+  }
+}
 
 Config config;
 
@@ -1266,7 +1326,7 @@ void WINAPI SetStartupInfoW(const struct PluginStartupInfo *Info)
   SynchronizeConfig();
 }
 
-int isident(int chr)
+inline int isident(int chr)
 {
   return config.isident(chr);
 }

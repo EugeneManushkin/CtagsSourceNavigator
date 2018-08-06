@@ -37,45 +37,6 @@
 
 using namespace XClasses;
 
-const size_t Config::max_history_len = 100;
-
-Config::Config()
-  : exe("ctags.exe")
-  , opt("--c++-types=+px --c-types=+px --fields=+n -R *")
-  , autoload("%USERPROFILE%\\.tags-autoload")
-  , tagsmask("tags,*.tags")
-  , history_file("%USERPROFILE%\\.tags-history")
-  , history_len(10)
-  , casesens(true)
-  , autoload_changed(true)
-  , max_results(10)
-  , cur_file_first(true)
-  , sort_class_members_by_name(false)
-
-{
-  SetWordchars("0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz~$_");
-}
-
-void Config::SetWordchars(std::string const& str)
-{
-  wordchars = str;
-  wordCharsMap.reset();
-  for (auto c : str)
-  {
-    wordCharsMap.set((unsigned char)c, true);
-  }
-}
-
-std::string Config::GetWordchars() const
-{
-  return wordchars;
-}
-
-bool Config::isident(int chr) const
-{
-  return wordCharsMap[(unsigned char)chr];
-}
-
 static bool FileExists(char const* filename)
 {
   return GetFileAttributesA(filename) != INVALID_FILE_ATTRIBUTES;

@@ -21,7 +21,6 @@
 #define __TAGS_H__
 
 #include <string>
-#include <bitset>
 #include <vector>
 
 enum{
@@ -86,29 +85,6 @@ enum{
   MMaxResults,
   MSortClassMembersByName,
   MCurFileFirst,
-};
-
-struct Config{
-  Config();
-  void SetWordchars(std::string const& str);
-  std::string GetWordchars() const;
-  bool isident(int chr) const;
-  std::string exe;
-  std::string opt;
-  std::string autoload;
-  std::string tagsmask;
-  std::string history_file;
-  size_t history_len;
-  bool casesens;
-  bool autoload_changed;
-  size_t max_results;
-  bool cur_file_first;
-  bool sort_class_members_by_name;
-  static const size_t max_history_len;
-
-private:
-  std::string wordchars;
-  std::bitset<256> wordCharsMap;
 };
 
 struct TagInfo{
