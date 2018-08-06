@@ -111,8 +111,6 @@ private:
   std::bitset<256> wordCharsMap;
 };
 
-extern Config config;
-
 struct TagInfo{
   std::string name;
   std::string file;
@@ -124,8 +122,6 @@ struct TagInfo{
 
   TagInfo():lineno(-1){}
 };
-
-int isident(int chr);
 
 class SortOptions
 {

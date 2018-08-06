@@ -12,13 +12,6 @@
 #include <regex>
 #include <vector>
 
-Config config;
-
-int isident(int chr)
-{
-  return config.isident(chr);
-}
-
 namespace
 {
   bool CheckIdxFiles = false;

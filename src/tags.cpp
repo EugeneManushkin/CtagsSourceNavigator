@@ -451,11 +451,23 @@ static char const* FindClassFullQualification(char const* str)
   return nullptr;
 }
 
+inline bool IsScopeSeparator(char c)
+{
+  return c == '.'  // .  default
+      || c == ':'  // :: c++, itcl, php, tcl, tcloo
+      || c == '/'  // /  automake
+      || c == '%'  // /% dtd parameter entry
+      || c == '@'  // /@ dtd attribute
+      || c == '\\' // \  php namespace
+      || c == '-'  // -  rpm
+  ;
+}
+
 static char const* ExtractClassName(char const* fullQualification)
 {
   char const* className = fullQualification;
   for(; fullQualification && !IsFieldEnd(*fullQualification); ++fullQualification)
-    if (!isident(*fullQualification))
+    if (IsScopeSeparator(*fullQualification))
       className = fullQualification + 1;
 
   return className && !IsFieldEnd(*className) ? className : nullptr;
