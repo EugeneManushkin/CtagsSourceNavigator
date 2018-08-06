@@ -686,7 +686,8 @@ int TagFileInfo::Load()
 {
   struct stat st;
   if (stat(filename.c_str(), &st) == -1)
-    return MEFailedToOpen;
+//TODO: return Error(...)
+    return ENOENT;
 
   if (modtm == st.st_mtime)
     return 0;
@@ -694,7 +695,8 @@ int TagFileInfo::Load()
   if (!LoadIndex(st.st_mtime) && !CreateIndex(st.st_mtime))
   {
     remove(indexFile.c_str());
-    return MFailedToWriteIndex;
+//TODO: return Error(...)
+    return EIO;
   }
 
   modtm = st.st_mtime;

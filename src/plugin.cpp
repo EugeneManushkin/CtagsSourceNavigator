@@ -38,6 +38,7 @@
 #define _FAR_NO_NAMELESS_UNIONS
 #include <plugin_sdk/plugin.hpp>
 #include "tags.h"
+#include "text.h"
 #include "RegExp.hpp"
 #include "resource.h"
 
@@ -914,7 +915,7 @@ static size_t LoadTagsImpl(std::string const& tagsFile)
   size_t symbolsLoaded = 0;
   auto message = LongOperationMessage(GetMsg(MLoadingTags));
   if (auto err = Load(tagsFile.c_str(), symbolsLoaded))
-    throw Error(err);
+    throw Error(err == ENOENT ? MEFailedToOpen : MFailedToWriteIndex);
 
   return symbolsLoaded;
 }
