@@ -33,9 +33,6 @@
 #define NOMINMAX
 #include <windows.h>
 #include "tags.h"
-#include "RegExp.hpp"
-
-using namespace XClasses;
 
 static bool FileExists(char const* filename)
 {
@@ -167,11 +164,6 @@ static bool ReadRepoRoot(FILE* f, std::string& repoRoot)
   return true;
 }
 
-static std::string GetStr(const char* buf, SMatch& m)
-{
-  return std::string(buf + m.start, buf + m.end);
-}
-
 static int ToInt(std::string const& str)
 {
   try
@@ -271,45 +263,74 @@ static std::string MakeFilename(std::string const& str)
   return result;
 }
 
-RegExp reParse("/(.+?)\\t(.*?)\\t(\\d+|\\/.*?\\/(?<=[^\\\\]\\/));\"\\t(\\w)(?:\\tline:(\\d+))?(?:\\t(\\S*))?/");
-
-TagInfo* ParseLine(const char* buf, TagFileInfo const& fi)
+inline bool IsFieldEnd(char c)
 {
-  std::string pos;
-  std::string file;
-  SMatch m[10];
-  int n=10;
-  if(reParse.Match(buf,m,n))
+  return !c || c == '\r' || c == '\n' || c == '\t';
+}
+
+inline bool NextField(char const*& cur, char const*& next)
+{
+  if (IsFieldEnd(*next) && *next != '\t')
+    return false;
+
+  char const* const end = nullptr;
+  cur = cur != next ? next + 1 : cur;
+  for (next = cur; !IsFieldEnd(*next); ++next);
+  return next != cur;
+}
+
+bool ParseLine(const char* buf, TagFileInfo const& fi, TagInfo& result)
+{
+  char const* next = buf;
+  if (!NextField(buf, next))
+    return false; 
+
+  result.name = std::string(buf, next);
+  if (!NextField(buf, next))
+    return false;
+
+  result.file = MakeFilename(fi.GetFullPath(std::string(buf, next)));
+  if (!NextField(buf, next))
+    return false;
+
+  std::string const separator = ";\"";
+  if (next <= buf + separator.length() || separator.compare(0, separator.length(), next - separator.length(), separator.length()))
+    return false;
+
+  std::string excmd(buf, next - separator.length());
+  if(excmd.length() > 1 && excmd.front() == '/')
   {
-    TagInfo *i=new TagInfo;
-    i->name = GetStr(buf,m[1]);
-    file = GetStr(buf,m[2]);
-    i->file = MakeFilename(fi.GetFullPath(file));
-    pos = GetStr(buf,m[3]);
-    if(pos[0]=='/')
-    {
-      i->declaration = MakeDeclaration(pos);
-      QuoteMeta(pos);
-      ReplaceSpaces(pos);
-      i->re=pos;
-      if(m[5].start!=-1)
-      {
-        pos = GetStr(buf,m[5]);
-        i->lineno=ToInt(pos);
-      }
-    }else
-    {
-      i->lineno=ToInt(pos);
-    }
-    pos = GetStr(buf,m[4]);
-    i->type=pos[0];
-    if(m[5].start!=-1)
-    {
-      i->info = GetStr(buf,m[6]);
-    }
-    return i;
+    if (excmd.length() < 2 && excmd.back() != '/')
+      return false;
+
+    result.declaration = MakeDeclaration(excmd);
+    QuoteMeta(excmd);
+    ReplaceSpaces(excmd);
+    result.re = std::move(excmd);
   }
-  return NULL;
+  else
+  {
+    result.lineno=ToInt(excmd);
+  }
+
+//TODO: support --fields=-k
+  if (!NextField(buf, next))
+    return false;
+
+  result.type = *buf;
+  if (!NextField(buf, next))
+    return true;
+
+  std::string const line = "line:";
+  if (next > buf + line.length() && !line.compare(0, line.length(), buf, line.length()))
+  {
+    result.lineno=ToInt(std::string(buf + line.length(), next));
+    if (!NextField(buf, next))
+      return true;
+  }
+
+  result.info = std::string(buf, next);
+  return true;
 }
 
 static char strbuf[16384];
@@ -325,11 +346,6 @@ static bool CaseInsensitive = true;
 static bool CaseSensitive = !CaseInsensitive;
 static bool PartialCompare = true;
 static bool FullCompare = !PartialCompare;
-
-inline bool IsFieldEnd(char c)
-{
-  return !c || c == '\r' || c == '\n' || c == '\t';
-}
 
 inline int CharCmp(int left, int right, bool caseInsensitive)
 {
@@ -919,9 +935,9 @@ static std::vector<TagInfo> GetMatchedTags(TagFileInfo* fi, OffsetCont const& of
     fseek(f, offsets[range.first], SEEK_SET);
     std::string line;
     GetLine(line, f);
-    std::unique_ptr<TagInfo> tag(ParseLine(line.c_str(), *fi));
-    if (tag)
-      result.push_back(*tag);
+    TagInfo tag;
+    if (ParseLine(line.c_str(), *fi, tag))
+      result.push_back(std::move(tag));
   }
   fclose(f);
   return result;
