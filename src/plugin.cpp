@@ -39,7 +39,6 @@
 #include <plugin_sdk/plugin.hpp>
 #include "tags.h"
 #include "text.h"
-#include "RegExp.hpp"
 #include "resource.h"
 
 #include <algorithm>
@@ -55,16 +54,12 @@
 #include <map>
 #include <unordered_map>
 
-using namespace XClasses;
-
 static struct PluginStartupInfo I;
 FarStandardFunctions FSF;
 
 static const wchar_t* APPNAME = CTAGS_PRODUCT_NAME;
 
 static const wchar_t* ConfigFileName=L"config";
-
-RegExp RegexInstance;
 
 struct Config{
   Config();
@@ -1320,7 +1315,6 @@ static bool LookupTagsMenu(LookupMenuVisitor& visitor, TagInfo& tag, intptr_t se
 
 void WINAPI SetStartupInfoW(const struct PluginStartupInfo *Info)
 {
-  RegexInstance.InitLocale();
   I=*Info;
   FSF = *Info->FSF;
   I.FSF = &FSF;
@@ -1439,8 +1433,7 @@ static void NavigateTo(TagInfo const* info, bool setPanelDir = false)
   }
 
   bool havere=!info->re.empty();
-  RegExp& re = RegexInstance;
-  if(havere)re.Compile(info->re.c_str());
+  std::regex re = havere ? std::regex(info->re, std::regex_constants::basic) : std::regex();
   if(!GotoOpenedFile(info->file))
   {
     FILE *f=fopen(info->file.c_str(),"rt");
@@ -1454,11 +1447,9 @@ static void NavigateTo(TagInfo const* info, bool setPanelDir = false)
     char buf[512];
     while(fgets(buf,sizeof(buf),f) && cnt<line)cnt++;
     chomp(buf);
-    SMatch m[10];
-    int n=10;
     if(line!=-1)
     {
-      if(havere && !re.Match(buf,m,n))
+      if(havere && !std::regex_match(buf, re))
       {
         line=-1;
         Msg(L"not found in place, searching");
@@ -1477,8 +1468,7 @@ static void NavigateTo(TagInfo const* info, bool setPanelDir = false)
       while(fgets(buf,sizeof(buf),f))
       {
         chomp(buf);
-        n=10;
-        if(re.Match(buf,m,n))
+        if(std::regex_match(buf, re))
         {
           break;
         }
@@ -1515,11 +1505,7 @@ static void NavigateTo(TagInfo const* info, bool setPanelDir = false)
     EditorGetString egs = {sizeof(EditorGetString)};
     egs.StringNumber=line;
     I.EditorControl(ei.EditorID, ECTL_GETSTRING, 0, &egs);
-    SMatch m[10];
-    int n=10;
-
-    std::string strLine = ToStdString(egs.StringText);
-    if(havere && !re.Match(strLine.c_str(),strLine.c_str() + strLine.length(),m,n))
+    if(havere && !std::regex_match(ToStdString(egs.StringText), re))
     {
       line=-1;
     }
@@ -1535,8 +1521,6 @@ static void NavigateTo(TagInfo const* info, bool setPanelDir = false)
       return;
     }
     line=0;
-    SMatch m[10];
-    int n=10;
     EditorGetString egs = {sizeof(EditorGetString)};
     while(line<ei.TotalLines)
     {
@@ -1544,9 +1528,7 @@ static void NavigateTo(TagInfo const* info, bool setPanelDir = false)
       I.EditorControl(ei.EditorID, ECTL_SETPOSITION, 0, &esp);
       egs.StringNumber=-1;
       I.EditorControl(ei.EditorID, ECTL_GETSTRING, 0, &egs);
-      n=10;
-      std::string strLine = ToStdString(egs.StringText);
-      if(re.Match(strLine.c_str(),strLine.c_str()+strLine.length(),m,n))
+      if(std::regex_match(ToStdString(egs.StringText), re))
       {
         break;
       }

@@ -181,7 +181,7 @@ static bool LineMatches(char const* lineText, TagInfo const& tag)
 {
   try
   {
-    return tag.re.length() > 2 ? std::regex_match(lineText, std::regex(tag.re.substr(1, tag.re.length() - 2))) : false;
+    return !tag.re.empty() ? std::regex_match(lineText, std::regex(tag.re)) : false;
   }
   catch(std::exception const&)
   {
@@ -190,64 +190,15 @@ static bool LineMatches(char const* lineText, TagInfo const& tag)
   return false;
 }
 
-//int Msg(const char*);
-
-static void QuoteMeta(std::string& str)
-{
-  static char map[256];
-  const char *toquote=".$^*()|+[]{}?";
-  if(!map[(unsigned char)toquote[0]])
-  {
-    while(*toquote)
-    {
-      map[(unsigned char)*toquote]=1;
-      toquote++;
-    }
-  }
-  std::string dst;
-  size_t i=1;
-  dst+=str[0];
-  if(str[1]=='^')
-  {
-    i++;
-    dst+=str[1];
-  }
-
-  size_t j=1;
-  if(str.length() >= 2 && str[str.length() - 2]=='$')j=2;
-  for(;i<str.length()-j;i++)
-  {
-    if(map[(unsigned char)str[i]])
-    {
-      dst+='\\';
-    }
-    dst+=str[i];
-  }
-  if(j==2)dst+='$';
-  dst+='/';
-  str=dst;
-}
-
-static void ReplaceSpaces(std::string& str)
-{
-  std::string dst;
-  for(size_t i=0;i<str.length();i++)
-  {
-    if(str[i]==' ')
-    {
-      while(i<str.length() && str[i]==' ')i++;
-      dst+="\\s+";
-    }
-    dst+=str[i];
-  }
-  str=dst;
-}
-
 //TODO: consider optimization
 static std::string MakeDeclaration(std::string const& str)
 {
   std::string declaration = str;
-  declaration = declaration.length() > 4 ? declaration.substr(2, declaration.length() - 4) : declaration;
+  size_t begin = declaration.length() > 2 && declaration.front() == '^' ? 1 : 0;
+  size_t end = declaration.length() > 2 && declaration.back() == '$' ? declaration.length() - 1 : declaration.length();
+  if (end - begin != declaration.length())
+    declaration = std::string(declaration.begin() + begin, declaration.begin() + end);
+
   std::replace(declaration.begin(), declaration.end(), '\t', ' ');
   declaration.resize(std::unique(declaration.begin(), declaration.end(), [](char a, char b) {return a == ' ' && a == b;}) - declaration.begin());
   declaration = !declaration.empty() && *declaration.begin() == ' ' ? declaration.substr(1) : declaration;
@@ -303,9 +254,8 @@ bool ParseLine(const char* buf, TagFileInfo const& fi, TagInfo& result)
     if (excmd.length() < 2 && excmd.back() != '/')
       return false;
 
+    excmd = excmd.substr(1, excmd.length() - 2);
     result.declaration = MakeDeclaration(excmd);
-    QuoteMeta(excmd);
-    ReplaceSpaces(excmd);
     result.re = std::move(excmd);
   }
   else
