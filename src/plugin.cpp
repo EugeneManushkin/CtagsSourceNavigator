@@ -1433,7 +1433,7 @@ static void NavigateTo(TagInfo const* info, bool setPanelDir = false)
   }
 
   bool havere=!info->re.empty();
-  std::regex re = havere ? std::regex(info->re, std::regex_constants::basic) : std::regex();
+  std::regex re = havere ? std::regex(info->re) : std::regex();
   if(!GotoOpenedFile(info->file))
   {
     FILE *f=fopen(info->file.c_str(),"rt");

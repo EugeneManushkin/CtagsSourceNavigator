@@ -190,6 +190,56 @@ static bool LineMatches(char const* lineText, TagInfo const& tag)
   return false;
 }
 
+static void QuoteMeta(std::string& str)
+{
+  static char map[256];
+  const char *toquote=".$^*()|+[]{}?";
+  if(!map[(unsigned char)toquote[0]])
+  {
+    while(*toquote)
+    {
+      map[(unsigned char)*toquote]=1;
+      toquote++;
+    }
+  }
+  std::string dst;
+  size_t i=1;
+  dst+=str[0];
+  if(str[1]=='^')
+  {
+    i++;
+    dst+=str[1];
+  }
+
+  size_t j=0;
+  if(str.length() >= 2 && str.back()=='$')j=1;
+  for(;i<str.length()-j;i++)
+  {
+    if(map[(unsigned char)str[i]])
+    {
+      dst+='\\';
+    }
+    dst+=str[i];
+  }
+  if(j==1)dst+='$';
+  str=dst;
+}
+
+static void ReplaceSpaces(std::string& str)
+{
+  std::string dst;
+  for(size_t i=0;i<str.length();i++)
+  {
+    if(str[i]==' ')
+    {
+      while(i<str.length() && str[i]==' ')i++;
+      dst+="\\s+";
+    }
+    dst+=str[i];
+  }
+  str=dst;
+}
+
 //TODO: consider optimization
 static std::string MakeDeclaration(std::string const& str)
 {
@@ -264,6 +314,8 @@ bool ParseLine(const char* buf, TagFileInfo const& fi, TagInfo& result)
 
     excmd = excmd.substr(1, excmd.length() - 2);
     result.declaration = MakeDeclaration(excmd);
+    QuoteMeta(excmd);
+    ReplaceSpaces(excmd);
     result.re = std::move(excmd);
   }
   else
