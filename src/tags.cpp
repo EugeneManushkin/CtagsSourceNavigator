@@ -214,19 +214,30 @@ static std::string MakeFilename(std::string const& str)
   return result;
 }
 
-inline bool IsFieldEnd(char c)
+inline bool IsLineEnd(char c)
 {
-  return !c || c == '\r' || c == '\n' || c == '\t';
+  return !c || c == '\r' || c == '\n';
 }
 
-inline bool NextField(char const*& cur, char const*& next)
+inline bool IsFieldEnd(char c)
 {
-  if (IsFieldEnd(*next) && *next != '\t')
+  return IsLineEnd(c) || c == '\t';
+}
+
+inline bool NextField(char const*& cur, char const*& next, std::string const& separator = "\t")
+{
+  if (IsLineEnd(*next))
     return false;
 
-  char const* const end = nullptr;
   cur = cur != next ? next + 1 : cur;
-  for (next = cur; !IsFieldEnd(*next); ++next);
+  size_t separatorPos = 0;
+  for (next = cur; separatorPos != separator.length() && !IsLineEnd(*next); ++next)
+  {
+    separatorPos = *next == separator[separatorPos] ? separatorPos + 1 :
+                   *next == separator.front() ? 1 : 0;
+  }
+
+  next = separatorPos == separator.length() ? next - separator.length() : next;
   return next != cur;
 }
 
@@ -241,17 +252,14 @@ bool ParseLine(const char* buf, TagFileInfo const& fi, TagInfo& result)
     return false;
 
   result.file = MakeFilename(fi.GetFullPath(std::string(buf, next)));
-  if (!NextField(buf, next))
-    return false;
-
   std::string const separator = ";\"";
-  if (next <= buf + separator.length() || separator.compare(0, separator.length(), next - separator.length(), separator.length()))
+  if (!NextField(buf, next, separator))
     return false;
 
-  std::string excmd(buf, next - separator.length());
+  std::string excmd(buf, next);
   if(excmd.length() > 1 && excmd.front() == '/')
   {
-    if (excmd.length() < 2 && excmd.back() != '/')
+    if (excmd.length() < 2 || excmd.back() != '/')
       return false;
 
     excmd = excmd.substr(1, excmd.length() - 2);
@@ -262,6 +270,10 @@ bool ParseLine(const char* buf, TagFileInfo const& fi, TagInfo& result)
   {
     result.lineno=ToInt(excmd);
   }
+
+  next += IsLineEnd(*next) ? 0 : separator.length();
+  if (*next != '\t')
+    return IsLineEnd(*next);
 
 //TODO: support --fields=-k
   if (!NextField(buf, next))
