@@ -222,6 +222,7 @@ static void QuoteMeta(std::string& str)
     dst+=str[i];
   }
   if(j==1)dst+='$';
+  else dst+=".+";
   str=dst;
 }
 
