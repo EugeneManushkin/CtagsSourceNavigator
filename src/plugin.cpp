@@ -1616,7 +1616,6 @@ static std::vector<WideString> GetDirectoryTags(WideString const& dir)
   while (FindNextFileW(handle.get(), &fileData))
   {
     auto curFile = JoinPath(dir, fileData.cFileName);
-    auto test = FSF.ProcessName(tagsMask.c_str(), fileData.cFileName, 0, PN_CMPNAMELIST);
     auto atts = GetFileAttributesW(curFile.c_str());
     if (!(GetFileAttributesW(curFile.c_str()) & FILE_ATTRIBUTE_DIRECTORY) && !!FSF.ProcessName(tagsMask.c_str(), fileData.cFileName, 0, PN_CMPNAMELIST))
       result.push_back(curFile);
