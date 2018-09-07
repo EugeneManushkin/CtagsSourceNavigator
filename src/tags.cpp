@@ -490,7 +490,7 @@ char const* GetLine(std::string& buffer, FILE *f)
 static std::string GetIntersection(char const* left, char const* right)
 {
   if (!left || !*left)
-    return right;
+    return std::string(right, GetFilename(right));
 
   auto begining = left;
   for (; *left && !IsFieldEnd(*right) && *left == *right; ++left, ++right);
