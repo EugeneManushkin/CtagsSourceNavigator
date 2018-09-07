@@ -663,6 +663,50 @@ static void RemoveFile(WideString const& file)
                              "\nwith error: " + std::to_string(GetLastError()));
 }
 
+static void RemoveDirWithFiles(WideString const& dir)
+{
+  if (!(GetFileAttributesW(dir.c_str()) & FILE_ATTRIBUTE_DIRECTORY))
+    return;
+
+//TODO: refactor duplicated code
+  WIN32_FIND_DATAW fileData;
+  auto pattern = JoinPath(dir, L"*");
+  std::shared_ptr<void> handle(::FindFirstFileW(pattern.c_str(), &fileData), ::FindClose);
+  while (handle.get() != INVALID_HANDLE_VALUE && FindNextFileW(handle.get(), &fileData))
+  {
+    auto file = JoinPath(dir, fileData.cFileName);
+    if (!(GetFileAttributesW(file.c_str()) & FILE_ATTRIBUTE_DIRECTORY))
+      RemoveFile(file);
+  }
+
+  if (!::RemoveDirectoryW(dir.c_str()))
+    throw std::runtime_error("Failed to remove directory:\n" + ToStdString(dir) +
+                             "\nwith error: " + std::to_string(GetLastError()));
+}
+
+static void MkDir(WideString const& dir)
+{
+  if (!::CreateDirectoryW(dir.c_str(), nullptr))
+    throw std::runtime_error("Failed to create directory:\n" + ToStdString(dir) +
+                             "\nwith error: " + std::to_string(GetLastError()));
+}
+
+static WideString GetFirstFileInDir(WideString const& dir)
+{
+//TODO: refactor duplicated code
+  WIN32_FIND_DATAW fileData;
+  auto pattern = JoinPath(dir, L"*");
+  std::shared_ptr<void> handle(::FindFirstFileW(pattern.c_str(), &fileData), ::FindClose);
+  while (handle.get() != INVALID_HANDLE_VALUE && FindNextFileW(handle.get(), &fileData))
+  {
+    auto file = JoinPath(dir, fileData.cFileName);
+    if (!(GetFileAttributesW(file.c_str()) & FILE_ATTRIBUTE_DIRECTORY))
+      return file;
+  }
+
+  return WideString();
+}
+
 static WideString RenameToTempFilename(WideString const& originalFile)
 {
   auto pos = originalFile.rfind('\\');
@@ -1603,6 +1647,70 @@ static WideString SelectFromHistory()
   return *selected;
 }
 
+class TemprepoStorage
+{
+public:
+  void Register(WideString const& fileFullPath, WideString const& tempDirectory)
+  {
+    if (!FileToTempdir.insert(std::make_pair(fileFullPath, tempDirectory)).second)
+      throw std::logic_error("Internal error: file already indexed " + ToStdString(fileFullPath));
+  }
+
+  void Unregister(WideString const& fileFullPath)
+  {
+    auto item = FileToTempdir.find(fileFullPath);
+    if (item == FileToTempdir.end())
+      return;
+
+    auto tempDir = std::move(item->second);
+    FileToTempdir.erase(item);
+    RemoveDirWithFiles(tempDir);
+  }
+
+  void Clear()
+  {
+    for (auto const& i : FileToTempdir)
+      SafeCall(std::bind(RemoveDirWithFiles, i.second));
+
+    FileToTempdir.clear();
+  }
+
+private:
+  std::unordered_map<WideString, WideString> FileToTempdir;
+};
+
+TemprepoStorage TemporaryRepositories;
+
+static std::string RemoveFileMask(std::string const& args)
+{
+  auto fileMaskEndPos = config.opt.find_last_not_of(" ");
+  if (fileMaskEndPos == std::string::npos)
+    return args;
+
+  auto beforeMaskPos = config.opt.rfind(' ', fileMaskEndPos);
+  return config.opt.substr(0, beforeMaskPos == std::string::npos ? 0 : beforeMaskPos + 1);
+}
+
+static WideString IndexSingleFile(WideString const& fileFullPath, WideString const& tagsDirectoryPath)
+{
+  auto args = ToString(RemoveFileMask(config.opt));
+  args += args.empty() || args.back() == ' ' ? fileFullPath : L" " + fileFullPath;
+  ExecuteScript(ToString(ExpandEnvString(config.exe)), args, tagsDirectoryPath);
+  return GetFirstFileInDir(tagsDirectoryPath);
+}
+
+static WideString CreateTemporaryTags(WideString const& fileFullPath)
+{
+  auto tempDirPath = GenerateTempPath();
+  MkDir(tempDirPath);
+  TemporaryRepositories.Register(fileFullPath, tempDirPath);
+  WideString result = SafeCall(std::bind(IndexSingleFile, fileFullPath, tempDirPath), WideString());
+  if (result.empty())
+    TemporaryRepositories.Unregister(fileFullPath);
+
+  return result;
+}
+
 static std::vector<WideString> GetDirectoryTags(WideString const& dir)
 {
   std::vector<WideString> result;
@@ -1640,7 +1748,7 @@ static std::string SearchTagsFile(std::string const& fileName)
   }
 
   if (foundTags.empty())
-    throw Error(MTagsNotFound);
+    return std::string();
 
   MenuList lst;
   int i = 0;
@@ -1665,7 +1773,8 @@ static bool EnsureTagsLoaded(std::string const& fileName)
 
   auto tagsFile = SearchTagsFile(fileName);
   if (tagsFile.empty())
-    throw Error(MENotLoaded);
+//TODO: configure this behaviour
+    tagsFile = ToStdString(CreateTemporaryTags(ToString(fileName)));
 
   LoadTags(tagsFile.c_str(), true);
   return true;
@@ -1718,7 +1827,7 @@ static void LookupFile(std::string const& file, bool setPanelDir)
 static void NavigateToTag(std::vector<TagInfo>&& ta, intptr_t separatorPos, FormatTagFlag formatFlag)
 {
   if (ta.empty())
-    throw Error(MNotFound);
+    throw Error(MNothingFound);
 
   TagInfo tag;
   FilterMenuVisitor visitor(std::move(ta), !config.casesens, formatFlag);
@@ -2212,4 +2321,5 @@ void WINAPI GetGlobalInfoW(struct GlobalInfo *info)
 
 void WINAPI ExitFARW(const struct ExitInfo *info)
 {
+  TemporaryRepositories.Clear();
 }

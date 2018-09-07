@@ -105,6 +105,7 @@ private:
   std::string filename;
   std::string indexFile;
   std::string reporoot;
+  std::string singlefile;
   bool fullpathrepo;
   time_t modtm;
 };
@@ -426,6 +427,12 @@ static char const* GetFilename(char const* path)
   return pos;
 }
 
+inline char const* GetFilenameEnd(char const* path)
+{
+  for (; !IsFieldEnd(*path); ++path);
+  return path;
+}
+
 static char const* FindClassFullQualification(char const* str)
 {
   std::vector<std::string> const fieldNames = {
@@ -605,6 +612,7 @@ int TagFileInfo::CreateIndex(time_t tagsModTime)
   pos=ftell(f);
   bool sorted=true;
   std::string pathIntersection;
+  bool singleFileRepos = true;
   while(GetLine(strbuf, buffer, f))
   {
     if(strbuf[0]=='!')
@@ -627,6 +635,7 @@ int TagFileInfo::CreateIndex(time_t tagsModTime)
     li->pos=pos;
     for(li->fn = li->line; !IsFieldEnd(*li->fn); ++li->fn);
     li->fn += *li->fn ? 1 : 0;
+    singleFileRepos = singleFileRepos && !lines.empty() && PathsEqual(lines.back()->fn, li->fn) || lines.empty();
     pathIntersection = IsFullPath(li->fn) ? GetIntersection(pathIntersection.c_str(), li->fn) : pathIntersection;
     if (li->cls = ExtractClassName(FindClassFullQualification(li->line)))
       classes.push_back(li);
@@ -638,6 +647,7 @@ int TagFileInfo::CreateIndex(time_t tagsModTime)
   for (; !pathIntersection.empty() && IsPathSeparator(pathIntersection.back()); pathIntersection.resize(pathIntersection.length() - 1));
   fullpathrepo = !pathIntersection.empty();
   reporoot = pathIntersection.empty() ? GetDirOfFile(filename) : MakeFilename(pathIntersection);
+  singlefile = singleFileRepos && !lines.empty() ? std::string(GetFilename(lines.back()->fn), GetFilenameEnd(lines.back()->fn)) : "";
   fclose(f);
   FILE *g=fopen(fi->indexFile.c_str(),"wb");
   if(!g)
@@ -743,7 +753,7 @@ char const* TagFileInfo::GetRelativePath(char const* fileName) const
     return nullptr;
 
   for (; IsPathSeparator(*fileName); ++fileName);
-  return !*fileName ? nullptr : fileName;
+  return !*fileName || (!singlefile.empty() && !PathsEqual(fileName, singlefile.c_str())) ? nullptr : fileName;
 }
 
 std::string TagFileInfo::GetFullPath(std::string const& relativePath) const

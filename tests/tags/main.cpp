@@ -313,15 +313,22 @@ namespace TESTS
       EXPECT_EQ(belongs, !Find("main", file).empty()) << "File: " << file;
     }
 
-    void TestTagsLoadedForFile()
+    void TestTagsLoadedForFile(bool singleFileRepo = false)
     {
-      EXPECT_NO_FATAL_FAILURE(TestFileBelongsToRepo("C:\\18743\\Dummy Folder\\Repository Root/lowercasefolder/.", true));
-      EXPECT_NO_FATAL_FAILURE(TestFileBelongsToRepo("C:/18743/Dummy Folder/Repository Root/lowercasefolder/.", true));
-      EXPECT_NO_FATAL_FAILURE(TestFileBelongsToRepo("C:/18743/Dummy Folder/Repository Root/lowercasefolder//.", true));
-      EXPECT_NO_FATAL_FAILURE(TestFileBelongsToRepo("C:\\18743\\Dummy Folder\\Repository Root\\lowercasefolder\\.", true));
-      EXPECT_NO_FATAL_FAILURE(TestFileBelongsToRepo("C:\\18743\\Dummy Folder\\Repository Root\\lowercasefolder\\\\.", true));
-      EXPECT_NO_FATAL_FAILURE(TestFileBelongsToRepo("c:\\18743\\dummy folder\\repository root\\lowercasefolder\\.", true));
-      EXPECT_NO_FATAL_FAILURE(TestFileBelongsToRepo("C:\\18743\\DUMMY FOLDER\\REPOSITORY ROOT\\LOWERCASEFOLDER\\.", true));
+      EXPECT_NO_FATAL_FAILURE(TestFileBelongsToRepo("C:\\18743\\Dummy Folder\\Repository Root/lowercasefolder/tags.cpp", true));
+      EXPECT_NO_FATAL_FAILURE(TestFileBelongsToRepo("C:/18743/Dummy Folder/Repository Root/lowercasefolder/tags.cpp", true));
+      EXPECT_NO_FATAL_FAILURE(TestFileBelongsToRepo("C:/18743/Dummy Folder/Repository Root/lowercasefolder//tags.cpp", true));
+      EXPECT_NO_FATAL_FAILURE(TestFileBelongsToRepo("C:\\18743\\Dummy Folder\\Repository Root\\lowercasefolder\\tags.cpp", true));
+      EXPECT_NO_FATAL_FAILURE(TestFileBelongsToRepo("C:\\18743\\Dummy Folder\\Repository Root\\lowercasefolder\\\\tags.cpp", true));
+      EXPECT_NO_FATAL_FAILURE(TestFileBelongsToRepo("c:\\18743\\dummy folder\\repository root\\lowercasefolder\\tags.cpp", true));
+      EXPECT_NO_FATAL_FAILURE(TestFileBelongsToRepo("C:\\18743\\DUMMY FOLDER\\REPOSITORY ROOT\\LOWERCASEFOLDER\\tags.cpp", true));
+      EXPECT_NO_FATAL_FAILURE(TestFileBelongsToRepo("C:\\18743\\Dummy Folder\\Repository Root/lowercasefolder/.", !singleFileRepo));
+      EXPECT_NO_FATAL_FAILURE(TestFileBelongsToRepo("C:/18743/Dummy Folder/Repository Root/lowercasefolder/.", !singleFileRepo));
+      EXPECT_NO_FATAL_FAILURE(TestFileBelongsToRepo("C:/18743/Dummy Folder/Repository Root/lowercasefolder//.", !singleFileRepo));
+      EXPECT_NO_FATAL_FAILURE(TestFileBelongsToRepo("C:\\18743\\Dummy Folder\\Repository Root\\lowercasefolder\\.", !singleFileRepo));
+      EXPECT_NO_FATAL_FAILURE(TestFileBelongsToRepo("C:\\18743\\Dummy Folder\\Repository Root\\lowercasefolder\\\\.", !singleFileRepo));
+      EXPECT_NO_FATAL_FAILURE(TestFileBelongsToRepo("c:\\18743\\dummy folder\\repository root\\lowercasefolder\\.", !singleFileRepo));
+      EXPECT_NO_FATAL_FAILURE(TestFileBelongsToRepo("C:\\18743\\DUMMY FOLDER\\REPOSITORY ROOT\\LOWERCASEFOLDER\\.", !singleFileRepo));
       EXPECT_NO_FATAL_FAILURE(TestFileBelongsToRepo("C:\\18743\\Dummy Folder\\Repository Root\\lowercasefolder", false));
       EXPECT_NO_FATAL_FAILURE(TestFileBelongsToRepo("C:\\18743\\Dummy Folder\\Repository Root/lowercasefolder/", false));
       EXPECT_NO_FATAL_FAILURE(TestFileBelongsToRepo("C:/18743/Dummy Folder/Repository Root/lowercasefolder/", false));
@@ -434,19 +441,19 @@ namespace TESTS
   TEST_F(Tags, AllNamesFoundInCygwinSingleFileFullPathRepos)
   {
     LoadAndLookupNames("full_path_single_file_repo\\tags.exuberant", "full_path_single_file_repo\\tags.exuberant.meta");
-    TestTagsLoadedForFile();
+    TestTagsLoadedForFile(true);
   }
 
   TEST_F(Tags, AllNamesFoundInExuberantSingleFileFullPathRepos)
   {
     LoadAndLookupNames("full_path_single_file_repo\\tags.exuberant.w", "full_path_single_file_repo\\tags.exuberant.meta");
-    TestTagsLoadedForFile();
+    TestTagsLoadedForFile(true);
   }
 
   TEST_F(Tags, AllNamesFoundInUniversalSingleFileFullPathRepos)
   {
     LoadAndLookupNames("full_path_single_file_repo\\tags.universal", "full_path_single_file_repo\\tags.universal.meta");
-    TestTagsLoadedForFile();
+    TestTagsLoadedForFile(true);
   }
 
   TEST_F(Tags, FilePartsFoundInUniversalRepeatedFilesRepos)
