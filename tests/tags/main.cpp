@@ -249,7 +249,7 @@ namespace TESTS
 
     void LookupAllPartiallyMatchedNames(MetaTag const& metaTag, std::string const& name, bool caseInsensitive)
     {
-      std::string part = name + "extra";
+      std::string part = name + "zzzz";
       while (!part.empty())
       {
         auto tags = FindPartiallyMatchedTags(metaTag.FullPath.c_str(), part.c_str(), 0, caseInsensitive);
@@ -428,6 +428,24 @@ namespace TESTS
   TEST_F(Tags, AllNamesFoundInUniversalFullPathRepos)
   {
     LoadAndLookupNames("full_path_repos\\tags.universal", "full_path_repos\\tags.meta");
+    TestTagsLoadedForFile();
+  }
+
+  TEST_F(Tags, AllNamesFoundInCygwinSingleFileFullPathRepos)
+  {
+    LoadAndLookupNames("full_path_single_file_repo\\tags.exuberant", "full_path_single_file_repo\\tags.exuberant.meta");
+    TestTagsLoadedForFile();
+  }
+
+  TEST_F(Tags, AllNamesFoundInExuberantSingleFileFullPathRepos)
+  {
+    LoadAndLookupNames("full_path_single_file_repo\\tags.exuberant.w", "full_path_single_file_repo\\tags.exuberant.meta");
+    TestTagsLoadedForFile();
+  }
+
+  TEST_F(Tags, AllNamesFoundInUniversalSingleFileFullPathRepos)
+  {
+    LoadAndLookupNames("full_path_single_file_repo\\tags.universal", "full_path_single_file_repo\\tags.universal.meta");
     TestTagsLoadedForFile();
   }
 
