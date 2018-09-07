@@ -1691,21 +1691,23 @@ static std::string RemoveFileMask(std::string const& args)
   return config.opt.substr(0, beforeMaskPos == std::string::npos ? 0 : beforeMaskPos + 1);
 }
 
-static WideString IndexSingleFile(WideString const& fileFullPath, WideString const& tagsDirectoryPath)
+static bool IndexSingleFile(WideString const& fileFullPath, WideString const& tagsDirectoryPath)
 {
   auto args = ToString(RemoveFileMask(config.opt));
-  args += args.empty() || args.back() == ' ' ? fileFullPath : L" " + fileFullPath;
+  args += args.empty() || args.back() == ' ' ? L" " : L"";
+  args += L"\"" + fileFullPath + L"\"";
   ExecuteScript(ToString(ExpandEnvString(config.exe)), args, tagsDirectoryPath);
-  return GetFirstFileInDir(tagsDirectoryPath);
+  auto tagsFile = GetFirstFileInDir(tagsDirectoryPath);
+  return tagsFile.empty() ? false : !!LoadTagsImpl(ToStdString(tagsFile));
 }
 
-static WideString CreateTemporaryTags(WideString const& fileFullPath)
+static bool CreateTemporaryTags(WideString const& fileFullPath)
 {
   auto tempDirPath = GenerateTempPath();
   MkDir(tempDirPath);
   TemporaryRepositories.Register(fileFullPath, tempDirPath);
-  WideString result = SafeCall(std::bind(IndexSingleFile, fileFullPath, tempDirPath), WideString());
-  if (result.empty())
+  bool result = SafeCall(std::bind(IndexSingleFile, fileFullPath, tempDirPath), false);
+  if (!result)
     TemporaryRepositories.Unregister(fileFullPath);
 
   return result;
@@ -1774,7 +1776,7 @@ static bool EnsureTagsLoaded(std::string const& fileName)
   auto tagsFile = SearchTagsFile(fileName);
   if (tagsFile.empty())
 //TODO: configure this behaviour
-    tagsFile = ToStdString(CreateTemporaryTags(ToString(fileName)));
+    return CreateTemporaryTags(ToString(fileName));
 
   LoadTags(tagsFile.c_str(), true);
   return true;
