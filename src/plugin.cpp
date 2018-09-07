@@ -497,15 +497,20 @@ static size_t GetMenuWidth()
   return borderLen > width ? 0 : width - borderLen;
 }
 
+static WideString ExpandEnvString(WideString const& str)
+{
+  auto sz = ::ExpandEnvironmentStringsW(str.c_str(), nullptr, 0);
+  if (!sz)
+    return WideString();
+
+  std::vector<wchar_t> buffer(sz);
+  ::ExpandEnvironmentStringsW(str.c_str(), &buffer[0], sz);
+  return WideString(buffer.begin(), buffer.end() - 1);
+}
+
 static std::string ExpandEnvString(std::string const& str)
 {
-  auto sz = ::ExpandEnvironmentStringsA(str.c_str(), nullptr, 0);
-  if (!sz)
-    return std::string();
-
-  std::vector<char> buffer(sz);
-  ::ExpandEnvironmentStringsA(str.c_str(), &buffer[0], sz);
-  return std::string(buffer.begin(), buffer.end());
+  return ToStdString(ExpandEnvString(ToString(str)));
 }
 
 static std::string GetClipboardText()
@@ -597,7 +602,7 @@ static void ExecuteScript(WideString const& script, WideString const& args, Wide
     throw std::runtime_error("Failed to run external utility: " + std::to_string(GetLastError()));
 
   DWORD exitCode = 0;
-  if (InteractiveWaitProcess(ShExecInfo.hProcess, message.empty() ? L"Running: " + script + L"\nArgs:" + args : message))
+  if (InteractiveWaitProcess(ShExecInfo.hProcess, message.empty() ? L"Running: " + script + L"\nArgs: " + args : message))
   {
     TerminateProcess(ShExecInfo.hProcess, ERROR_CANCELLED);
     auto messageHolder = LongOperationMessage(GetMsg(MCanceling));
@@ -625,7 +630,7 @@ int TagDirectory(WideString const& dir)
   if (!(GetFileAttributesW(dir.c_str()) & FILE_ATTRIBUTE_DIRECTORY))
     throw std::runtime_error("Selected item is not a direcory");
 
-  ExecuteScript(ToString(ExpandEnvString(config.exe)), ToString(config.opt), dir, WideString(GetMsg(MTagingCurrentDirectory)) + L"\n" + dir);
+  ExecuteScript(ExpandEnvString(ToString(config.exe)), ToString(config.opt), dir, WideString(GetMsg(MTagingCurrentDirectory)) + L"\n" + dir);
   return 1;
 }
 
@@ -1696,7 +1701,7 @@ static bool IndexSingleFile(WideString const& fileFullPath, WideString const& ta
   auto args = ToString(RemoveFileMask(config.opt));
   args += args.empty() || args.back() == ' ' ? L" " : L"";
   args += L"\"" + fileFullPath + L"\"";
-  ExecuteScript(ToString(ExpandEnvString(config.exe)), args, tagsDirectoryPath);
+  ExecuteScript(ExpandEnvString(ToString(config.exe)), args, tagsDirectoryPath);
   auto tagsFile = GetFirstFileInDir(tagsDirectoryPath);
   return tagsFile.empty() ? false : !!LoadTagsImpl(ToStdString(tagsFile));
 }
