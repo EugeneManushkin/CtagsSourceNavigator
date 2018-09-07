@@ -129,7 +129,7 @@ static std::string GetDirOfFile(std::string const& filePath)
     return !pos || pos == std::string::npos ? std::string() : filePath.substr(0, pos);
 }
 
-char const IndexFileSignature[] = "tags.idx.v6";
+char const IndexFileSignature[] = "tags.idx.v7";
 
 static bool ReadSignature(FILE* f)
 {
@@ -143,26 +143,31 @@ static bool ReadSignature(FILE* f)
   return true;
 }
 
-static bool ReadRepoRoot(FILE* f, std::string& repoRoot)
+static bool ReadFilePath(FILE* f, std::string& filePath)
 {
-  uint32_t rootLen = 0;
-  if (fread(&rootLen, sizeof(rootLen), 1, f) != 1)
+  uint32_t pathLen = 0;
+  if (fread(&pathLen, sizeof(pathLen), 1, f) != 1)
     return false;
 
-  if (rootLen > 0)
+  if (pathLen > 0)
   {
-    std::vector<char> buf(rootLen);
+    std::vector<char> buf(pathLen);
     if (fread(&buf[0], 1, buf.size(), f) != buf.size())
       return false;  
 
-    repoRoot = std::string(buf.begin(), buf.end());
+    filePath = std::string(buf.begin(), buf.end());
   }
   else
   {
-    repoRoot.clear();
+    filePath.clear();
   }
 
   return true;
+}
+
+static bool ReadRepoRoot(FILE* f, std::string& repoRoot, std::string& singleFile)
+{
+  return ReadFilePath(f, repoRoot) && ReadFilePath(f, singleFile);
 }
 
 static int ToInt(std::string const& str)
@@ -532,8 +537,8 @@ OffsetCont TagFileInfo::GetOffsets(IndexType type)
     throw std::logic_error("Signature must be valid");
 
   fseek(f, sizeof(time_t), SEEK_CUR);
-  std::string repoRoot;
-  if (!ReadRepoRoot(f, repoRoot))
+  std::string repoRoot, singleFile;
+  if (!ReadRepoRoot(f, repoRoot, singleFile))
     throw std::logic_error("Reporoot must be valid");
 
   for (int i = 0; i != static_cast<int>(type); ++i)
@@ -668,6 +673,11 @@ int TagFileInfo::CreateIndex(time_t tagsModTime)
   if (fullpathrepo)
     fwrite(reporoot.c_str(), 1, reporoot.length(), g);
 
+  uint32_t singlefileLen = static_cast<uint32_t>(singlefile.length());
+  fwrite(&singlefileLen, 1, sizeof(singlefileLen), g);
+  if (!singlefile.empty())
+    fwrite(singlefile.c_str(), 1, singlefile.length(), g);
+
   std::sort(lines.begin(), lines.end(), [](LineInfo* left, LineInfo* right) { return FieldLess(left->line, right->line); });
   WriteOffsets(g, lines.begin(), lines.end());
   fi->offsets.reserve(lines.size());
@@ -713,7 +723,7 @@ bool TagFileInfo::LoadIndex(time_t tagsModTime)
   if (storedTagsModTime != tagsModTime)
     return false;
 
-  if (!ReadRepoRoot(f, reporoot))
+  if (!ReadRepoRoot(f, reporoot, singlefile))
     return false;
 
   fullpathrepo = !reporoot.empty();
