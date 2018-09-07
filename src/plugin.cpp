@@ -1773,15 +1773,14 @@ static std::string SearchTagsFile(std::string const& fileName)
   return tagsFile;
 }
 
-static bool EnsureTagsLoaded(std::string const& fileName)
+static bool EnsureTagsLoaded(std::string const& fileName, bool createTempTags)
 {
   if (TagsLoadedForFile(fileName.c_str()))
     return true;
 
   auto tagsFile = SearchTagsFile(fileName);
   if (tagsFile.empty())
-//TODO: configure this behaviour
-    return CreateTemporaryTags(ToString(fileName));
+    return createTempTags && CreateTemporaryTags(ToString(fileName));
 
   LoadTags(tagsFile.c_str(), true);
   return true;
@@ -1811,24 +1810,26 @@ static WideString ReindexRepository(std::string const& fileName)
   return tagsFile;
 }
 
-static void Lookup(std::string const& file, bool setPanelDir, LookupMenuVisitor& visitor)
+static void Lookup(std::string const& file, bool setPanelDir, LookupMenuVisitor& visitor, bool createTempTags)
 {
-  EnsureTagsLoaded(file);
+  if (!EnsureTagsLoaded(file, createTempTags))
+    return;
+
   TagInfo selectedTag;
   if (LookupTagsMenu(visitor, selectedTag))
     NavigateTo(&selectedTag, setPanelDir);
 }
 
-static void LookupSymbol(std::string const& file, bool setPanelDir)
+static void LookupSymbol(std::string const& file, bool setPanelDir, bool createTempTags)
 {
   LookupTagsVisitor visitor(file);
-  Lookup(file, setPanelDir, visitor);
+  Lookup(file, setPanelDir, visitor, createTempTags);
 }
 
 static void LookupFile(std::string const& file, bool setPanelDir)
 {
   SearchFileVisitor visitor(file);
-  Lookup(file, setPanelDir, visitor);
+  Lookup(file, setPanelDir, visitor, false);
 }
 
 static void NavigateToTag(std::vector<TagInfo>&& ta, intptr_t separatorPos, FormatTagFlag formatFlag)
@@ -1954,7 +1955,8 @@ HANDLE WINAPI OpenW(const struct OpenInfo *info)
       || res == miComplete
       || res == miBrowseClass
       || res == miBrowseFile
-        ) && !SafeCall(std::bind(EnsureTagsLoaded, fileName), false))
+//TODO: configure creating temporary tags behaviour
+        ) && !SafeCall(std::bind(EnsureTagsLoaded, fileName, true), false))
     {
       return nullptr;
     }
@@ -2011,7 +2013,8 @@ HANDLE WINAPI OpenW(const struct OpenInfo *info)
       }break;
       case miLookupSymbol:
       {
-        SafeCall(std::bind(LookupSymbol, fileName, false));
+//TODO: configure creating temporary tags behaviour
+        SafeCall(std::bind(LookupSymbol, fileName, false, true));
       }break;
       case miSearchFile:
       {
@@ -2085,7 +2088,8 @@ HANDLE WINAPI OpenW(const struct OpenInfo *info)
         }break;
         case miLookupSymbol:
         {
-          SafeCall(std::bind(LookupSymbol, ToStdString(GetSelectedItem()), true));
+//TODO: configure creating temporary tags behaviour
+          SafeCall(std::bind(LookupSymbol, ToStdString(GetSelectedItem()), true, false));
         }break;
         case miSearchFile:
         {
