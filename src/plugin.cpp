@@ -964,6 +964,20 @@ static size_t LoadTagsImpl(std::string const& tagsFile)
   return symbolsLoaded;
 }
 
+static bool LoadNotEmptyTags(std::string const& tagsFile)
+{
+  if (!!LoadTagsImpl(tagsFile))
+    return true;
+
+  auto const loadedTags = GetFiles();
+  auto currentTags = std::find(loadedTags.begin(), loadedTags.end(), tagsFile);
+  if (currentTags == loadedTags.end())
+    throw std::logic_error("Internal error: loaded tags not found " + tagsFile);
+
+  UnloadTags(static_cast<int>(std::distance(loadedTags.begin(), currentTags)));
+  return false;
+}
+
 static void LoadTags(std::string const& tagsFile, bool silent)
 {
   size_t symbolsLoaded = LoadTagsImpl(tagsFile);
@@ -1736,7 +1750,7 @@ static bool IndexSingleFile(WideString const& fileFullPath, WideString const& ta
   args += L"\"" + fileFullPath + L"\"";
   ExecuteScript(ExpandEnvString(ToString(config.exe)), args, tagsDirectoryPath);
   auto tagsFile = GetFirstFileInDir(tagsDirectoryPath);
-  return tagsFile.empty() ? false : !!LoadTagsImpl(ToStdString(tagsFile));
+  return tagsFile.empty() ? false : LoadNotEmptyTags(ToStdString(tagsFile));
 }
 
 static bool CreateTemporaryTags(WideString const& fileFullPath)
