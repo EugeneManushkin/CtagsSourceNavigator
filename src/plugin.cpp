@@ -1659,17 +1659,28 @@ public:
   {
     if (!FileToTempdir.insert(std::make_pair(fileFullPath, tempDirectory)).second)
       throw std::logic_error("Internal error: file already indexed " + ToStdString(fileFullPath));
+
+    if (!TempdirToFile.insert(std::make_pair(tempDirectory, fileFullPath)).second)
+    {
+      FileToTempdir.erase(fileFullPath);
+      throw std::logic_error("Internal error: temporary directory already used " + ToStdString(tempDirectory));
+    }
   }
 
   void Unregister(WideString const& fileFullPath)
   {
-    auto item = FileToTempdir.find(fileFullPath);
-    if (item == FileToTempdir.end())
-      return;
+    auto file = FileToTempdir.find(fileFullPath);
+    auto tempDir = file == FileToTempdir.end() ? TempdirToFile.end() : TempdirToFile.find(file->second);
+    Unregister(file, tempDir);
+  }
 
-    auto tempDir = std::move(item->second);
-    FileToTempdir.erase(item);
-    RemoveDirWithFiles(tempDir);
+  void UnregisterTags(WideString const& tagsFile)
+  {
+    auto pos = tagsFile.rfind('\\');
+    auto dirOfFile = pos == WideString::npos ? WideString() : tagsFile.substr(0, pos);
+    auto tempDir = TempdirToFile.find(dirOfFile);
+    auto file = tempDir == TempdirToFile.end() ? FileToTempdir.end() : FileToTempdir.find(tempDir->second);
+    Unregister(file, tempDir);
   }
 
   void Clear()
@@ -1681,7 +1692,29 @@ public:
   }
 
 private:
-  std::unordered_map<WideString, WideString> FileToTempdir;
+  using PathToPathMap = std::unordered_map<WideString, WideString>;
+
+  std::logic_error IndexMissedError(PathToPathMap::iterator iter) const
+  {
+    return std::logic_error("Internal error: index missed for " + ToStdString(iter->first) + ", " + ToStdString(iter->second));
+  }
+
+  void Unregister(PathToPathMap::iterator file, PathToPathMap::iterator tempDir)
+  {
+    if (file == FileToTempdir.end() && tempDir == TempdirToFile.end())
+      return;
+
+    if (file == FileToTempdir.end() || tempDir == TempdirToFile.end())
+        throw IndexMissedError(file == FileToTempdir.end() ? tempDir : file);
+
+    auto tempDirPath = std::move(file->second);
+    FileToTempdir.erase(file);
+    TempdirToFile.erase(tempDir);
+    RemoveDirWithFiles(tempDirPath);
+  }
+
+  PathToPathMap FileToTempdir;
+  PathToPathMap TempdirToFile;
 };
 
 TemprepoStorage TemporaryRepositories;
@@ -1716,6 +1749,12 @@ static bool CreateTemporaryTags(WideString const& fileFullPath)
     TemporaryRepositories.Unregister(fileFullPath);
 
   return result;
+}
+
+//TODO: fix SafeCall and use std::bind
+static void UnregisterTempTags(WideString const& tagsFile)
+{
+  TemporaryRepositories.UnregisterTags(tagsFile);
 }
 
 static std::vector<WideString> GetDirectoryTags(WideString const& dir)
@@ -2068,6 +2107,15 @@ HANDLE WINAPI OpenW(const struct OpenInfo *info)
           int rc=Menu(GetMsg(MUnloadTagsFile),ml,0);
           if(rc==-1)return nullptr;
           UnloadTags(rc-1);
+          if (!rc)
+          {
+            for (auto const& file : files)
+              SafeCall(std::bind(UnregisterTempTags, ToString(file)));
+          }
+          else
+          {
+            SafeCall(std::bind(UnregisterTempTags, ToString(files.at(rc - 1))));
+          }
         }break;
         case miCreateTagsFile:
         {
