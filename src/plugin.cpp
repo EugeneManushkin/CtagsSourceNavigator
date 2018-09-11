@@ -1703,6 +1703,7 @@ public:
       SafeCall(std::bind(RemoveDirWithFiles, i.second));
 
     FileToTempdir.clear();
+    TempdirToFile.clear();
   }
 
 private:
