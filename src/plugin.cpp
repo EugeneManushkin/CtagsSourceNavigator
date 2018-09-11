@@ -2392,6 +2392,16 @@ void WINAPI GetGlobalInfoW(struct GlobalInfo *info)
   info->Author = L"Eugene Manushkin";
 }
 
+intptr_t WINAPI ProcessEditorEventW(const struct ProcessEditorEventInfo *info)
+{
+  if (info->Event == EE_CLOSE)
+  {
+    TemporaryRepositories.Unregister(ToString(GetFileNameFromEditor(info->EditorID)));
+  }
+
+  return 0;
+}
+
 void WINAPI ExitFARW(const struct ExitInfo *info)
 {
   TemporaryRepositories.Clear();

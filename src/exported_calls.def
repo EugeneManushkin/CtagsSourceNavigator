@@ -5,4 +5,5 @@ EXPORTS
   AnalyseW
   SetStartupInfoW
   ConfigureW
+  ProcessEditorEventW
   ExitFARW
