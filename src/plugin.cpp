@@ -61,6 +61,8 @@ static const wchar_t* APPNAME = CTAGS_PRODUCT_NAME;
 
 static const wchar_t* ConfigFileName=L"config";
 
+static const wchar_t* const DefaultTagsFilename = L"tags";
+
 struct Config{
   Config();
   void SetWordchars(std::string const& str);
@@ -673,7 +675,6 @@ static void RemoveDirWithFiles(WideString const& dir)
   if (!(GetFileAttributesW(dir.c_str()) & FILE_ATTRIBUTE_DIRECTORY))
     return;
 
-//TODO: refactor duplicated code
   WIN32_FIND_DATAW fileData;
   auto pattern = JoinPath(dir, L"*");
   std::shared_ptr<void> handle(::FindFirstFileW(pattern.c_str(), &fileData), ::FindClose);
@@ -694,22 +695,6 @@ static void MkDir(WideString const& dir)
   if (!::CreateDirectoryW(dir.c_str(), nullptr))
     throw std::runtime_error("Failed to create directory:\n" + ToStdString(dir) +
                              "\nwith error: " + std::to_string(GetLastError()));
-}
-
-static WideString GetFirstFileInDir(WideString const& dir)
-{
-//TODO: refactor duplicated code
-  WIN32_FIND_DATAW fileData;
-  auto pattern = JoinPath(dir, L"*");
-  std::shared_ptr<void> handle(::FindFirstFileW(pattern.c_str(), &fileData), ::FindClose);
-  while (handle.get() != INVALID_HANDLE_VALUE && FindNextFileW(handle.get(), &fileData))
-  {
-    auto file = JoinPath(dir, fileData.cFileName);
-    if (!(GetFileAttributesW(file.c_str()) & FILE_ATTRIBUTE_DIRECTORY))
-      return file;
-  }
-
-  return WideString();
 }
 
 static WideString RenameToTempFilename(WideString const& originalFile)
@@ -962,20 +947,6 @@ static size_t LoadTagsImpl(std::string const& tagsFile)
     throw Error(err == ENOENT ? MEFailedToOpen : MFailedToWriteIndex);
 
   return symbolsLoaded;
-}
-
-static bool LoadNotEmptyTags(std::string const& tagsFile)
-{
-  if (!!LoadTagsImpl(tagsFile))
-    return true;
-
-  auto const loadedTags = GetFiles();
-  auto currentTags = std::find(loadedTags.begin(), loadedTags.end(), tagsFile);
-  if (currentTags == loadedTags.end())
-    throw std::logic_error("Internal error: loaded tags not found " + tagsFile);
-
-  UnloadTags(static_cast<int>(std::distance(loadedTags.begin(), currentTags)));
-  return false;
 }
 
 static void LoadTags(std::string const& tagsFile, bool silent)
@@ -1681,26 +1652,26 @@ public:
     }
   }
 
-  void Unregister(WideString const& fileFullPath)
+  void ClearByFile(WideString const& fileFullPath)
   {
     auto file = FileToTempdir.find(fileFullPath);
     auto tempDir = file == FileToTempdir.end() ? TempdirToFile.end() : TempdirToFile.find(file->second);
-    Unregister(file, tempDir);
+    Clear(file, tempDir);
   }
 
-  void UnregisterTags(WideString const& tagsFile)
+  void ClearByTags(WideString const& tagsFile)
   {
     auto pos = tagsFile.rfind('\\');
     auto dirOfFile = pos == WideString::npos ? WideString() : tagsFile.substr(0, pos);
     auto tempDir = TempdirToFile.find(dirOfFile);
     auto file = tempDir == TempdirToFile.end() ? FileToTempdir.end() : FileToTempdir.find(tempDir->second);
-    Unregister(file, tempDir);
+    Clear(file, tempDir);
   }
 
-  void Clear()
+  void ClearAll()
   {
     for (auto const& i : FileToTempdir)
-      SafeCall(std::bind(RemoveDirWithFiles, i.second));
+      SafeCall(std::bind(&TemprepoStorage::ClearTempRepository, i.second));
 
     FileToTempdir.clear();
     TempdirToFile.clear();
@@ -1714,7 +1685,7 @@ private:
     return std::logic_error("Internal error: index missed for " + ToStdString(iter->first) + ", " + ToStdString(iter->second));
   }
 
-  void Unregister(PathToPathMap::iterator file, PathToPathMap::iterator tempDir)
+  void Clear(PathToPathMap::iterator file, PathToPathMap::iterator tempDir)
   {
     if (file == FileToTempdir.end() && tempDir == TempdirToFile.end())
       return;
@@ -1725,7 +1696,13 @@ private:
     auto tempDirPath = std::move(file->second);
     FileToTempdir.erase(file);
     TempdirToFile.erase(tempDir);
-    RemoveDirWithFiles(tempDirPath);
+    ClearTempRepository(tempDirPath);
+  }
+
+  static void ClearTempRepository(WideString const& tempDirectory)
+  {
+    UnloadTags(ToStdString(JoinPath(tempDirectory, DefaultTagsFilename)).c_str());
+    RemoveDirWithFiles(tempDirectory);
   }
 
   PathToPathMap FileToTempdir;
@@ -1744,14 +1721,14 @@ static std::string RemoveFileMask(std::string const& args)
   return config.opt.substr(0, beforeMaskPos == std::string::npos ? 0 : beforeMaskPos + 1);
 }
 
+//TODO: handle '-f tagfile' ctags flag
 static bool IndexSingleFile(WideString const& fileFullPath, WideString const& tagsDirectoryPath)
 {
   auto args = ToString(RemoveFileMask(config.opt));
   args += args.empty() || args.back() == ' ' ? L" " : L"";
   args += L"\"" + fileFullPath + L"\"";
   ExecuteScript(ExpandEnvString(ToString(config.exe)), args, tagsDirectoryPath);
-  auto tagsFile = GetFirstFileInDir(tagsDirectoryPath);
-  return tagsFile.empty() ? false : LoadNotEmptyTags(ToStdString(tagsFile));
+  return !!LoadTagsImpl(ToStdString(JoinPath(tagsDirectoryPath, DefaultTagsFilename)));
 }
 
 static bool CreateTemporaryTags(WideString const& fileFullPath)
@@ -1759,17 +1736,21 @@ static bool CreateTemporaryTags(WideString const& fileFullPath)
   auto tempDirPath = GenerateTempPath();
   MkDir(tempDirPath);
   TemporaryRepositories.Register(fileFullPath, tempDirPath);
-  bool result = SafeCall(std::bind(IndexSingleFile, fileFullPath, tempDirPath), false);
-  if (!result)
-    TemporaryRepositories.Unregister(fileFullPath);
+  if (SafeCall(std::bind(IndexSingleFile, fileFullPath, tempDirPath), false))
+    return true;
 
-  return result;
+  TemporaryRepositories.ClearByFile(fileFullPath);
+  return false;
 }
 
-//TODO: fix SafeCall and use std::bind
-static void UnregisterTempTags(WideString const& tagsFile)
+static void ClearTemporaryTags(WideString const& tagsFile)
 {
-  TemporaryRepositories.UnregisterTags(tagsFile);
+  TemporaryRepositories.ClearByTags(tagsFile);
+}
+
+static void ClearTemporaryTagsByFile(WideString const& file)
+{
+  TemporaryRepositories.ClearByFile(file);
 }
 
 static std::vector<WideString> GetDirectoryTags(WideString const& dir)
@@ -2121,15 +2102,18 @@ HANDLE WINAPI OpenW(const struct OpenInfo *info)
           }
           int rc=Menu(GetMsg(MUnloadTagsFile),ml,0);
           if(rc==-1)return nullptr;
-          UnloadTags(rc-1);
           if (!rc)
           {
             for (auto const& file : files)
-              SafeCall(std::bind(UnregisterTempTags, ToString(file)));
+              SafeCall(std::bind(ClearTemporaryTags, ToString(file)));
+
+            UnloadAllTags();
           }
           else
           {
-            SafeCall(std::bind(UnregisterTempTags, ToString(files.at(rc - 1))));
+            auto file = files.at(rc - 1);
+            SafeCall(std::bind(ClearTemporaryTags, ToString(file)));
+            UnloadTags(file.c_str());
           }
         }break;
         case miCreateTagsFile:
@@ -2138,7 +2122,8 @@ HANDLE WINAPI OpenW(const struct OpenInfo *info)
           int rc = SafeCall(std::bind(TagDirectory, selectedDir), 0);
           if (rc)
           {
-            tagfile = JoinPath(selectedDir, L"tags");
+//TODO: handle '-f tagfile' ctags flag
+            tagfile = JoinPath(selectedDir, DefaultTagsFilename);
           }
         }break;
         case miAddTagsToAutoload:
@@ -2397,7 +2382,7 @@ intptr_t WINAPI ProcessEditorEventW(const struct ProcessEditorEventInfo *info)
 {
   if (info->Event == EE_CLOSE)
   {
-    TemporaryRepositories.Unregister(ToString(GetFileNameFromEditor(info->EditorID)));
+    SafeCall(std::bind(ClearTemporaryTagsByFile, ToString(GetFileNameFromEditor(info->EditorID))));
   }
 
   return 0;
@@ -2405,5 +2390,5 @@ intptr_t WINAPI ProcessEditorEventW(const struct ProcessEditorEventInfo *info)
 
 void WINAPI ExitFARW(const struct ExitInfo *info)
 {
-  TemporaryRepositories.Clear();
+  TemporaryRepositories.ClearAll();
 }
