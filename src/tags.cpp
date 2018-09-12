@@ -773,7 +773,6 @@ std::string TagFileInfo::GetFullPath(std::string const& relativePath) const
 
 bool TagFileInfo::HasName(char const* fileName) const
 {
-  // filename.back() is not path separator
   return PathsEqual(filename.c_str(), fileName);
 }
 
@@ -1079,15 +1078,16 @@ std::vector<std::string> GetFiles()
   return result;
 }
 
-void UnloadTags(int idx)
+void UnloadTags(const char* tagsFile)
 {
-  if(idx==-1)
-  {
-    files.clear();
-  }else
-  {
-    files.erase(files.begin() + idx);
-  }
+  auto pos = std::find_if(files.begin(), files.end(), [&](TagFileInfoPtr const& repos) {return repos->HasName(tagsFile);});
+  if (pos != files.end())
+    files.erase(pos);
+}
+
+void UnloadAllTags()
+{
+  files.clear();
 }
 
 bool IsTagFile(const char* file)

@@ -193,7 +193,7 @@ namespace TESTS
 
     virtual void TearDown() 
     {
-      UnloadTags(-1);
+      UnloadAllTags();
     }
 
     void LoadTagsFileImpl(std::string const& tagsFile, size_t expectedTagsCount)

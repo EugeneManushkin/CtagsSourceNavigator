@@ -48,7 +48,8 @@ public:
 };
 
 int Load(const char* filename, size_t& symbolsLoaded);
-void UnloadTags(int idx);
+void UnloadTags(const char* tagsFile);
+void UnloadAllTags();
 std::vector<TagInfo> Find(const char* name, const char* filename, int sortOptions = SortOptions::Default);
 std::vector<TagInfo> FindPartiallyMatchedTags(const char* file, const char* part, size_t maxCount, bool caseInsensitive, int sortOptions = SortOptions::Default);
 std::vector<std::string> FindPartiallyMatchedFile(const char* file, const char* part, size_t maxCount); 
