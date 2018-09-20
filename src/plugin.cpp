@@ -1996,8 +1996,7 @@ HANDLE WINAPI OpenW(const struct OpenInfo *info)
       || res == miComplete
       || res == miBrowseClass
       || res == miBrowseFile
-//TODO: configure creating temporary tags behaviour
-        ) && !SafeCall(std::bind(EnsureTagsLoaded, fileName, true), false))
+        ) && !SafeCall(std::bind(EnsureTagsLoaded, fileName, config.index_edited_file), false))
     {
       return nullptr;
     }
@@ -2054,8 +2053,7 @@ HANDLE WINAPI OpenW(const struct OpenInfo *info)
       }break;
       case miLookupSymbol:
       {
-//TODO: configure creating temporary tags behaviour
-        SafeCall(std::bind(LookupSymbol, fileName, false, true));
+        SafeCall(std::bind(LookupSymbol, fileName, false, config.index_edited_file));
       }break;
       case miSearchFile:
       {
@@ -2142,7 +2140,6 @@ HANDLE WINAPI OpenW(const struct OpenInfo *info)
         }break;
         case miLookupSymbol:
         {
-//TODO: configure creating temporary tags behaviour
           SafeCall(std::bind(LookupSymbol, ToStdString(GetSelectedItem()), true, false));
         }break;
         case miSearchFile:
