@@ -62,4 +62,5 @@ enum{
   MMaxResults,
   MSortClassMembersByName,
   MCurFileFirst,
+  MIndexEditedFile,
 };

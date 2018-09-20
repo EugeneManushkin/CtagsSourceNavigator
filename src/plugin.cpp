@@ -86,6 +86,7 @@ struct Config{
   bool autoload_changed;
   size_t max_results;
   bool cur_file_first;
+  bool index_edited_file;
   bool sort_class_members_by_name;
   static const size_t max_history_len;
 
@@ -107,6 +108,7 @@ Config::Config()
   , autoload_changed(true)
   , max_results(10)
   , cur_file_first(true)
+  , index_edited_file(true)
   , sort_class_members_by_name(false)
 {
   SetWordchars("0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz~$_");
@@ -849,6 +851,10 @@ static void LoadConfig(std::string const& fileName)
     else if(key == "curfilefirst")
     {
       config.cur_file_first = val == "true";
+    }
+    else if(key == "indexeditedfile")
+    {
+      config.index_edited_file = val == "true";
     }
     else if(key == "sortclassmembersbyname")
     {
@@ -2310,7 +2316,7 @@ intptr_t WINAPI ConfigureW(const struct ConfigureInfo *Info)
   unsigned char y = 0;
   struct InitDialogItem initItems[]={
 //    Type        X1  Y2  X2 Y2  F S           Flags D Data
-    DI_DOUBLEBOX, 3, ++y, 64,25, 0,0,              0,0,MPlugin,L"",{},
+    DI_DOUBLEBOX, 3, ++y, 64,26, 0,0,              0,0,MPlugin,L"",{},
     DI_TEXT,      5, ++y,  0, 0, 0,0,              0,0,MPathToExe,L"",{},
     DI_EDIT,      5, ++y, 62, 3, 1,0,              0,0,-1,ToString(config.exe),{"pathtoexe", true},
     DI_TEXT,      5, ++y,  0, 0, 0,0,              0,0,MCmdLineOptions,L"",{},
@@ -2321,6 +2327,7 @@ intptr_t WINAPI ConfigureW(const struct ConfigureInfo *Info)
     DI_CHECKBOX,  5, ++y, 62,10, 1,config.casesens,0,0,MCaseSensFilt,L"",{"casesensfilt", false, true},
     DI_CHECKBOX,  5, ++y, 62,10, 1,config.sort_class_members_by_name,0,0,MSortClassMembersByName,L"",{"sortclassmembersbyname", false, true},
     DI_CHECKBOX,  5, ++y, 62,10, 1,config.cur_file_first,0,0,MCurFileFirst,L"",{"curfilefirst", false, true},
+    DI_CHECKBOX,  5, ++y, 62,10, 1,config.index_edited_file,0,0,MIndexEditedFile,L"",{"indexeditedfile", false, true},
     DI_TEXT,      5, ++y,  0, 0, 0,0,              0,0,MWordChars,L"",{},
     DI_EDIT,      5, ++y, 62, 9, 1,0,              0,0,-1,ToString(config.GetWordchars()),{"wordchars", true},
     DI_TEXT,      5, ++y, 62,10, 1,0,DIF_SEPARATOR|DIF_BOXCOLOR,0,-1,L"",{},
@@ -2360,7 +2367,7 @@ intptr_t WINAPI ConfigureW(const struct ConfigureInfo *Info)
 
   std::shared_ptr<void> handleHolder(handle, [](void* h){I.DialogFree(h);});
   auto ExitCode = I.DialogRun(handle);
-  if(ExitCode!=23)return FALSE;
+  if(ExitCode!=24)return FALSE;
   if (SaveConfig(initItems, itemsCount))
     SynchronizeConfig();
 
