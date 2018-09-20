@@ -968,14 +968,14 @@ struct MI{
   WideString item;
   int data;
   bool Disabled;
+  char Label;
   MI()
     : data(-1)
     , Disabled(false)
   {
   }
-  MI(WideString const& str,int value,bool disabled=false):item(str),data(value),Disabled(disabled){}
-  MI(const char* str,int value,bool disabled=false):item(ToString(str)),data(value),Disabled(disabled){}
-  MI(int msgid,int value,bool disabled=false):item(GetMsg(msgid)),data(value),Disabled(disabled){}
+  MI(WideString const& str,int value):item(str),data(value),Disabled(false),Label(0){}
+  MI(int msgid,int value,bool disabled=false,char label=0):item(GetMsg(msgid)),data(value),Disabled(disabled),Label(label){}
   bool IsSeparator() const
   {
     return item.empty();
@@ -1010,7 +1010,10 @@ int Menu(const wchar_t *title,MenuList& lst,int sel,int flags=MF_LABELS,const vo
     {
       if((flags&MF_LABELS))
       {
-        WideString buf = curLabel<labelsCount ? WideString(L"&") + labels[curLabel] + L" " : L"  ";
+        WideString buf;
+        buf = buf.empty() && !!lstItem.Label ? WideString(L"&") + wchar_t(lstItem.Label) + L" " : buf;
+        buf = buf.empty() && curLabel < labelsCount ? WideString(L"&") + labels[curLabel] + L" " : buf;
+        buf = buf.empty() ? L"  " : buf;
         lstItem.item = buf + lstItem.item;
       }
       lstItem.item = lstItem.item.substr(0, MaxMenuWidth);
@@ -1630,7 +1633,7 @@ static WideString SelectFromHistory()
   MenuList menuList;
   for (auto const& file : VisitedTags)
   {
-    menuList.push_back(MI(ToStdString(file).c_str(), i));
+    menuList.push_back(MI(file, i));
     ++i;
   }
 
@@ -1963,6 +1966,8 @@ static void CompleteName(char const* fileName, EditorInfo const& ei)
   I.EditorControl(ei.EditorID, ECTL_INSERTTEXT, 0, const_cast<wchar_t*>(newText.c_str()));
 }
 
+static intptr_t ConfigurePlugin();
+
 HANDLE WINAPI OpenW(const struct OpenInfo *info)
 {
   OPENFROM OpenFrom = info->OpenFrom;
@@ -1976,7 +1981,8 @@ HANDLE WINAPI OpenW(const struct OpenInfo *info)
     LazyAutoload();
     enum{
       miFindSymbol,miUndo,miResetUndo,miReindexRepo,
-      miComplete,miBrowseClass,miBrowseFile,miLookupSymbol,miSearchFile
+      miComplete,miBrowseClass,miBrowseFile,miLookupSymbol,miSearchFile,
+      miPluginConfiguration,
     };
     MenuList ml = {
         MI(MFindSymbol,miFindSymbol)
@@ -1989,6 +1995,8 @@ HANDLE WINAPI OpenW(const struct OpenInfo *info)
       , MI(MSearchFile,miSearchFile)
       , MI::Separator()
       , MI(MReindexRepo, miReindexRepo)
+      , MI::Separator()
+      , MI(MPluginConfiguration, miPluginConfiguration, false, 'C')
     };
     int res=Menu(GetMsg(MPlugin),ml,0);
     if(res==-1)return nullptr;
@@ -2063,6 +2071,10 @@ HANDLE WINAPI OpenW(const struct OpenInfo *info)
       {
         tagfile = SafeCall(std::bind(ReindexRepository, fileName), WideString());
       }break;
+      case miPluginConfiguration:
+      {
+        SafeCall(ConfigurePlugin);
+      }break;
     }
   }
   else
@@ -2070,7 +2082,9 @@ HANDLE WINAPI OpenW(const struct OpenInfo *info)
     if(OpenFrom==OPEN_PLUGINSMENU)
     {
       enum {miLoadFromHistory,miLoadTagsFile,miUnloadTagsFile, miReindexRepo,
-            miCreateTagsFile,miAddTagsToAutoload, miLookupSymbol, miSearchFile};
+            miCreateTagsFile,miAddTagsToAutoload, miLookupSymbol, miSearchFile,
+            miPluginConfiguration,
+      };
       MenuList ml = {
            MI(MLookupSymbol, miLookupSymbol)
          , MI(MSearchFile, miSearchFile)
@@ -2082,6 +2096,8 @@ HANDLE WINAPI OpenW(const struct OpenInfo *info)
          , MI::Separator()
          , MI(MCreateTagsFile, miCreateTagsFile)
          , MI(MReindexRepo, miReindexRepo)
+         , MI::Separator()
+         , MI(MPluginConfiguration, miPluginConfiguration, false, 'C')
       };
       int rc=Menu(GetMsg(MPlugin),ml,0);
       switch(rc)
@@ -2102,7 +2118,7 @@ HANDLE WINAPI OpenW(const struct OpenInfo *info)
           int i = 0;
           for(auto const& file : files)
           {
-            ml.push_back(MI(file.c_str(), ++i));
+            ml.push_back(MI(ToString(file), ++i));
           }
           int rc=Menu(GetMsg(MUnloadTagsFile),ml,0);
           if(rc==-1)return nullptr;
@@ -2149,6 +2165,10 @@ HANDLE WINAPI OpenW(const struct OpenInfo *info)
         case miReindexRepo:
         {
           tagfile = SafeCall(std::bind(ReindexRepository, ToStdString(GetSelectedItem())), WideString());
+        }break;
+        case miPluginConfiguration:
+        {
+          SafeCall(ConfigurePlugin);
         }break;
       }
     }
@@ -2312,7 +2332,7 @@ intptr_t WINAPI ConfigureDlgProc(
   return I.DefDlgProc(hDlg, Msg, Param1, Param2);
 }
 
-intptr_t WINAPI ConfigureW(const struct ConfigureInfo *Info)
+static intptr_t ConfigurePlugin()
 {
   SynchronizeConfig();
   unsigned char y = 0;
@@ -2375,6 +2395,11 @@ intptr_t WINAPI ConfigureW(const struct ConfigureInfo *Info)
     SynchronizeConfig();
 
   return TRUE;
+}
+
+intptr_t WINAPI ConfigureW(const struct ConfigureInfo *)
+{
+    return SafeCall(ConfigurePlugin, FALSE);
 }
 
 void WINAPI GetGlobalInfoW(struct GlobalInfo *info)

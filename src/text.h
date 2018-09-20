@@ -63,4 +63,5 @@ enum{
   MSortClassMembersByName,
   MCurFileFirst,
   MIndexEditedFile,
+  MPluginConfiguration,
 };
