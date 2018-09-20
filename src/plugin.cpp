@@ -2277,6 +2277,11 @@ static bool SaveConfig(InitDialogItem const* dlgItems, size_t count)
   return true;
 }
 
+static WideString PluginVersionString()
+{
+  return ToString(std::to_string(CTAGS_VERSION_MAJOR) + "." + std::to_string(CTAGS_VERSION_MINOR) + ".0." + std::to_string(CTAGS_BUILD));
+}
+
 WideString get_text(HANDLE hDlg, intptr_t ctrl_id) {
   FarDialogItemData item = { sizeof(FarDialogItemData) };
   item.PtrLength = I.SendDlgMessage(hDlg, DM_GETTEXT, ctrl_id, 0);
@@ -2311,9 +2316,10 @@ intptr_t WINAPI ConfigureW(const struct ConfigureInfo *Info)
 {
   SynchronizeConfig();
   unsigned char y = 0;
+  WideString menuTitle = WideString(GetMsg(MPlugin)) + L" " + PluginVersionString();
   struct InitDialogItem initItems[]={
 //    Type        X1  Y2  X2 Y2  F S           Flags D Data
-    DI_DOUBLEBOX, 3, ++y, 64,26, 0,0,              0,0,MPlugin,L"",{},
+    DI_DOUBLEBOX, 3, ++y, 64,26, 0,0,              0,0,-1,menuTitle.c_str(),{},
     DI_TEXT,      5, ++y,  0, 0, 0,0,              0,0,MPathToExe,L"",{},
     DI_EDIT,      5, ++y, 62, 3, 1,0,              0,0,-1,ToString(config.exe),{"pathtoexe", true},
     DI_TEXT,      5, ++y,  0, 0, 0,0,              0,0,MCmdLineOptions,L"",{},
