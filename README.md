@@ -16,6 +16,9 @@ This is a [Far Manager](https://www.farmanager.com/) plugin for browsing source 
 + Reindexing repository.
 + Hotkeys macro
 ## What's new 
+### 2.1.0.31
++ Supported shadow indexing of currently edited file
++ Plugin configuration dialog is available in main menu and editor menu
 ### 2.1.0.29
 + Supported case insensitive search in entire repository. Unsetting "Case Sensitive filter" option in plugin configuration menu means case insensitive search in all kind of search including search in entire repository
 + Supported natural ordering of class members. To sort class members by name enable option "Sort class members by name" in plugin configuration menu
