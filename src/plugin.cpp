@@ -439,13 +439,19 @@ static void SetPanelDir(WideString const& dir, HANDLE hPanel)
   I.PanelControl(hPanel, FCTL_SETPANELDIRECTORY, 0, &farDir);
 }
 
+inline WideString GetDirOfFile(WideString const& fileName)
+{
+  auto pos = fileName.find_last_of(L"\\/");
+  return pos == WideString::npos ? WideString() : fileName.substr(0, pos);
+}
+
 static void SelectFile(WideString const& fileName, HANDLE hPanel = PANEL_ACTIVE)
 {
-  auto pos = fileName.rfind('\\');
-  if (pos == WideString::npos)
+  auto const dirOfFile = GetDirOfFile(fileName);
+  if (dirOfFile.empty())
     return;
 
-  SetPanelDir(fileName.substr(0, pos), hPanel);
+  SetPanelDir(dirOfFile, hPanel);
   PanelInfo pi = {sizeof(PanelInfo)};
   I.PanelControl(hPanel, FCTL_GETPANELINFO, 0, &pi);
   size_t foundItem = 0;
@@ -657,6 +663,13 @@ static WideString GetTempFilename()
   return pos == WideString::npos ? tempPath : tempPath.substr(pos, WideString::npos);
 }
 
+static bool IsInTempDirectory(WideString const& fileName)
+{
+  auto const tempDir = GetDirOfFile(GenerateTempPath());
+  auto const dirOfFile = GetDirOfFile(fileName);
+  return !tempDir.empty() && !dirOfFile.empty() && !!FSF.ProcessName(JoinPath(tempDir, L"*").c_str(), const_cast<wchar_t*>(dirOfFile.c_str()), 0, PN_CMPNAME);
+}
+
 static void RenameFile(WideString const& originalFile, WideString const& newFile)
 {
   if (!::MoveFileExW(originalFile.c_str(), newFile.c_str(), MOVEFILE_REPLACE_EXISTING))
@@ -701,9 +714,7 @@ static void MkDir(WideString const& dir)
 
 static WideString RenameToTempFilename(WideString const& originalFile)
 {
-  auto pos = originalFile.rfind('\\');
-  auto dirOfFile = pos == WideString::npos ? WideString() : originalFile.substr(0, pos);
-  auto newName = JoinPath(dirOfFile, GetTempFilename());
+  auto const newName = JoinPath(GetDirOfFile(originalFile), GetTempFilename());
   RenameFile(originalFile, newName);
   return newName;
 }
@@ -715,13 +726,11 @@ static void SetDefaultConfig()
 
 static WideString GetModulePath()
 {
-  WideString path(I.ModuleName);
-  auto pos = path.rfind('\\');
-  pos = pos == WideString::npos ? path.rfind('/') : pos;
-  if (!pos || pos == WideString::npos)
+  auto const path = GetDirOfFile(I.ModuleName);
+  if (path.empty())
     throw std::invalid_argument("Invalid module path");
 
-  return path.substr(0, pos);
+  return path;
 }
 
 static WideString GetConfigFilePath()
@@ -1663,17 +1672,15 @@ public:
 
   void ClearByFile(WideString const& fileFullPath)
   {
-    auto file = FileToTempdir.find(fileFullPath);
-    auto tempDir = file == FileToTempdir.end() ? TempdirToFile.end() : TempdirToFile.find(file->second);
+    auto const file = FileToTempdir.find(fileFullPath);
+    auto const tempDir = file == FileToTempdir.end() ? TempdirToFile.end() : TempdirToFile.find(file->second);
     Clear(file, tempDir);
   }
 
   void ClearByTags(WideString const& tagsFile)
   {
-    auto pos = tagsFile.rfind('\\');
-    auto dirOfFile = pos == WideString::npos ? WideString() : tagsFile.substr(0, pos);
-    auto tempDir = TempdirToFile.find(dirOfFile);
-    auto file = tempDir == TempdirToFile.end() ? FileToTempdir.end() : FileToTempdir.find(tempDir->second);
+    auto const tempDir = TempdirToFile.find(GetDirOfFile(tagsFile));
+    auto const file = tempDir == TempdirToFile.end() ? FileToTempdir.end() : FileToTempdir.find(tempDir->second);
     Clear(file, tempDir);
   }
 
@@ -1783,23 +1790,22 @@ static std::vector<WideString> GetDirectoryTags(WideString const& dir)
   return result;
 }
 
-static std::string SearchTagsFile(std::string const& fileName)
+static WideString SearchTagsFile(WideString const& fileName)
 {
   auto str = fileName;
   std::vector<WideString> foundTags;
   while(!str.empty())
   {
-    auto pos = str.rfind('\\');
-    if (pos == std::string::npos)
+    str = GetDirOfFile(str);
+    if (str.empty())
       break;
 
-    str = str.substr(0, pos);
-    auto tags = GetDirectoryTags(ToString(str));
+    auto tags = GetDirectoryTags(str);
     foundTags.insert(foundTags.end(), tags.begin(), tags.end());
   }
 
   if (foundTags.empty())
-    return std::string();
+    return WideString();
 
   MenuList lst;
   int i = 0;
@@ -1808,10 +1814,10 @@ static std::string SearchTagsFile(std::string const& fileName)
 
   auto res = Menu(GetMsg(MSelectTags), lst, 0, 0);
   if (res < 0)
-    return std::string();
+    return WideString();
 
-  auto tagsFile = ToStdString(foundTags[res]);
-  if (tagsFile.empty() || !IsTagFile(tagsFile.c_str()))
+  auto const& tagsFile = foundTags[res];
+  if (!IsTagFile(ToStdString(tagsFile).c_str()))
     throw Error(MNotTagFile);
 
   return tagsFile;
@@ -1822,25 +1828,24 @@ static bool EnsureTagsLoaded(std::string const& fileName, bool createTempTags)
   if (TagsLoadedForFile(fileName.c_str()))
     return true;
 
-  auto tagsFile = SearchTagsFile(fileName);
+  auto tagsFile = IsInTempDirectory(ToString(fileName)) ? WideString() : SearchTagsFile(ToString(fileName));
   if (tagsFile.empty())
     return createTempTags && CreateTemporaryTags(ToString(fileName));
 
-  LoadTags(tagsFile.c_str(), true);
+  LoadTags(ToStdString(tagsFile).c_str(), true);
   return true;
 }
 
 static WideString ReindexRepository(std::string const& fileName)
 {
-  auto tagsFile = ToString(SearchTagsFile(fileName));
+  auto tagsFile = SearchTagsFile(ToString(fileName));
   if (tagsFile.empty())
     return WideString();
 
-  auto pos = tagsFile.find_last_of('\\');
-  if (pos == WideString::npos)
+  auto reposDir = GetDirOfFile(tagsFile);
+  if (reposDir.empty())
     throw Error(MNotTagFile);
 
-  auto reposDir = tagsFile.substr(0, pos);
   if (YesNoCalncelDialog(WideString(GetMsg(MAskReindex)) + L"\n" + reposDir + L"\n" + GetMsg(MProceed)) != YesNoCancel::Yes)
     return WideString();
 
