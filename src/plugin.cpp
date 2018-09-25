@@ -126,8 +126,10 @@ void Config::SetWordchars(std::string const& str)
 
 Config config;
 
+using WideString = std::basic_string<wchar_t>;
+
 struct SUndoInfo{
-  std::string file;
+  WideString file;
   intptr_t line;
   intptr_t pos;
   intptr_t top;
@@ -135,8 +137,6 @@ struct SUndoInfo{
 };
 
 std::deque<SUndoInfo> UndoArray;
-
-using WideString = std::basic_string<wchar_t>;
 
 struct VisitedTagsLru
 {
@@ -406,15 +406,15 @@ EditorInfo GetCurrentEditorInfo()
   return ei;
 }
 
-std::string GetFileNameFromEditor(intptr_t editorID)
+WideString GetFileNameFromEditor(intptr_t editorID)
 {
   size_t sz = I.EditorControl(editorID, ECTL_GETFILENAME, 0, nullptr);
   if (!sz)
-    return std::string();
+    return WideString();
 
   std::vector<wchar_t> buffer(sz);
   I.EditorControl(editorID, ECTL_GETFILENAME, buffer.size(), &buffer[0]);
-  return ToStdString(WideString(buffer.begin(), buffer.end() - 1));
+  return WideString(buffer.begin(), buffer.end() - 1);
 }
 
 WideString GetPanelDir(HANDLE hPanel = PANEL_ACTIVE)
@@ -1427,15 +1427,7 @@ static void chomp(char* str)
   }
 }
 
-int SetPos(std::string const& filename,intptr_t line,intptr_t col,intptr_t top,intptr_t left);
-
-static void NotFound(std::string const& fn,int line)
-{
-  if(YesNoCalncelDialog(GetMsg(MNotFoundAsk)) == YesNoCancel::Yes)
-  SetPos(fn,line,0,-1,-1);
-}
-
-bool GotoOpenedFile(std::string const& file)
+bool GotoOpenedFile(WideString const& file)
 {
   auto c = I.AdvControl(&PluginGuid, ACTL_GETWINDOWCOUNT, 0, nullptr);
   for(decltype(c) i=0;i<c;i++)
@@ -1449,7 +1441,7 @@ bool GotoOpenedFile(std::string const& file)
     std::vector<wchar_t> name(wi.NameSize);
     wi.Name = &name[0];
     I.AdvControl(&PluginGuid, ACTL_GETWINDOWINFO, 0, (void*)&wi);
-    if(wi.Type==WTYPE_EDITOR && !FSF.LStricmp(wi.Name, ToString(file).c_str()))
+    if(wi.Type==WTYPE_EDITOR && !FSF.LStricmp(wi.Name, file.c_str()))
     {
       I.AdvControl(&PluginGuid, ACTL_SETCURRENTWINDOW, i, nullptr);
       I.AdvControl(&PluginGuid, ACTL_COMMIT, 0, nullptr);
@@ -1460,14 +1452,40 @@ bool GotoOpenedFile(std::string const& file)
   return false;
 }
 
+int SetPos(WideString const& filename,intptr_t line,intptr_t col,intptr_t top,intptr_t left)
+{
+  if(!GotoOpenedFile(filename))
+  {
+    I.Editor(filename.c_str(), L"", 0, 0, -1, -1,  EF_NONMODAL, line >= 0 ? line + 1 : -1, col >= 0 ? col + 1 : -1, CP_DEFAULT);
+    return 0;
+  }
+
+  EditorInfo ei = GetCurrentEditorInfo();
+  EditorSetPosition esp = {sizeof(EditorSetPosition)};
+  esp.CurLine=line;
+  esp.CurPos=col;
+  esp.CurTabPos=-1;
+  esp.TopScreenLine=top;
+  esp.LeftPos=left;
+  esp.Overtype=-1;
+  I.EditorControl(ei.EditorID, ECTL_SETPOSITION, 0, &esp);
+  I.EditorControl(ei.EditorID, ECTL_REDRAW, 0, nullptr);
+  return 1;
+}
+
+static void NotFound(WideString const& fn,int line)
+{
+  if(YesNoCalncelDialog(GetMsg(MNotFoundAsk)) == YesNoCancel::Yes)
+  SetPos(fn,line,0,-1,-1);
+}
+
 static void NavigateTo(TagInfo const* info, bool setPanelDir = false)
 {
   EditorInfo ei = {sizeof(EditorInfo)};
   if (!!I.EditorControl(-1, ECTL_GETINFO, 0, &ei))
   {
-    auto fileName = GetFileNameFromEditor(ei.EditorID);
     SUndoInfo ui;
-    ui.file=fileName.c_str();
+    ui.file=GetFileNameFromEditor(ei.EditorID);
     ui.line=ei.CurLine;
     ui.pos=ei.CurPos;
     ui.top=ei.TopScreenLine;
@@ -1475,18 +1493,19 @@ static void NavigateTo(TagInfo const* info, bool setPanelDir = false)
     UndoArray.push_back(ui);
   }
 
+  auto infoFile = ToString(info->file);
   if (info->name.empty())
   {
     if (setPanelDir)
-      SelectFile(ToString(info->file));
+      SelectFile(infoFile);
 
-    SetPos(info->file, -1, -1, -1, -1);
+    SetPos(infoFile, -1, -1, -1, -1);
     return;
   }
 
   bool havere=!info->re.empty();
   std::regex re = havere ? std::regex(info->re) : std::regex();
-  if(!GotoOpenedFile(info->file))
+  if(!GotoOpenedFile(infoFile))
   {
     FILE *f=fopen(info->file.c_str(),"rt");
     if(!f)
@@ -1511,7 +1530,7 @@ static void NavigateTo(TagInfo const* info, bool setPanelDir = false)
     {
       if(!havere)
       {
-        NotFound(info->file,info->lineno);
+        NotFound(infoFile,info->lineno);
         fclose(f);
         return;
       }
@@ -1528,16 +1547,16 @@ static void NavigateTo(TagInfo const* info, bool setPanelDir = false)
       }
       if(feof(f))
       {
-        NotFound(info->file,info->lineno);
+        NotFound(infoFile,info->lineno);
         fclose(f);
         return;
       }
     }
     fclose(f);
     if (setPanelDir)
-      SelectFile(ToString(info->file));
+      SelectFile(infoFile);
 
-    I.Editor(ToString(info->file).c_str(), L"", 0, 0, -1, -1, EF_NONMODAL, line + 1, 1, CP_DEFAULT);
+    I.Editor(infoFile.c_str(), L"", 0, 0, -1, -1, EF_NONMODAL, line + 1, 1, CP_DEFAULT);
     return;
   }
   EditorSetPosition esp = {sizeof(EditorSetPosition)};
@@ -1569,7 +1588,7 @@ static void NavigateTo(TagInfo const* info, bool setPanelDir = false)
       esp.CurLine=ei.CurLine;
       esp.TopScreenLine=ei.TopScreenLine;
       I.EditorControl(ei.EditorID, ECTL_SETPOSITION, 0, &esp);
-      NotFound(info->file,info->lineno);
+      NotFound(infoFile,info->lineno);
       return;
     }
     line=0;
@@ -1591,13 +1610,13 @@ static void NavigateTo(TagInfo const* info, bool setPanelDir = false)
       esp.CurLine=info->lineno==-1?ei.CurLine:info->lineno-1;
       esp.TopScreenLine=ei.TopScreenLine;
       I.EditorControl(ei.EditorID, ECTL_SETPOSITION, 0, &esp);
-      NotFound(info->file,info->lineno);
+      NotFound(infoFile,info->lineno);
       return;
     }
   }
 
   if (setPanelDir)
-    SelectFile(ToString(info->file));
+    SelectFile(infoFile);
 
   esp.CurLine=line;
   esp.TopScreenLine=esp.CurLine-1;
@@ -1606,27 +1625,6 @@ static void NavigateTo(TagInfo const* info, bool setPanelDir = false)
   esp.LeftPos=0;
   I.EditorControl(ei.EditorID, ECTL_SETPOSITION, 0, &esp);
   I.EditorControl(ei.EditorID, ECTL_REDRAW, 0, nullptr);
-}
-
-int SetPos(std::string const& filename,intptr_t line,intptr_t col,intptr_t top,intptr_t left)
-{
-  if(!GotoOpenedFile(filename))
-  {
-    I.Editor(ToString(filename).c_str(), L"", 0, 0, -1, -1,  EF_NONMODAL, line >= 0 ? line + 1 : -1, col >= 0 ? col + 1 : -1, CP_DEFAULT);
-    return 0;
-  }
-
-  EditorInfo ei = GetCurrentEditorInfo();
-  EditorSetPosition esp = {sizeof(EditorSetPosition)};
-  esp.CurLine=line;
-  esp.CurPos=col;
-  esp.CurTabPos=-1;
-  esp.TopScreenLine=top;
-  esp.LeftPos=left;
-  esp.Overtype=-1;
-  I.EditorControl(ei.EditorID, ECTL_SETPOSITION, 0, &esp);
-  I.EditorControl(ei.EditorID, ECTL_REDRAW, 0, nullptr);
-  return 1;
 }
 
 static WideString SelectFromHistory()
@@ -1823,22 +1821,22 @@ static WideString SearchTagsFile(WideString const& fileName)
   return tagsFile;
 }
 
-static bool EnsureTagsLoaded(std::string const& fileName, bool createTempTags)
+static bool EnsureTagsLoaded(WideString const& fileName, bool createTempTags)
 {
-  if (TagsLoadedForFile(fileName.c_str()))
+  if (TagsLoadedForFile(ToStdString(fileName).c_str()))
     return true;
 
-  auto tagsFile = IsInTempDirectory(ToString(fileName)) ? WideString() : SearchTagsFile(ToString(fileName));
+  auto tagsFile = IsInTempDirectory(fileName) ? WideString() : SearchTagsFile(fileName);
   if (tagsFile.empty())
-    return createTempTags && CreateTemporaryTags(ToString(fileName));
+    return createTempTags && CreateTemporaryTags(fileName);
 
   LoadTags(ToStdString(tagsFile).c_str(), true);
   return true;
 }
 
-static WideString ReindexRepository(std::string const& fileName)
+static WideString ReindexRepository(WideString const& fileName)
 {
-  auto tagsFile = SearchTagsFile(ToString(fileName));
+  auto tagsFile = SearchTagsFile(fileName);
   if (tagsFile.empty())
     return WideString();
 
@@ -1859,7 +1857,7 @@ static WideString ReindexRepository(std::string const& fileName)
   return tagsFile;
 }
 
-static void Lookup(std::string const& file, bool setPanelDir, LookupMenuVisitor& visitor, bool createTempTags)
+static void Lookup(WideString const& file, bool setPanelDir, LookupMenuVisitor& visitor, bool createTempTags)
 {
   if (!EnsureTagsLoaded(file, createTempTags))
     return;
@@ -1869,15 +1867,15 @@ static void Lookup(std::string const& file, bool setPanelDir, LookupMenuVisitor&
     NavigateTo(&selectedTag, setPanelDir);
 }
 
-static void LookupSymbol(std::string const& file, bool setPanelDir, bool createTempTags)
+static void LookupSymbol(WideString const& file, bool setPanelDir, bool createTempTags)
 {
-  LookupTagsVisitor visitor(file);
+  LookupTagsVisitor visitor(ToStdString(file));
   Lookup(file, setPanelDir, visitor, createTempTags);
 }
 
-static void LookupFile(std::string const& file, bool setPanelDir)
+static void LookupFile(WideString const& file, bool setPanelDir)
 {
-  SearchFileVisitor visitor(file);
+  SearchFileVisitor visitor(ToStdString(file));
   Lookup(file, setPanelDir, visitor, false);
 }
 
@@ -1980,9 +1978,8 @@ HANDLE WINAPI OpenW(const struct OpenInfo *info)
   SynchronizeConfig();
   if(OpenFrom==OPEN_EDITOR)
   {
-    //DebugBreak();
     auto ei = GetCurrentEditorInfo();
-    std::string fileName = GetFileNameFromEditor(ei.EditorID); // TODO: auto
+    auto fileName = GetFileNameFromEditor(ei.EditorID);
     LazyAutoload();
     enum{
       miFindSymbol,miUndo,miResetUndo,miReindexRepo,
@@ -2018,7 +2015,7 @@ HANDLE WINAPI OpenW(const struct OpenInfo *info)
     {
       case miFindSymbol:
       {
-        SafeCall(std::bind(GotoDeclaration, fileName.c_str()));
+        SafeCall(std::bind(GotoDeclaration, ToStdString(fileName).c_str()));
       }break;
       case miUndo:
       {
@@ -2041,11 +2038,11 @@ HANDLE WINAPI OpenW(const struct OpenInfo *info)
       }break;
       case miComplete:
       {
-        SafeCall(std::bind(CompleteName, fileName.c_str(), std::cref(ei)));
+        SafeCall(std::bind(CompleteName, ToStdString(fileName).c_str(), std::cref(ei)));
       }break;
       case miBrowseFile:
       {
-        SafeCall([&]{ NavigateToTag(FindFileSymbols(fileName.c_str()), FormatTagFlag::NotDisplayFile); });
+        SafeCall([&]{ NavigateToTag(FindFileSymbols(ToStdString(fileName).c_str()), FormatTagFlag::NotDisplayFile); });
       }break;
       case miBrowseClass:
       {
@@ -2062,7 +2059,7 @@ HANDLE WINAPI OpenW(const struct OpenInfo *info)
         }
         auto options = GetSortOptions(config) & ~SortOptions::SortByName;
         options |= config.sort_class_members_by_name ? SortOptions::SortByName : 0;
-        SafeCall([&]{ NavigateToTag(FindClassMembers(fileName.c_str(), word.c_str(), options), FormatTagFlag::DisplayFile); });
+        SafeCall([&]{ NavigateToTag(FindClassMembers(ToStdString(fileName).c_str(), word.c_str(), options), FormatTagFlag::DisplayFile); });
       }break;
       case miLookupSymbol:
       {
@@ -2161,15 +2158,15 @@ HANDLE WINAPI OpenW(const struct OpenInfo *info)
         }break;
         case miLookupSymbol:
         {
-          SafeCall(std::bind(LookupSymbol, ToStdString(GetSelectedItem()), true, false));
+          SafeCall(std::bind(LookupSymbol, GetSelectedItem(), true, false));
         }break;
         case miSearchFile:
         {
-          SafeCall(std::bind(LookupFile, ToStdString(GetSelectedItem()), true));
+          SafeCall(std::bind(LookupFile, GetSelectedItem(), true));
         }break;
         case miReindexRepo:
         {
-          tagfile = SafeCall(std::bind(ReindexRepository, ToStdString(GetSelectedItem())), WideString());
+          tagfile = SafeCall(std::bind(ReindexRepository, GetSelectedItem()), WideString());
         }break;
         case miPluginConfiguration:
         {
@@ -2422,7 +2419,7 @@ intptr_t WINAPI ProcessEditorEventW(const struct ProcessEditorEventInfo *info)
 {
   if (info->Event == EE_CLOSE)
   {
-    SafeCall(std::bind(ClearTemporaryTagsByFile, ToString(GetFileNameFromEditor(info->EditorID))));
+    SafeCall(std::bind(ClearTemporaryTagsByFile, GetFileNameFromEditor(info->EditorID)));
   }
 
   return 0;
