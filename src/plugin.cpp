@@ -1417,15 +1417,6 @@ static std::string GetWord(int offset=0)
   return "unknown";
 }
 */
-static void chomp(char* str)
-{
-  auto i=strlen(str)-1;
-  while(i>=0 && (unsigned char)str[i]<32)
-  {
-    str[i]=0;
-    i--;
-  }
-}
 
 bool GotoOpenedFile(WideString const& file)
 {
@@ -1476,7 +1467,7 @@ int SetPos(WideString const& filename,intptr_t line,intptr_t col,intptr_t top,in
 static void NotFound(WideString const& fn,int line)
 {
   if(YesNoCalncelDialog(GetMsg(MNotFoundAsk)) == YesNoCancel::Yes)
-  SetPos(fn,line,0,-1,-1);
+  SetPos(fn,line > 0 ? line - 1 : line,0,-1,-1);
 }
 
 static void NavigateTo(TagInfo const* info, bool setPanelDir = false)
@@ -1507,56 +1498,45 @@ static void NavigateTo(TagInfo const* info, bool setPanelDir = false)
   std::regex re = havere ? std::regex(info->re) : std::regex();
   if(!GotoOpenedFile(infoFile))
   {
-    FILE *f=fopen(info->file.c_str(),"rt");
-    if(!f)
+    int line= info->lineno < 0 ? -1 : info->lineno;
+    if (havere)
     {
-      Msg(MEFailedToOpen);
+      std::ifstream f;
+      f.exceptions(std::ifstream::goodbit);
+      f.open(info->file);
+      std::shared_ptr<void> fileCloser(0, [&](void*) { f.close(); });
+      if(!f.is_open())
+      {
+        Msg(MEFailedToOpen);
+        return;
+      }
+
+      std::string buf;
+      if(line!=-1)
+      {
+        for (int i = 0; i < line && std::getline(f, buf); ++i);
+        line = !std::regex_match(buf, re) ? -1 : line;
+      }
+
+      if(line==-1)
+      {
+        auto messageHolder = LongOperationMessage(L"not found in place, searching");
+        f.seekg(0, f.beg);
+        for(line = 1; std::getline(f, buf) && !std::regex_match(buf, re); ++line);
+        line = f.eof() || f.fail() ? -1 : line;
+      }
+    }
+
+    if(line == -1)
+    {
+      NotFound(infoFile,info->lineno);
       return;
     }
-    int line= info->lineno < 0 ? -1 : info->lineno - 1;
-    int cnt=0;
-    char buf[512];
-    while(fgets(buf,sizeof(buf),f) && cnt<line)cnt++;
-    chomp(buf);
-    if(line!=-1)
-    {
-      if(havere && !std::regex_match(buf, re))
-      {
-        line=-1;
-        Msg(L"not found in place, searching");
-      }
-    }
-    if(line==-1)
-    {
-      if(!havere)
-      {
-        NotFound(infoFile,info->lineno);
-        fclose(f);
-        return;
-      }
-      line=0;
-      fseek(f,0,SEEK_SET);
-      while(fgets(buf,sizeof(buf),f))
-      {
-        chomp(buf);
-        if(std::regex_match(buf, re))
-        {
-          break;
-        }
-        line++;
-      }
-      if(feof(f))
-      {
-        NotFound(infoFile,info->lineno);
-        fclose(f);
-        return;
-      }
-    }
-    fclose(f);
+
     if (setPanelDir)
       SelectFile(infoFile);
 
-    I.Editor(infoFile.c_str(), L"", 0, 0, -1, -1, EF_NONMODAL, line + 1, 1, CP_DEFAULT);
+    I.Editor(infoFile.c_str(), L"", 0, 0, -1, -1, EF_NONMODAL, line, 1, CP_DEFAULT);
     return;
   }
   EditorSetPosition esp = {sizeof(EditorSetPosition)};
