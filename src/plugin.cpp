@@ -128,16 +128,6 @@ Config config;
 
 using WideString = std::basic_string<wchar_t>;
 
-struct SUndoInfo{
-  WideString file;
-  intptr_t line;
-  intptr_t pos;
-  intptr_t top;
-  intptr_t left;
-};
-
-std::deque<SUndoInfo> UndoArray;
-
 struct VisitedTagsLru
 {
   VisitedTagsLru(size_t max)
@@ -1024,11 +1014,11 @@ int Menu(const wchar_t *title,MenuList& lst,int sel,int flags=MF_LABELS,const vo
         buf = buf.empty() && curLabel < labelsCount ? WideString(L"&") + labels[curLabel] + L" " : buf;
         buf = buf.empty() ? L"  " : buf;
         lstItem.item = buf + lstItem.item;
+        curLabel += !!lstItem.Label ? 0 : 1;
       }
       lstItem.item = lstItem.item.substr(0, MaxMenuWidth);
       menu[i].Text = lstItem.item.c_str();
       if(sel==i)menu[i].Flags |= MIF_SELECTED;
-      ++curLabel;
     }
     menu[i].Flags |= lstItem.IsSeparator() ? MIF_SEPARATOR : 0;
     menu[i].Flags |= lstItem.IsDisabled() ? MIF_DISABLE | MIF_GRAYED : 0;
@@ -1418,193 +1408,192 @@ static std::string GetWord(int offset=0)
 }
 */
 
-bool GotoOpenedFile(WideString const& file)
+static bool FileExists(WideString const& filename)
 {
-  auto c = I.AdvControl(&PluginGuid, ACTL_GETWINDOWCOUNT, 0, nullptr);
-  for(decltype(c) i=0;i<c;i++)
-  {
-    WindowInfo wi = {sizeof(WindowInfo)};
-    wi.Pos=i;
-    I.AdvControl(&PluginGuid, ACTL_GETWINDOWINFO, 0, (void*)&wi);
-    if (!wi.NameSize)
-      continue;
-
-    std::vector<wchar_t> name(wi.NameSize);
-    wi.Name = &name[0];
-    I.AdvControl(&PluginGuid, ACTL_GETWINDOWINFO, 0, (void*)&wi);
-    if(wi.Type==WTYPE_EDITOR && !FSF.LStricmp(wi.Name, file.c_str()))
-    {
-      I.AdvControl(&PluginGuid, ACTL_SETCURRENTWINDOW, i, nullptr);
-      I.AdvControl(&PluginGuid, ACTL_COMMIT, 0, nullptr);
-      return true;
-    }
-  }
-
-  return false;
+  auto attributes = GetFileAttributesW(filename.c_str());
+  return attributes != INVALID_FILE_ATTRIBUTES && !(attributes & FILE_ATTRIBUTE_DIRECTORY);
 }
 
-int SetPos(WideString const& filename,intptr_t line,intptr_t col,intptr_t top,intptr_t left)
+static int SetPos(WideString const& filename,intptr_t line,intptr_t col,intptr_t top,intptr_t left)
 {
-  if(!GotoOpenedFile(filename))
-  {
-    I.Editor(filename.c_str(), L"", 0, 0, -1, -1,  EF_NONMODAL, line >= 0 ? line + 1 : -1, col >= 0 ? col + 1 : -1, CP_DEFAULT);
-    return 0;
-  }
+  if (!FileExists(filename))
+    throw Error(MEFailedToOpen);
 
+  I.Editor(filename.c_str(), L"", 0, 0, -1, -1,  EF_NONMODAL | EF_IMMEDIATERETURN | EF_OPENMODE_USEEXISTING, 1, 1, CP_DEFAULT);
   EditorInfo ei = GetCurrentEditorInfo();
   EditorSetPosition esp = {sizeof(EditorSetPosition)};
-  esp.CurLine=line;
-  esp.CurPos=col;
-  esp.CurTabPos=-1;
-  esp.TopScreenLine=top;
-  esp.LeftPos=left;
-  esp.Overtype=-1;
+  esp.CurLine = line;
+  esp.CurPos = col;
+  esp.CurTabPos = -1;
+  esp.TopScreenLine = top;
+  esp.LeftPos = left;
+  esp.Overtype = -1;
   I.EditorControl(ei.EditorID, ECTL_SETPOSITION, 0, &esp);
   I.EditorControl(ei.EditorID, ECTL_REDRAW, 0, nullptr);
   return 1;
 }
 
-static void NotFound(WideString const& fn,int line)
+int EnsureLine(int line, std::string const& file, std::string const& regex)
 {
-  if(YesNoCalncelDialog(GetMsg(MNotFoundAsk)) == YesNoCancel::Yes)
-  SetPos(fn,line > 0 ? line - 1 : line,0,-1,-1);
+  if (regex.empty())
+    return line;
+
+  std::regex re = std::regex(regex);
+  std::ifstream f;
+  f.exceptions(std::ifstream::goodbit);
+  f.open(file);
+  std::shared_ptr<void> fileCloser(0, [&](void*) { f.close(); });
+  if(!f.is_open())
+    throw Error(MEFailedToOpen);
+
+  std::string buf;
+  if (line >= 0)
+  {
+    for (int i = 0; i < line && std::getline(f, buf); ++i);
+    line = !std::regex_match(buf, re) ? -1 : line;
+  }
+
+  if (line < 0)
+  {
+    auto messageHolder = LongOperationMessage(L"not found in place, searching");
+    f.seekg(0, f.beg);
+    for (line = 1; std::getline(f, buf) && !std::regex_match(buf, re); ++line);
+    line = f.eof() || f.fail() ? -1 : line;
+  }
+
+  return line;
+}
+
+class Navigator
+{
+public:
+  Navigator();
+  void Goto(TagInfo const& tag, bool setPanelDir);
+  void GoBack();
+  bool CanGoBack();
+  void GoForward();
+  bool CanGoForward();
+
+private:
+  struct Position
+  {
+    WideString File;
+    intptr_t Line;
+    intptr_t Pos;
+    intptr_t Top;
+    intptr_t Left;
+  };
+
+  bool GetPosition(Position& pos);
+  void SavePosition(Position&& pos);
+  void Move(WideString const& file, int line, bool setPanelDir);
+
+  std::deque<Position> Stack;
+  std::deque<Position>::iterator Current;
+};
+
+Navigator NavigatorInstance;
+
+Navigator::Navigator()
+  : Current(Stack.end())
+{
+}
+
+void Navigator::Goto(TagInfo const& tag, bool setPanelDir)
+{
+  int line = tag.lineno;
+  if (!tag.name.empty())
+  {
+    line = EnsureLine(line, tag.file, tag.re);
+    line = line < 0 && YesNoCalncelDialog(GetMsg(MNotFoundAsk)) == YesNoCancel::Yes ? tag.lineno : line;
+    if (line < 0)
+      return;
+  }
+
+  Move(ToString(tag.file), line, setPanelDir);
+}
+
+void Navigator::GoBack()
+{
+  if (!CanGoBack())
+    return;
+
+  Position position;
+  bool havePosition = Current == Stack.end() && GetPosition(position);
+  auto newPosition = Current - 1;
+  SetPos(newPosition->File, newPosition->Line, newPosition->Pos, newPosition->Top, newPosition->Left);
+  if (havePosition)
+  {
+    SavePosition(std::move(position));
+    --Current;
+  }
+
+  --Current;
+}
+
+bool Navigator::CanGoBack()
+{
+  return Current != Stack.begin();
+}
+
+void Navigator::GoForward()
+{
+  if (!CanGoForward())
+    return;
+
+  auto newPosition = Current + 1 != Stack.end() ? Current + 1 : Current;
+  SetPos(newPosition->File, newPosition->Line, newPosition->Pos, newPosition->Top, newPosition->Left);
+  Current = newPosition;
+}
+
+bool Navigator::CanGoForward()
+{
+  return Current != Stack.end();
+}
+
+bool Navigator::GetPosition(Navigator::Position& pos)
+{
+  EditorInfo ei = {sizeof(EditorInfo)};
+  if (!I.EditorControl(-1, ECTL_GETINFO, 0, &ei))
+    return false;
+
+  pos = {GetFileNameFromEditor(ei.EditorID), ei.CurLine, ei.CurPos, ei.TopScreenLine, ei.LeftPos};
+  return true;
+}
+
+void Navigator::SavePosition(Navigator::Position&& pos)
+{
+  Stack.erase(Current, Stack.end());
+  Stack.push_back(std::move(pos));
+  Current = Stack.end();
+}
+
+void Navigator::Move(WideString const& file, int line, bool setPanelDir)
+{
+  Position position;
+  bool havePosition = GetPosition(position);
+  line -= line > 0 ? 1 : 0;
+  SetPos(file, line, 0, line > 0 ? line - 1 : line, 0);
+  if (setPanelDir)
+    SelectFile(file);
+
+  if (havePosition)
+    SavePosition(std::move(position));
 }
 
 static void NavigateTo(TagInfo const* info, bool setPanelDir = false)
 {
-  EditorInfo ei = {sizeof(EditorInfo)};
-  if (!!I.EditorControl(-1, ECTL_GETINFO, 0, &ei))
-  {
-    SUndoInfo ui;
-    ui.file=GetFileNameFromEditor(ei.EditorID);
-    ui.line=ei.CurLine;
-    ui.pos=ei.CurPos;
-    ui.top=ei.TopScreenLine;
-    ui.left=ei.LeftPos;
-    UndoArray.push_back(ui);
-  }
+  NavigatorInstance.Goto(*info, setPanelDir);
+}
 
-  auto infoFile = ToString(info->file);
-  if (info->name.empty())
-  {
-    if (setPanelDir)
-      SelectFile(infoFile);
+static void NavigateBack()
+{
+  NavigatorInstance.GoBack();
+}
 
-    SetPos(infoFile, -1, -1, -1, -1);
-    return;
-  }
-
-  bool havere=!info->re.empty();
-  std::regex re = havere ? std::regex(info->re) : std::regex();
-  if(!GotoOpenedFile(infoFile))
-  {
-    int line= info->lineno < 0 ? -1 : info->lineno;
-    if (havere)
-    {
-      std::ifstream f;
-      f.exceptions(std::ifstream::goodbit);
-      f.open(info->file);
-      std::shared_ptr<void> fileCloser(0, [&](void*) { f.close(); });
-      if(!f.is_open())
-      {
-        Msg(MEFailedToOpen);
-        return;
-      }
-
-      std::string buf;
-      if(line!=-1)
-      {
-        for (int i = 0; i < line && std::getline(f, buf); ++i);
-        line = !std::regex_match(buf, re) ? -1 : line;
-      }
-
-      if(line==-1)
-      {
-        auto messageHolder = LongOperationMessage(L"not found in place, searching");
-        f.seekg(0, f.beg);
-        for(line = 1; std::getline(f, buf) && !std::regex_match(buf, re); ++line);
-        line = f.eof() || f.fail() ? -1 : line;
-      }
-    }
-
-    if(line == -1)
-    {
-      NotFound(infoFile,info->lineno);
-      return;
-    }
-
-    if (setPanelDir)
-      SelectFile(infoFile);
-
-    I.Editor(infoFile.c_str(), L"", 0, 0, -1, -1, EF_NONMODAL, line, 1, CP_DEFAULT);
-    return;
-  }
-  EditorSetPosition esp = {sizeof(EditorSetPosition)};
-  ei = GetCurrentEditorInfo();
-
-  esp.CurPos=-1;
-  esp.CurTabPos=-1;
-  esp.TopScreenLine=-1;
-  esp.LeftPos=-1;
-  esp.Overtype=-1;
-
-
-  int line=info->lineno-1;
-  line = line >= ei.TotalLines ? -1 : line;
-  if(line!=-1)
-  {
-    EditorGetString egs = {sizeof(EditorGetString)};
-    egs.StringNumber=line;
-    I.EditorControl(ei.EditorID, ECTL_GETSTRING, 0, &egs);
-    if(havere && !std::regex_match(ToStdString(egs.StringText), re))
-    {
-      line=-1;
-    }
-  }
-  if(line==-1)
-  {
-    if(!havere)
-    {
-      esp.CurLine=ei.CurLine;
-      esp.TopScreenLine=ei.TopScreenLine;
-      I.EditorControl(ei.EditorID, ECTL_SETPOSITION, 0, &esp);
-      NotFound(infoFile,info->lineno);
-      return;
-    }
-    line=0;
-    EditorGetString egs = {sizeof(EditorGetString)};
-    while(line<ei.TotalLines)
-    {
-      esp.CurLine=line;
-      I.EditorControl(ei.EditorID, ECTL_SETPOSITION, 0, &esp);
-      egs.StringNumber=-1;
-      I.EditorControl(ei.EditorID, ECTL_GETSTRING, 0, &egs);
-      if(std::regex_match(ToStdString(egs.StringText), re))
-      {
-        break;
-      }
-      line++;
-    }
-    if(line==ei.TotalLines)
-    {
-      esp.CurLine=info->lineno==-1?ei.CurLine:info->lineno-1;
-      esp.TopScreenLine=ei.TopScreenLine;
-      I.EditorControl(ei.EditorID, ECTL_SETPOSITION, 0, &esp);
-      NotFound(infoFile,info->lineno);
-      return;
-    }
-  }
-
-  if (setPanelDir)
-    SelectFile(infoFile);
-
-  esp.CurLine=line;
-  esp.TopScreenLine=esp.CurLine-1;
-  if(esp.TopScreenLine==-1)esp.TopScreenLine=0;
-  if(ei.TotalLines<ei.WindowSizeY)esp.TopScreenLine=0;
-  esp.LeftPos=0;
-  I.EditorControl(ei.EditorID, ECTL_SETPOSITION, 0, &esp);
-  I.EditorControl(ei.EditorID, ECTL_REDRAW, 0, nullptr);
+static void NavigateForward()
+{
+  NavigatorInstance.GoForward();
 }
 
 static WideString SelectFromHistory()
@@ -1962,14 +1951,15 @@ HANDLE WINAPI OpenW(const struct OpenInfo *info)
     auto fileName = GetFileNameFromEditor(ei.EditorID);
     LazyAutoload();
     enum{
-      miFindSymbol,miUndo,miResetUndo,miReindexRepo,
+      miFindSymbol,miGoBack,miGoForward,miReindexRepo,
       miComplete,miBrowseClass,miBrowseFile,miLookupSymbol,miSearchFile,
       miPluginConfiguration,
     };
     MenuList ml = {
         MI(MFindSymbol,miFindSymbol)
       , MI(MCompleteSymbol,miComplete)
-      , MI(MUndoNavigation,miUndo,UndoArray.empty())
+      , MI(MUndoNavigation,miGoBack,!NavigatorInstance.CanGoBack())
+      , MI(MRepeatNavigation,miGoForward,!NavigatorInstance.CanGoForward(), 'F')
       , MI::Separator()
       , MI(MBrowseClass,miBrowseClass)
       , MI(MBrowseSymbolsInFile,miBrowseFile)
@@ -1997,24 +1987,13 @@ HANDLE WINAPI OpenW(const struct OpenInfo *info)
       {
         SafeCall(std::bind(GotoDeclaration, ToStdString(fileName).c_str()));
       }break;
-      case miUndo:
+      case miGoBack:
       {
-        if(UndoArray.empty())return nullptr;
-        /*char b[32];
-        sprintf(b,"%d",ei.CurState);
-        Msg(b);*/
-        if(ei.CurState==ECSTATE_SAVED)
-        {
-          I.EditorControl(ei.EditorID, ECTL_QUIT, 0, nullptr);
-          I.AdvControl(&PluginGuid, ACTL_COMMIT, 0, nullptr);
-        }
-        SUndoInfo ui = UndoArray.back();
-        UndoArray.pop_back();
-        SetPos(ui.file,ui.line,ui.pos,ui.top,ui.left);
+        SafeCall(NavigateBack);
       }break;
-      case miResetUndo:
+      case miGoForward:
       {
-        UndoArray.clear();
+        SafeCall(NavigateForward);
       }break;
       case miComplete:
       {

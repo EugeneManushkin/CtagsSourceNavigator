@@ -9,7 +9,7 @@ enum{
   MNotFound,
   MSelectSymbol,
   MUndoNavigation,
-  MResetUndo,
+  MRepeatNavigation,
   MLoadOk,
   MENotLoaded,
   MLoadTagsFile,

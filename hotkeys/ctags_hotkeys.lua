@@ -30,6 +30,13 @@ Macro {
 }
 
 Macro {
+  description="Go forward";
+  area="Editor";
+  key="CtrlD";
+  action = function() OpenPluginMenu('F') end;
+}
+
+Macro {
   description="Search name in opened file";
   area="Editor";
   key="CtrlShiftX";
