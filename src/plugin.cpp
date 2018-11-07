@@ -1467,12 +1467,14 @@ int EnsureLine(int line, std::string const& file, std::string const& regex)
 class Navigator
 {
 public:
+  using Index = size_t;
+
   Navigator();
   void Goto(TagInfo const& tag, bool setPanelDir);
   void GoBack();
-  bool CanGoBack();
+  bool CanGoBack() const;
   void GoForward();
-  bool CanGoForward();
+  bool CanGoForward() const;
 
 private:
   struct Position
@@ -1484,18 +1486,19 @@ private:
     intptr_t Left;
   };
 
-  bool GetPosition(Position& pos);
+  void Goto(Index index);
+  bool GetPosition(Position& pos) const;
   void SavePosition(Position&& pos);
   void Move(WideString const& file, int line, bool setPanelDir);
 
   std::deque<Position> Stack;
-  std::deque<Position>::iterator Current;
+  Index Current;
 };
 
 Navigator NavigatorInstance;
 
 Navigator::Navigator()
-  : Current(Stack.end())
+  : Current(Stack.size())
 {
 }
 
@@ -1513,45 +1516,41 @@ void Navigator::Goto(TagInfo const& tag, bool setPanelDir)
   Move(ToString(tag.file), line, setPanelDir);
 }
 
-void Navigator::GoBack()
+void Navigator::Goto(Index index)
 {
-  if (!CanGoBack())
-    return;
-
+  auto const& newPosition = Stack.at(index);
   Position position;
-  bool havePosition = Current == Stack.end() && GetPosition(position);
-  auto newPosition = Current - 1;
-  SetPos(newPosition->File, newPosition->Line, newPosition->Pos, newPosition->Top, newPosition->Left);
+  bool havePosition = Current == Stack.size() && GetPosition(position); 
+  SetPos(newPosition.File, newPosition.Line, newPosition.Pos, newPosition.Top, newPosition.Left);
   if (havePosition)
-  {
     SavePosition(std::move(position));
-    --Current;
-  }
 
-  --Current;
+  Current = index;
 }
 
-bool Navigator::CanGoBack()
+void Navigator::GoBack()
 {
-  return Current != Stack.begin();
+  if (CanGoBack())
+    Goto(Current - 1);
+}
+
+bool Navigator::CanGoBack() const
+{
+  return !!Current;
 }
 
 void Navigator::GoForward()
 {
-  if (!CanGoForward())
-    return;
-
-  auto newPosition = Current + 1 != Stack.end() ? Current + 1 : Current;
-  SetPos(newPosition->File, newPosition->Line, newPosition->Pos, newPosition->Top, newPosition->Left);
-  Current = newPosition;
+  if (CanGoForward())
+    Goto(Current + 1 == Stack.size() ? Current : Current + 1);
 }
 
-bool Navigator::CanGoForward()
+bool Navigator::CanGoForward() const
 {
-  return Current != Stack.end();
+  return Current != Stack.size();
 }
 
-bool Navigator::GetPosition(Navigator::Position& pos)
+bool Navigator::GetPosition(Position& pos) const
 {
   EditorInfo ei = {sizeof(EditorInfo)};
   if (!I.EditorControl(-1, ECTL_GETINFO, 0, &ei))
@@ -1563,9 +1562,9 @@ bool Navigator::GetPosition(Navigator::Position& pos)
 
 void Navigator::SavePosition(Navigator::Position&& pos)
 {
-  Stack.erase(Current, Stack.end());
+  Stack.erase(Stack.begin() + Current, Stack.end());
   Stack.push_back(std::move(pos));
-  Current = Stack.end();
+  Current = Stack.size();
 }
 
 void Navigator::Move(WideString const& file, int line, bool setPanelDir)
