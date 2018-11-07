@@ -1076,6 +1076,7 @@ std::vector<FarKey> GetFarKeys(std::string const& filterkeys)
   fk.push_back({ VK_INSERT, RIGHT_CTRL_PRESSED });
   fk.push_back({ 0x43, LEFT_CTRL_PRESSED });
   fk.push_back({ 0x43, RIGHT_CTRL_PRESSED });
+  fk.push_back({VK_F4});
   fk.push_back(FarKey());
   return fk;
 }
@@ -1086,6 +1087,11 @@ bool IsCtrlC(FarKey const& key)
       || (key.VirtualKeyCode == VK_INSERT && key.ControlKeyState == RIGHT_CTRL_PRESSED)
       || (key.VirtualKeyCode == 0x43 && key.ControlKeyState == LEFT_CTRL_PRESSED)
       || (key.VirtualKeyCode == 0x43 && key.ControlKeyState == RIGHT_CTRL_PRESSED);
+}
+
+bool IsF4(FarKey const& key)
+{
+  return key.VirtualKeyCode == VK_F4;
 }
 
 static bool GetRegex(WideString const& filter, bool caseInsensitive, std::wregex& result)
@@ -1299,6 +1305,8 @@ private:
   std::vector<TagInfo const*> FilteredTags;
 };
 
+static void OpenInNewWindow(TagInfo const& tag);
+
 static bool LookupTagsMenu(LookupMenuVisitor& visitor, TagInfo& tag, intptr_t separatorPos = -1)
 {
   std::string filter;
@@ -1338,6 +1346,11 @@ static bool LookupTagsMenu(LookupMenuVisitor& visitor, TagInfo& tag, intptr_t se
         SetClipboardText(visitor.GetClipboardText(menu[res].UserData));
 
       return false;
+    }
+    if (IsF4(fk[bkey]))
+    {
+      OpenInNewWindow(visitor.GetTag(menu[res].UserData));
+      continue;
     }
     if (static_cast<size_t>(bkey) >= filterkeys.length())
     {
@@ -1462,6 +1475,16 @@ int EnsureLine(int line, std::string const& file, std::string const& regex)
   }
 
   return line;
+}
+
+static void OpenInNewWindow(TagInfo const& tag)
+{
+  if (tag.name.empty())
+    return;
+
+  auto line = SafeCall(std::bind(EnsureLine, tag.lineno, tag.file, tag.re), -1);
+  if (line > 0)
+    I.Editor(ToString(tag.file).c_str(), L"", 0, 0, -1, -1,  EF_OPENMODE_NEWIFOPEN, line, 1, CP_DEFAULT);
 }
 
 class Navigator
