@@ -480,6 +480,12 @@ namespace TESTS
   {
     LookupAllClassMembers("classes_repos\\tags.universal", "classes_repos\\tags.universal.classmeta");
   }
+
+  TEST_F(Tags, AnyFileBelongsToMinimalSingleFileRepos)
+  {
+    ASSERT_NO_FATAL_FAILURE(LoadTagsFile("minimal_single_file_repos\\tags", 1));
+    TestTagsLoadedForFile();
+  }
 }
 
 int main(int argc, char* argv[])
