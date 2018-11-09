@@ -909,7 +909,7 @@ static void Autoload(std::string const& fileName)
     if (str.length() > 1 || str[1] == ':')
     {
       size_t symbolsLoaded;
-      Load(str.c_str(), symbolsLoaded);
+      Load(str.c_str(), false, symbolsLoaded);
     }
   }
 }
@@ -944,11 +944,11 @@ static int AddToAutoload(std::string const& fname)
   return 0;
 }
 
-static size_t LoadTagsImpl(std::string const& tagsFile)
+static size_t LoadTagsImpl(std::string const& tagsFile, bool singleFileRepos = false)
 {
   size_t symbolsLoaded = 0;
   auto message = LongOperationMessage(GetMsg(MLoadingTags));
-  if (auto err = Load(tagsFile.c_str(), symbolsLoaded))
+  if (auto err = Load(tagsFile.c_str(), singleFileRepos, symbolsLoaded))
     throw Error(err == ENOENT ? MEFailedToOpen : MFailedToWriteIndex);
 
   return symbolsLoaded;
@@ -1733,7 +1733,7 @@ static bool IndexSingleFile(WideString const& fileFullPath, WideString const& ta
   args += args.empty() || args.back() == ' ' ? L" " : L"";
   args += L"\"" + fileFullPath + L"\"";
   ExecuteScript(ExpandEnvString(ToString(config.exe)), args, tagsDirectoryPath);
-  return !!LoadTagsImpl(ToStdString(JoinPath(tagsDirectoryPath, DefaultTagsFilename)));
+  return !!LoadTagsImpl(ToStdString(JoinPath(tagsDirectoryPath, DefaultTagsFilename)), true);
 }
 
 static bool CreateTemporaryTags(WideString const& fileFullPath)
