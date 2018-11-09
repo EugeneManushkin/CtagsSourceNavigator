@@ -56,9 +56,10 @@ enum class IndexType
 };
 
 struct TagFileInfo{
-  TagFileInfo(char const* fname)
+  TagFileInfo(char const* fname, bool singleFileRepos)
     : filename(fname)
     , indexFile(filename + ".idx")
+    , singlefilerepos(singleFileRepos)
     , modtm(0)
   {
     if (filename.empty() || IsPathSeparator(filename.back()))
@@ -94,7 +95,7 @@ struct TagFileInfo{
   int Load();
 
 private:
-  int CreateIndex(time_t tagsModTime);
+  int CreateIndex(time_t tagsModTime, bool singleFileRepos);
   bool LoadIndex(time_t tagsModTime);
   FILE* OpenIndex()
   {
@@ -106,6 +107,7 @@ private:
   std::string indexFile;
   std::string reporoot;
   std::string singlefile;
+  bool singlefilerepos;
   bool fullpathrepo;
   time_t modtm;
 };
@@ -557,7 +559,7 @@ OffsetCont TagFileInfo::GetOffsets(IndexType type)
   return result;
 }
 
-int TagFileInfo::CreateIndex(time_t tagsModTime)
+int TagFileInfo::CreateIndex(time_t tagsModTime, bool singleFileRepos)
 {
   TagFileInfo* fi = this;
   int pos=0;
@@ -617,7 +619,6 @@ int TagFileInfo::CreateIndex(time_t tagsModTime)
   pos=ftell(f);
   bool sorted=true;
   std::string pathIntersection;
-  bool singleFileRepos = true;
   while(GetLine(strbuf, buffer, f))
   {
     if(strbuf[0]=='!')
@@ -640,7 +641,7 @@ int TagFileInfo::CreateIndex(time_t tagsModTime)
     li->pos=pos;
     for(li->fn = li->line; !IsFieldEnd(*li->fn); ++li->fn);
     li->fn += *li->fn ? 1 : 0;
-    singleFileRepos = singleFileRepos && !lines.empty() && PathsEqual(lines.back()->fn, li->fn) || lines.empty();
+    singleFileRepos = singleFileRepos && (lines.empty() || PathsEqual(lines.back()->fn, li->fn));
     pathIntersection = IsFullPath(li->fn) ? GetIntersection(pathIntersection.c_str(), li->fn) : pathIntersection;
     if (li->cls = ExtractClassName(FindClassFullQualification(li->line)))
       classes.push_back(li);
@@ -743,7 +744,7 @@ int TagFileInfo::Load()
   if (modtm == st.st_mtime)
     return 0;
 
-  if (!LoadIndex(st.st_mtime) && !CreateIndex(st.st_mtime))
+  if (!LoadIndex(st.st_mtime) && !CreateIndex(st.st_mtime, singlefilerepos))
   {
     remove(indexFile.c_str());
 //TODO: return Error(...)
@@ -776,11 +777,10 @@ bool TagFileInfo::HasName(char const* fileName) const
   return PathsEqual(filename.c_str(), fileName);
 }
 
-//TODO: rework: must return error instead of message id (message id coud be zero)
-int Load(const char* filename, size_t& symbolsLoaded)
+int Load(const char* filename, bool singleFileRepos, size_t& symbolsLoaded)
 {
   auto iter = std::find_if(files.begin(), files.end(), [&](TagFileInfoPtr const& file) {return file->HasName(filename);});
-  TagFileInfoPtr fi = iter == files.end() ? std::shared_ptr<TagFileInfo>(new TagFileInfo(filename)) : *iter;
+  TagFileInfoPtr fi = iter == files.end() ? std::shared_ptr<TagFileInfo>(new TagFileInfo(filename, singleFileRepos)) : *iter;
   if (auto err = fi->Load())
     return err;
 

@@ -47,7 +47,7 @@ public:
   };
 };
 
-int Load(const char* filename, size_t& symbolsLoaded);
+int Load(const char* filename, bool singleFileRepos, size_t& symbolsLoaded);
 void UnloadTags(const char* tagsFile);
 void UnloadAllTags();
 std::vector<TagInfo> Find(const char* name, const char* filename, int sortOptions = SortOptions::Default);
