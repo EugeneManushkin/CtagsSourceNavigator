@@ -1314,6 +1314,7 @@ static bool LookupTagsMenu(LookupMenuVisitor& visitor, TagInfo& tag, intptr_t se
 //TODO: Support platform path chars
   std::string filterkeys = GetFilterKeys();
   std::vector<FarKey> fk = GetFarKeys(filterkeys);
+  intptr_t selected = -1;
   while(true)
   {
     auto menuStrings = visitor.ApplyFilter(filter.c_str());
@@ -1321,7 +1322,7 @@ static bool LookupTagsMenu(LookupMenuVisitor& visitor, TagInfo& tag, intptr_t se
     intptr_t counter = 0;
     for (auto const& i : menuStrings)
     {
-      FarMenuItem item = {MIF_NONE,i.c_str()};
+      FarMenuItem item = {counter == selected ? MIF_SELECTED : MIF_NONE, i.c_str()};
       item.UserData = counter++;
       menu.push_back(item);
     }
@@ -1332,6 +1333,7 @@ static bool LookupTagsMenu(LookupMenuVisitor& visitor, TagInfo& tag, intptr_t se
     intptr_t bkey;
     WideString ftitle = !filter.empty() ? L"[Filter: " + ToString(filter) + L"]" : WideString(L" [") + title + L"]";
     WideString bottomText = L"";
+    selected = -1;
     auto res = I.Menu(&PluginGuid, &CtagsMenuGuid,-1,-1,0,FMENU_WRAPMODE|FMENU_SHOWAMPERSAND,ftitle.c_str(),
                      bottomText.c_str(),L"content",&fk[0],&bkey, menu.empty() ? nullptr : &menu[0],menu.size());
     if(res==-1 && bkey==-1)return false;
@@ -1350,6 +1352,7 @@ static bool LookupTagsMenu(LookupMenuVisitor& visitor, TagInfo& tag, intptr_t se
     if (IsF4(fk[bkey]))
     {
       OpenInNewWindow(visitor.GetTag(menu[res].UserData));
+      selected = res;
       continue;
     }
     if (static_cast<size_t>(bkey) >= filterkeys.length())
