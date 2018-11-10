@@ -1481,12 +1481,13 @@ int EnsureLine(int line, std::string const& file, std::string const& regex)
 
 static void OpenInNewWindow(TagInfo const& tag)
 {
-  if (tag.name.empty())
+  int line = tag.name.empty() ? -1 : SafeCall(std::bind(EnsureLine, tag.lineno, tag.file, tag.re), -1);
+  if (!tag.name.empty() && line < 0)
     return;
 
-  auto line = SafeCall(std::bind(EnsureLine, tag.lineno, tag.file, tag.re), -1);
-  if (line > 0)
-    I.Editor(ToString(tag.file).c_str(), L"", 0, 0, -1, -1,  EF_OPENMODE_NEWIFOPEN, line, 1, CP_DEFAULT);
+  auto file = ToString(tag.file);
+  if (FileExists(file))
+    I.Editor(file.c_str(), L"", 0, 0, -1, -1,  EF_OPENMODE_NEWIFOPEN, line, line < 0 ? -1 : 1, CP_DEFAULT);
 }
 
 class Navigator
