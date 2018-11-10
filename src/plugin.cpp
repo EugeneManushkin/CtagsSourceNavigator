@@ -1427,12 +1427,15 @@ static bool FileExists(WideString const& filename)
   return attributes != INVALID_FILE_ATTRIBUTES && !(attributes & FILE_ATTRIBUTE_DIRECTORY);
 }
 
-static int SetPos(WideString const& filename,intptr_t line,intptr_t col,intptr_t top,intptr_t left)
+static void SetPos(WideString const& filename, intptr_t line, intptr_t col, intptr_t top, intptr_t left)
 {
   if (!FileExists(filename))
     throw Error(MEFailedToOpen);
 
-  I.Editor(filename.c_str(), L"", 0, 0, -1, -1,  EF_NONMODAL | EF_IMMEDIATERETURN | EF_OPENMODE_USEEXISTING, 1, 1, CP_DEFAULT);
+  I.Editor(filename.c_str(), L"", 0, 0, -1, -1,  EF_NONMODAL | EF_IMMEDIATERETURN | EF_OPENMODE_USEEXISTING, -1, -1, CP_DEFAULT);
+  if (line < 0)
+    return;
+
   EditorInfo ei = GetCurrentEditorInfo();
   EditorSetPosition esp = {sizeof(EditorSetPosition)};
   esp.CurLine = line;
@@ -1443,7 +1446,6 @@ static int SetPos(WideString const& filename,intptr_t line,intptr_t col,intptr_t
   esp.Overtype = -1;
   I.EditorControl(ei.EditorID, ECTL_SETPOSITION, 0, &esp);
   I.EditorControl(ei.EditorID, ECTL_REDRAW, 0, nullptr);
-  return 1;
 }
 
 int EnsureLine(int line, std::string const& file, std::string const& regex)
@@ -1527,10 +1529,10 @@ Navigator::Navigator()
 
 void Navigator::Goto(TagInfo const& tag, bool setPanelDir)
 {
-  int line = tag.lineno;
+  int line = -1;
   if (!tag.name.empty())
   {
-    line = EnsureLine(line, tag.file, tag.re);
+    line = EnsureLine(tag.lineno, tag.file, tag.re);
     line = line < 0 && YesNoCalncelDialog(GetMsg(MNotFoundAsk)) == YesNoCancel::Yes ? tag.lineno : line;
     if (line < 0)
       return;
