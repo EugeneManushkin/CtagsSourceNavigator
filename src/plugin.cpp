@@ -1314,6 +1314,7 @@ static bool LookupTagsMenu(LookupMenuVisitor& visitor, TagInfo& tag, intptr_t se
 //TODO: Support platform path chars
   std::string filterkeys = GetFilterKeys();
   std::vector<FarKey> fk = GetFarKeys(filterkeys);
+  intptr_t selected = -1;
   while(true)
   {
     auto menuStrings = visitor.ApplyFilter(filter.c_str());
@@ -1321,7 +1322,7 @@ static bool LookupTagsMenu(LookupMenuVisitor& visitor, TagInfo& tag, intptr_t se
     intptr_t counter = 0;
     for (auto const& i : menuStrings)
     {
-      FarMenuItem item = {MIF_NONE,i.c_str()};
+      FarMenuItem item = {counter == selected ? MIF_SELECTED : MIF_NONE, i.c_str()};
       item.UserData = counter++;
       menu.push_back(item);
     }
@@ -1332,6 +1333,7 @@ static bool LookupTagsMenu(LookupMenuVisitor& visitor, TagInfo& tag, intptr_t se
     intptr_t bkey;
     WideString ftitle = !filter.empty() ? L"[Filter: " + ToString(filter) + L"]" : WideString(L" [") + title + L"]";
     WideString bottomText = L"";
+    selected = -1;
     auto res = I.Menu(&PluginGuid, &CtagsMenuGuid,-1,-1,0,FMENU_WRAPMODE|FMENU_SHOWAMPERSAND,ftitle.c_str(),
                      bottomText.c_str(),L"content",&fk[0],&bkey, menu.empty() ? nullptr : &menu[0],menu.size());
     if(res==-1 && bkey==-1)return false;
@@ -1350,6 +1352,7 @@ static bool LookupTagsMenu(LookupMenuVisitor& visitor, TagInfo& tag, intptr_t se
     if (IsF4(fk[bkey]))
     {
       OpenInNewWindow(visitor.GetTag(menu[res].UserData));
+      selected = res;
       continue;
     }
     if (static_cast<size_t>(bkey) >= filterkeys.length())
@@ -1427,12 +1430,15 @@ static bool FileExists(WideString const& filename)
   return attributes != INVALID_FILE_ATTRIBUTES && !(attributes & FILE_ATTRIBUTE_DIRECTORY);
 }
 
-static int SetPos(WideString const& filename,intptr_t line,intptr_t col,intptr_t top,intptr_t left)
+static void SetPos(WideString const& filename, intptr_t line, intptr_t col, intptr_t top, intptr_t left)
 {
   if (!FileExists(filename))
     throw Error(MEFailedToOpen);
 
-  I.Editor(filename.c_str(), L"", 0, 0, -1, -1,  EF_NONMODAL | EF_IMMEDIATERETURN | EF_OPENMODE_USEEXISTING, 1, 1, CP_DEFAULT);
+  I.Editor(filename.c_str(), L"", 0, 0, -1, -1,  EF_NONMODAL | EF_IMMEDIATERETURN | EF_OPENMODE_USEEXISTING, -1, -1, CP_DEFAULT);
+  if (line < 0)
+    return;
+
   EditorInfo ei = GetCurrentEditorInfo();
   EditorSetPosition esp = {sizeof(EditorSetPosition)};
   esp.CurLine = line;
@@ -1443,7 +1449,6 @@ static int SetPos(WideString const& filename,intptr_t line,intptr_t col,intptr_t
   esp.Overtype = -1;
   I.EditorControl(ei.EditorID, ECTL_SETPOSITION, 0, &esp);
   I.EditorControl(ei.EditorID, ECTL_REDRAW, 0, nullptr);
-  return 1;
 }
 
 int EnsureLine(int line, std::string const& file, std::string const& regex)
@@ -1479,12 +1484,13 @@ int EnsureLine(int line, std::string const& file, std::string const& regex)
 
 static void OpenInNewWindow(TagInfo const& tag)
 {
-  if (tag.name.empty())
+  int line = tag.name.empty() ? -1 : SafeCall(std::bind(EnsureLine, tag.lineno, tag.file, tag.re), -1);
+  if (!tag.name.empty() && line < 0)
     return;
 
-  auto line = SafeCall(std::bind(EnsureLine, tag.lineno, tag.file, tag.re), -1);
-  if (line > 0)
-    I.Editor(ToString(tag.file).c_str(), L"", 0, 0, -1, -1,  EF_OPENMODE_NEWIFOPEN, line, 1, CP_DEFAULT);
+  auto file = ToString(tag.file);
+  if (FileExists(file))
+    I.Editor(file.c_str(), L"", 0, 0, -1, -1,  EF_OPENMODE_NEWIFOPEN, line, line < 0 ? -1 : 1, CP_DEFAULT);
 }
 
 class Navigator
@@ -1527,10 +1533,10 @@ Navigator::Navigator()
 
 void Navigator::Goto(TagInfo const& tag, bool setPanelDir)
 {
-  int line = tag.lineno;
+  int line = -1;
   if (!tag.name.empty())
   {
-    line = EnsureLine(line, tag.file, tag.re);
+    line = EnsureLine(tag.lineno, tag.file, tag.re);
     line = line < 0 && YesNoCalncelDialog(GetMsg(MNotFoundAsk)) == YesNoCancel::Yes ? tag.lineno : line;
     if (line < 0)
       return;
