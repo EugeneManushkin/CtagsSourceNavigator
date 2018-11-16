@@ -1,4 +1,9 @@
 cmake_minimum_required(VERSION 3.0)
+
+if(NOT DEFINED CTAGS_VERSION_MAJOR OR NOT DEFINED CTAGS_VERSION_MINOR OR NOT DEFINED CTAGS_BUILD)
+    message(ERROR "Version not provided")
+endif(NOT DEFINED CTAGS_VERSION_MAJOR OR NOT DEFINED CTAGS_VERSION_MINOR OR NOT DEFINED CTAGS_BUILD)
+
 include_directories(Far)
 file(GLOB SOURCES
     "src/*.h"
@@ -16,6 +21,11 @@ endif(MSVC)
 
 add_library(ctags SHARED ${SOURCES})
 set(PLUGIN_DIR ${CMAKE_BINARY_DIR}/$<CONFIG>/ctags)
+target_compile_definitions(ctags PUBLIC CTAGS_VERSION_MAJOR=${CTAGS_VERSION_MAJOR}
+                                 PUBLIC CTAGS_VERSION_MINOR=${CTAGS_VERSION_MINOR}
+                                 PUBLIC CTAGS_BUILD=${CTAGS_BUILD}
+)
+
 add_custom_command(TARGET ctags POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E make_directory ${PLUGIN_DIR}
     COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_SOURCE_DIR}/src/tagseng.lng ${PLUGIN_DIR}

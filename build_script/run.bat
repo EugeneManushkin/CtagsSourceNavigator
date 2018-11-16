@@ -37,11 +37,11 @@ exit /b
 exit /b
 
 :GetBuildNumber
-  md "%ROOT%"\get_build_number && cd "%ROOT%"\get_build_number || exit /b 1
-  cmake -DREPO_ROOT="%REPO_ROOT%"\. -G "%GENERATOR%" "%REPO_ROOT%"\build_script\get_build_number || exit /b 1
-  cmake --build ./ --config Release || exit /b 1
-  for /F %%G in ('Release\getbuild.exe') do set BUILD_NUM=%%G
-  if "%BUILD_NUM%"=="" exit /b 1
+  call "%REPO_ROOT%"\build_script\version.bat || exit /b 1
+  if "%CTAGS_VERSION_MAJOR%"=="" exit /b 1
+  if "%CTAGS_VERSION_MINOR%"=="" exit /b 1
+  if "%CTAGS_BUILD%"=="" exit /b 1
+  set BUILD_NUM=%CTAGS_VERSION_MAJOR%.%CTAGS_VERSION_MINOR%.0.%CTAGS_BUILD%
 exit /b
 
 :BuildPlatform
@@ -53,7 +53,7 @@ exit /b
     set CMAKE_GENERATOR="%GENERATOR%"
   )
 
-  cmake -G %CMAKE_GENERATOR% "%REPO_ROOT%" || exit /b 1
+  cmake -DCTAGS_VERSION_MAJOR=%CTAGS_VERSION_MAJOR% -DCTAGS_VERSION_MINOR=%CTAGS_VERSION_MINOR% -DCTAGS_BUILD=%CTAGS_BUILD% -G %CMAKE_GENERATOR% "%REPO_ROOT%" || exit /b 1
   cmake --build ./ --config Release  || exit /b 1
   cd Release\ctags || exit /b 1
   %ARCHIVER% a ctags-%BUILD_NUM%-%1.zip * || exit /b 1
