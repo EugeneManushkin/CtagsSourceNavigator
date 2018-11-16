@@ -21,5 +21,8 @@ install:
 build_script:
   - '%APPVEYOR_BUILD_FOLDER%\appveyor\build.bat'
 
+test_script:
+  - '%APPVEYOR_BUILD_FOLDER%\appveyor\test.bat'
+
 artifacts:
   - path: ctags-*.zip

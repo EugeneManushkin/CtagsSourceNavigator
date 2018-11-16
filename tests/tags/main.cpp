@@ -495,5 +495,5 @@ int main(int argc, char* argv[])
 {
   CheckIdxFiles = std::find_if(argv, argv + argc, [](char* argument) {return !strcmp(argument, "--CheckIdxFiles");}) != argv + argc;
   testing::InitGoogleTest(&argc, argv);
-  RUN_ALL_TESTS();  
+  return RUN_ALL_TESTS();
 }
