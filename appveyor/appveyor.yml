@@ -12,6 +12,9 @@ environment:
       ARCH: x64
       CMAKE_GENERATOR: '$(CMAKE_GENERATOR_BASE) Win64'
 
+install_script:
+  - git submodule update --init --recursive
+
 build_script:
   - '%APPVEYOR_BUILD_FOLDER%\appveyor\build.bat'
 
