@@ -8,5 +8,5 @@ cmake -DCTAGS_VERSION_MAJOR=%CTAGS_VERSION_MAJOR% -DCTAGS_VERSION_MINOR=%CTAGS_V
 msbuild /target:build /property:Configuration=%CONFIGURATION% /logger:"C:\Program Files\AppVeyor\BuildAgent\Appveyor.MSBuildLogger.dll" %BUILD_ROOT%\Project.sln || exit /b 1
 
 cd %BUILD_ROOT%\%CONFIGURATION%\ctags || exit /b 1
-%ARCHIVER% a ctags-%BUILD_NUM%-%1.zip * || exit /b 1
+7z a ctags-%BUILD_NUM%-%1.zip * || exit /b 1
 move ctags-%BUILD_NUM%-%1.zip "%APPVEYOR_BUILD_FOLDER%" || exit /b 1
