@@ -37,10 +37,9 @@ exit /b
 exit /b
 
 :GetBuildNumber
-  call "%REPO_ROOT%"\build_script\version.bat || exit /b 1
-  if "%CTAGS_VERSION_MAJOR%"=="" exit /b 1
-  if "%CTAGS_VERSION_MINOR%"=="" exit /b 1
-  if "%CTAGS_BUILD%"=="" exit /b 1
+  set CTAGS_VERSION_MAJOR=0
+  set CTAGS_VERSION_MINOR=0
+  set CTAGS_BUILD=0
   set BUILD_NUM=%CTAGS_VERSION_MAJOR%.%CTAGS_VERSION_MINOR%.0.%CTAGS_BUILD%
 exit /b
 
