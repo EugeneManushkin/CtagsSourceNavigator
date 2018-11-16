@@ -1,4 +1,4 @@
-version: {build}
+version: 0.0.0.{build}
 
 environment:
   BUILD_ROOT: '%APPVEYOR_BUILD_FOLDER%\build'
