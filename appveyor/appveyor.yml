@@ -14,7 +14,7 @@ environment:
       ARCH: x64
       CMAKE_GENERATOR: '$(CMAKE_GENERATOR_BASE) Win64'
 
-version: $(CTAGS_VERSION)-{build}
+version: 0.{build}
 
 install:
   - git submodule update --init --recursive
