@@ -1,6 +1,7 @@
 version: {build}
 
 environment:
+  BUILD_ROOT: '%APPVEYOR_BUILD_FOLDER%\build'
   matrix:
     - compiler: msbuild
       CONFIGURATION: Release
@@ -10,9 +11,6 @@ environment:
       CONFIGURATION: Release
       ARCH: x64
       CMAKE_GENERATOR: '$(CMAKE_GENERATOR_BASE) Win64'
-
-environment:
-  BUILD_ROOT: '%APPVEYOR_BUILD_FOLDER%\build'
 
 build_script:
   - '%APPVEYOR_BUILD_FOLDER%\appveyor\build.bat'
