@@ -6,11 +6,11 @@ environment:
     - compiler: msbuild
       CONFIGURATION: Release
       ARCH: x86
-      CMAKE_GENERATOR: '$(CMAKE_GENERATOR_BASE)'
+      CMAKE_GENERATOR: $(CMAKE_GENERATOR_BASE)
     - compiler: msbuild
       CONFIGURATION: Release
       ARCH: x64
-      CMAKE_GENERATOR: '$(CMAKE_GENERATOR_BASE) Win64'
+      CMAKE_GENERATOR: $(CMAKE_GENERATOR_BASE) Win64
 
 build_script:
   - '%APPVEYOR_BUILD_FOLDER%\appveyor\build.bat'
