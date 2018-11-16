@@ -2,6 +2,7 @@ environment:
   CTAGS_VERSION_MAJOR: 2
   CTAGS_VERSION_MINOR: 1
   CTAGS_BUILD: 35
+  CTAGS_VERSION: $(CTAGS_VERSION_MAJOR).$(CTAGS_VERSION_MINOR).0.$(CTAGS_BUILD)
   BUILD_ROOT: '%APPVEYOR_BUILD_FOLDER%\build'
   matrix:
     - compiler: msbuild
@@ -13,7 +14,7 @@ environment:
       ARCH: x64
       CMAKE_GENERATOR: '$(CMAKE_GENERATOR_BASE) Win64'
 
-version: $(CTAGS_VERSION_MAJOR).$(CTAGS_VERSION_MINOR).0.$(CTAGS_BUILD)-{build}
+version: $(CTAGS_VERSION)-{build}
 
 install:
   - git submodule update --init --recursive
