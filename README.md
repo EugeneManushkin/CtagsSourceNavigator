@@ -18,6 +18,11 @@ This is a [Far Manager](https://www.farmanager.com/) plugin for browsing source 
 + Reindexing repository.
 + Hotkeys macro
 ## What's new 
+### 2.1.0.36
++ Implemented preview declaration by F4 without resetting search results (#27)
++ Improved navigation: implemented 'Go forward' (Ctrl+D hotkey) command. Update your hotkeys macro
++ Plugin is built with Appveyor continuous integration service
++ Fixed bugs
 ### 2.1.0.31
 + Supported shadow indexing of currently edited file
 + Plugin configuration dialog is available in main menu and editor menu
@@ -26,12 +31,6 @@ This is a [Far Manager](https://www.farmanager.com/) plugin for browsing source 
 + Supported natural ordering of class members. To sort class members by name enable option "Sort class members by name" in plugin configuration menu
 + Supported regex filter in "Search name in opened file" and "Class members" menu options
 + Improved "Open declaration" option
-+ Fixed bugs
-### 2.1.0.21
-+ Search and open files by name (equivalent to "Open resource" command in Eclipse CDT)
-+ Supported tags with absolute paths (ctags.exe ... -R C:\full\path\to\repository)
-+ Provided hotkey macro
-+ Enhanced user interface
 + Fixed bugs
 ## Requirements
 + Far3
@@ -69,6 +68,7 @@ This is a [Far Manager](https://www.farmanager.com/) plugin for browsing source 
 + Open declaration - ```Ctrl+F```
 + Complete name - ```Ctrl+Space```
 + Go back - ```Ctrl+G```
++ Go forward - ```Ctrl+D```
 + Search name in opened file - ```Ctrl+Shift+X```
 + Search name in entire repository - ```Ctrl+Shift+T```
 + Search file by name - ```Ctrl+Shift+R```
