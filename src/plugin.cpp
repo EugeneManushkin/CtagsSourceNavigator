@@ -1646,10 +1646,10 @@ static void NavigateForward()
 static void NavigationHistory()
 {
   MenuList menuList;
-  for (int i = 0; i < NavigatorInstance.NumPositions(); ++i)
+  for (Navigator::Index i = 0; i < NavigatorInstance.NumPositions(); ++i)
   {
     auto pos = NavigatorInstance.GetPosition(i);
-    menuList.push_back(MI(pos.first + WideString(L":") + ToString(std::to_string(pos.second + 1)), i));
+    menuList.push_back(MI(pos.first + WideString(L":") + ToString(std::to_string(pos.second + 1)), static_cast<int>(i)));
   }
 
   auto selected = static_cast<int>(NavigatorInstance.CurrentPosition());
