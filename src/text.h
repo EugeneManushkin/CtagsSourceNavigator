@@ -64,4 +64,6 @@ enum{
   MCurFileFirst,
   MIndexEditedFile,
   MPluginConfiguration,
+  MNavigationHistory,
+  MNavigationHistoryMenuTitle,
 };

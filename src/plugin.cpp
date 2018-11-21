@@ -1500,10 +1500,14 @@ public:
 
   Navigator();
   void Goto(TagInfo const& tag, bool setPanelDir);
+  void Goto(Index index);
   void GoBack();
   bool CanGoBack() const;
   void GoForward();
   bool CanGoForward() const;
+  Index NumPositions() const;
+  Index CurrentPosition() const;
+  std::pair<WideString, intptr_t> GetPosition(Index index) const;
 
 private:
   struct Position
@@ -1515,7 +1519,6 @@ private:
     intptr_t Left;
   };
 
-  void Goto(Index index);
   bool GetPosition(Position& pos) const;
   void SavePosition(Position&& pos);
   void Move(WideString const& file, int line, bool setPanelDir);
@@ -1579,6 +1582,22 @@ bool Navigator::CanGoForward() const
   return Current != Stack.size();
 }
 
+Navigator::Index Navigator::NumPositions() const
+{
+  return Stack.size();
+}
+
+Navigator::Index Navigator::CurrentPosition() const
+{
+  return Current;
+}
+
+std::pair<WideString, intptr_t> Navigator::GetPosition(Index index) const
+{
+  auto const& pos = Stack.at(index);
+  return std::make_pair(pos.File, pos.Line);
+}
+
 bool Navigator::GetPosition(Position& pos) const
 {
   EditorInfo ei = {sizeof(EditorInfo)};
@@ -1622,6 +1641,22 @@ static void NavigateBack()
 static void NavigateForward()
 {
   NavigatorInstance.GoForward();
+}
+
+static void NavigationHistory()
+{
+  MenuList menuList;
+  for (int i = 0; i < NavigatorInstance.NumPositions(); ++i)
+  {
+    auto pos = NavigatorInstance.GetPosition(i);
+    menuList.push_back(MI(pos.first + WideString(L":") + ToString(std::to_string(pos.second + 1)), i));
+  }
+
+  auto selected = static_cast<int>(NavigatorInstance.CurrentPosition());
+  selected = selected == NavigatorInstance.NumPositions() ? selected - 1 : selected;
+  auto index = Menu(GetMsg(MNavigationHistoryMenuTitle), menuList, selected, 0);
+  if (index >= 0)
+    NavigatorInstance.Goto(static_cast<Navigator::Index>(index));
 }
 
 static WideString SelectFromHistory()
@@ -1981,13 +2016,14 @@ HANDLE WINAPI OpenW(const struct OpenInfo *info)
     enum{
       miFindSymbol,miGoBack,miGoForward,miReindexRepo,
       miComplete,miBrowseClass,miBrowseFile,miLookupSymbol,miSearchFile,
-      miPluginConfiguration,
+      miPluginConfiguration,miNavigationHistory,
     };
     MenuList ml = {
         MI(MFindSymbol,miFindSymbol)
       , MI(MCompleteSymbol,miComplete)
       , MI(MUndoNavigation,miGoBack,!NavigatorInstance.CanGoBack())
       , MI(MRepeatNavigation,miGoForward,!NavigatorInstance.CanGoForward(), 'F')
+      , MI(MNavigationHistory,miNavigationHistory,!NavigatorInstance.NumPositions(), 'H')
       , MI::Separator()
       , MI(MBrowseClass,miBrowseClass)
       , MI(MBrowseSymbolsInFile,miBrowseFile)
@@ -2022,6 +2058,10 @@ HANDLE WINAPI OpenW(const struct OpenInfo *info)
       case miGoForward:
       {
         SafeCall(NavigateForward);
+      }break;
+      case miNavigationHistory:
+      {
+        SafeCall(NavigationHistory);
       }break;
       case miComplete:
       {
@@ -2072,11 +2112,12 @@ HANDLE WINAPI OpenW(const struct OpenInfo *info)
     {
       enum {miLoadFromHistory,miLoadTagsFile,miUnloadTagsFile, miReindexRepo,
             miCreateTagsFile,miAddTagsToAutoload, miLookupSymbol, miSearchFile,
-            miPluginConfiguration,
+            miPluginConfiguration, miNavigationHistory,
       };
       MenuList ml = {
            MI(MLookupSymbol, miLookupSymbol)
          , MI(MSearchFile, miSearchFile)
+         , MI(MNavigationHistory, miNavigationHistory, !NavigatorInstance.NumPositions(), 'H')
          , MI::Separator()
          , MI(MLoadTagsFile, miLoadTagsFile)
          , MI(MLoadFromHistory, miLoadFromHistory, !config.history_len)
@@ -2150,6 +2191,10 @@ HANDLE WINAPI OpenW(const struct OpenInfo *info)
         case miSearchFile:
         {
           SafeCall(std::bind(LookupFile, GetSelectedItem(), true));
+        }break;
+        case miNavigationHistory:
+        {
+          SafeCall(NavigationHistory);
         }break;
         case miReindexRepo:
         {
