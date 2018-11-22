@@ -1508,6 +1508,8 @@ public:
   Index NumPositions() const;
   Index CurrentPosition() const;
   std::pair<WideString, intptr_t> GetPosition(Index index) const;
+//TODO: temporary solution. Navigation should be separated for each repository and should be deleted when temporary tags is unloaded
+  void RemoveFromHistory(WideString const& file);
 
 private:
   struct Position
@@ -1598,6 +1600,12 @@ std::pair<WideString, intptr_t> Navigator::GetPosition(Index index) const
   return std::make_pair(pos.File, pos.Line);
 }
 
+void Navigator::RemoveFromHistory(WideString const& file)
+{
+  Stack.erase(std::remove_if(Stack.begin(), Stack.end(), [&file](Position const& pos) { return pos.File == file; }), Stack.end());
+  Current = Stack.size();
+}
+
 bool Navigator::GetPosition(Position& pos) const
 {
   EditorInfo ei = {sizeof(EditorInfo)};
@@ -1659,6 +1667,11 @@ static void NavigationHistory()
     NavigatorInstance.Goto(static_cast<Navigator::Index>(index));
 }
 
+static void RemoveFromHistory(WideString const& file)
+{
+  NavigatorInstance.RemoveFromHistory(file);
+}
+
 static WideString SelectFromHistory()
 {
   SynchronizeTagsHistory(false);
@@ -1698,6 +1711,11 @@ public:
       FileToTempdir.erase(fileFullPath);
       throw std::logic_error("Internal error: temporary directory already used " + ToStdString(tempDirectory));
     }
+  }
+
+  bool IsTemporaryIndexed(WideString const& fileFullPath) const
+  {
+    return FileToTempdir.find(fileFullPath) != FileToTempdir.end();
   }
 
   void ClearByFile(WideString const& fileFullPath)
@@ -2449,9 +2467,11 @@ void WINAPI GetGlobalInfoW(struct GlobalInfo *info)
 
 intptr_t WINAPI ProcessEditorEventW(const struct ProcessEditorEventInfo *info)
 {
-  if (info->Event == EE_CLOSE)
+  WideString file = GetFileNameFromEditor(info->EditorID);
+  if (info->Event == EE_CLOSE && TemporaryRepositories.IsTemporaryIndexed(file))
   {
-    SafeCall(std::bind(ClearTemporaryTagsByFile, GetFileNameFromEditor(info->EditorID)));
+    SafeCall(std::bind(ClearTemporaryTagsByFile, file));
+    SafeCall(std::bind(RemoveFromHistory, file));
   }
 
   return 0;
