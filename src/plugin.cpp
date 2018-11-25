@@ -48,6 +48,7 @@
 #include <iterator>
 #include <regex>
 #include <sstream> 
+#include <stack>
 #include <string>
 #include <vector>
 #include <list>
@@ -1493,12 +1494,113 @@ static void OpenInNewWindow(TagInfo const& tag)
     I.Editor(file.c_str(), L"", 0, 0, -1, -1,  EF_OPENMODE_NEWIFOPEN, line, line < 0 ? -1 : 1, CP_DEFAULT);
 }
 
+static bool IsModalMode()
+{
+  WindowInfo info = {sizeof(WindowInfo)};
+  for (auto numWindows = I.AdvControl(&PluginGuid, ACTL_GETWINDOWCOUNT, 0, nullptr); numWindows > 0 && !(info.Flags & WIF_CURRENT); --numWindows)
+  {
+    info.Pos = numWindows - 1;
+    info.Flags = WIF_NONE;
+    I.AdvControl(&PluginGuid, ACTL_GETWINDOWINFO, 0, &info);
+  }
+
+  return !!(info.Flags & WIF_CURRENT) && !!(info.Flags & WIF_MODAL);
+}
+
+static bool IsOpenedInCurrentEditor(WideString const& file)
+{
+  EditorInfo ei = {sizeof(EditorInfo)};
+  if (!I.EditorControl(-1, ECTL_GETINFO, 0, &ei))
+    return false;
+
+  auto const editorFile = GetFileNameFromEditor(ei.EditorID);
+  return FSF.ProcessName(file.c_str(), const_cast<wchar_t*>(editorFile.c_str()), 0, PN_CMPNAME) != 0;
+}
+
 class Navigator
 {
 public:
   using Index = size_t;
 
-  Navigator();
+  virtual ~Navigator() = default;
+  virtual void Goto(TagInfo const& tag, bool setPanelDir) = 0;
+  virtual void Goto(Index index) = 0;
+  virtual void GoBack() = 0;
+  virtual bool CanGoBack() const = 0;
+  virtual void GoForward() = 0;
+  virtual bool CanGoForward() const = 0;
+  virtual Index NumPositions() const = 0;
+  virtual Index CurrentPosition() const = 0;
+  virtual std::pair<WideString, intptr_t> GetPosition(Index index) const = 0;
+  virtual void OnNewModalWindow() = 0;
+  virtual void OnCloseModalWindow() = 0;
+};
+
+class InvalidNavigator : public Navigator
+{
+public:
+  using Navigator::Index;
+
+  virtual void Goto(TagInfo const&, bool) override
+  {
+    throw std::logic_error("Navigation is disabled");
+  }
+
+  virtual void Goto(Index) override
+  {
+    throw std::logic_error("Navigation is disabled");
+  }
+
+  virtual void GoBack() override
+  {
+    throw std::logic_error("Navigation is disabled");
+  }
+
+  virtual bool CanGoBack() const override
+  {
+    return false;
+  }
+
+  virtual void GoForward() override
+  {
+    throw std::logic_error("Navigation is disabled");
+  }
+
+  virtual bool CanGoForward() const override
+  {
+    return false;
+  }
+
+  virtual Index NumPositions() const override
+  {
+    return 0;
+  }
+
+  virtual Index CurrentPosition() const override
+  {
+    return 0;
+  }
+
+  virtual std::pair<WideString, intptr_t> GetPosition(Index) const override
+  {
+    throw std::logic_error("Navigation is disabled");
+  }
+
+  virtual void OnNewModalWindow() override
+  {
+  }
+
+  virtual void OnCloseModalWindow() override
+  {
+  }
+};
+
+class PlainNavigator
+{
+public:
+  using Index = Navigator::Index;
+
+  PlainNavigator(bool modal);
   void Goto(TagInfo const& tag, bool setPanelDir);
   void Goto(Index index);
   void GoBack();
@@ -1524,17 +1626,17 @@ private:
   void Move(WideString const& file, int line, bool setPanelDir);
 
   std::deque<Position> Stack;
-  Index Current;
+  Navigator::Index Current;
+  bool Modal;
 };
 
-Navigator NavigatorInstance;
-
-Navigator::Navigator()
+PlainNavigator::PlainNavigator(bool modal)
   : Current(Stack.size())
+  , Modal(modal)
 {
 }
 
-void Navigator::Goto(TagInfo const& tag, bool setPanelDir)
+void PlainNavigator::Goto(TagInfo const& tag, bool setPanelDir)
 {
   int line = -1;
   if (!tag.name.empty())
@@ -1548,7 +1650,7 @@ void Navigator::Goto(TagInfo const& tag, bool setPanelDir)
   Move(ToString(tag.file), line, setPanelDir);
 }
 
-void Navigator::Goto(Index index)
+void PlainNavigator::Goto(Index index)
 {
   auto const& newPosition = Stack.at(index);
   Position position;
@@ -1560,45 +1662,45 @@ void Navigator::Goto(Index index)
   Current = index;
 }
 
-void Navigator::GoBack()
+void PlainNavigator::GoBack()
 {
   if (CanGoBack())
     Goto(Current - 1);
 }
 
-bool Navigator::CanGoBack() const
+bool PlainNavigator::CanGoBack() const
 {
   return !!Current;
 }
 
-void Navigator::GoForward()
+void PlainNavigator::GoForward()
 {
   if (CanGoForward())
     Goto(Current + 1 == Stack.size() ? Current : Current + 1);
 }
 
-bool Navigator::CanGoForward() const
+bool PlainNavigator::CanGoForward() const
 {
   return Current != Stack.size();
 }
 
-Navigator::Index Navigator::NumPositions() const
+PlainNavigator::Index PlainNavigator::NumPositions() const
 {
   return Stack.size();
 }
 
-Navigator::Index Navigator::CurrentPosition() const
+PlainNavigator::Index PlainNavigator::CurrentPosition() const
 {
   return Current;
 }
 
-std::pair<WideString, intptr_t> Navigator::GetPosition(Index index) const
+std::pair<WideString, intptr_t> PlainNavigator::GetPosition(Index index) const
 {
   auto const& pos = Stack.at(index);
   return std::make_pair(pos.File, pos.Line);
 }
 
-bool Navigator::GetPosition(Position& pos) const
+bool PlainNavigator::GetPosition(Position& pos) const
 {
   EditorInfo ei = {sizeof(EditorInfo)};
   if (!I.EditorControl(-1, ECTL_GETINFO, 0, &ei))
@@ -1608,55 +1710,146 @@ bool Navigator::GetPosition(Position& pos) const
   return true;
 }
 
-void Navigator::SavePosition(Navigator::Position&& pos)
+void PlainNavigator::SavePosition(PlainNavigator::Position&& pos)
 {
   Stack.erase(Stack.begin() + Current, Stack.end());
   Stack.push_back(std::move(pos));
   Current = Stack.size();
 }
 
-void Navigator::Move(WideString const& file, int line, bool setPanelDir)
+void PlainNavigator::Move(WideString const& file, int line, bool setPanelDir)
 {
   Position position;
-  bool havePosition = GetPosition(position);
-  line -= line > 0 ? 1 : 0;
-  SetPos(file, line, 0, line > 0 ? line - 1 : line, 0);
-  if (setPanelDir)
+  bool openedInCurrentEditor = IsOpenedInCurrentEditor(file);
+  bool havePosition = (!Modal || openedInCurrentEditor) && GetPosition(position);
+  if (Modal && !openedInCurrentEditor)
+//TODO: handle open error
+    I.Editor(file.c_str(), L"", 0, 0, -1, -1,  EF_OPENMODE_NEWIFOPEN, line, line < 0 ? -1 : 1, CP_DEFAULT);
+  else
+    SetPos(file, line > 0 ? line - 1 : line, 0, line > 1 ? line - 2 : line, 0);
+
+  if (!Modal && setPanelDir)
     SelectFile(file);
 
   if (havePosition)
     SavePosition(std::move(position));
 }
 
+class NavigatorImpl : public Navigator
+{
+public:
+  using Navigator::Index;
+
+  NavigatorImpl()
+  {
+    Navigators.push(PlainNavigator(false));
+  }
+
+  virtual void Goto(TagInfo const& tag, bool setPanelDir) override
+  {
+    Navigators.top().Goto(tag, setPanelDir);
+  }
+
+  virtual void Goto(Index index) override
+  {
+    Navigators.top().Goto(index);
+  }
+
+  virtual void GoBack() override
+  {
+    Navigators.top().GoBack();
+  }
+
+  virtual bool CanGoBack() const override
+  {
+    return Navigators.top().CanGoBack();
+  }
+
+  virtual void GoForward() override
+  {
+    Navigators.top().GoForward();
+  }
+
+  virtual bool CanGoForward() const override
+  {
+    return Navigators.top().CanGoForward();
+  }
+
+  virtual Index NumPositions() const override
+  {
+    return Navigators.top().NumPositions();
+  }
+
+  virtual Index CurrentPosition() const override
+  {
+    return Navigators.top().CurrentPosition();
+  }
+
+  virtual std::pair<WideString, intptr_t> GetPosition(Index index) const override
+  {
+    return Navigators.top().GetPosition(index);
+  }
+
+  virtual void OnNewModalWindow() override
+  {
+    Navigators.push(PlainNavigator(true));
+  }
+
+  virtual void OnCloseModalWindow() override
+  {
+    if (Navigators.size() <= 1)
+      throw std::logic_error("No more modal navigators");
+
+    Navigators.pop();
+  }
+
+private:
+  std::stack<PlainNavigator> Navigators;
+};
+
+std::unique_ptr<Navigator> NavigatorInstance(new NavigatorImpl);
+
 static void NavigateTo(TagInfo const* info, bool setPanelDir = false)
 {
-  NavigatorInstance.Goto(*info, setPanelDir);
+  NavigatorInstance->Goto(*info, setPanelDir);
 }
 
 static void NavigateBack()
 {
-  NavigatorInstance.GoBack();
+  NavigatorInstance->GoBack();
 }
 
 static void NavigateForward()
 {
-  NavigatorInstance.GoForward();
+  NavigatorInstance->GoForward();
 }
 
 static void NavigationHistory()
 {
   MenuList menuList;
-  for (Navigator::Index i = 0; i < NavigatorInstance.NumPositions(); ++i)
+  for (Navigator::Index i = 0; i < NavigatorInstance->NumPositions(); ++i)
   {
-    auto pos = NavigatorInstance.GetPosition(i);
+    auto pos = NavigatorInstance->GetPosition(i);
     menuList.push_back(MI(pos.first + WideString(L":") + ToString(std::to_string(pos.second + 1)), static_cast<int>(i)));
   }
 
-  auto selected = static_cast<int>(NavigatorInstance.CurrentPosition());
-  selected = selected == NavigatorInstance.NumPositions() ? selected - 1 : selected;
+  auto selected = static_cast<int>(NavigatorInstance->CurrentPosition());
+  selected = selected == NavigatorInstance->NumPositions() ? selected - 1 : selected;
   auto index = Menu(GetMsg(MNavigationHistoryMenuTitle), menuList, selected, 0);
   if (index >= 0)
-    NavigatorInstance.Goto(static_cast<Navigator::Index>(index));
+    NavigatorInstance->Goto(static_cast<Navigator::Index>(index));
+}
+
+bool OnNewModalWindow()
+{
+  NavigatorInstance->OnNewModalWindow();
+  return true;
+}
+
+bool OnCloseModalWindow()
+{
+  NavigatorInstance->OnCloseModalWindow();
+  return true;
 }
 
 static WideString SelectFromHistory()
@@ -2021,9 +2214,9 @@ HANDLE WINAPI OpenW(const struct OpenInfo *info)
     MenuList ml = {
         MI(MFindSymbol,miFindSymbol)
       , MI(MCompleteSymbol,miComplete)
-      , MI(MUndoNavigation,miGoBack,!NavigatorInstance.CanGoBack())
-      , MI(MRepeatNavigation,miGoForward,!NavigatorInstance.CanGoForward(), 'F')
-      , MI(MNavigationHistory,miNavigationHistory,!NavigatorInstance.NumPositions(), 'H')
+      , MI(MUndoNavigation,miGoBack,!NavigatorInstance->CanGoBack())
+      , MI(MRepeatNavigation,miGoForward,!NavigatorInstance->CanGoForward(), 'F')
+      , MI(MNavigationHistory,miNavigationHistory,!NavigatorInstance->NumPositions(), 'H')
       , MI::Separator()
       , MI(MBrowseClass,miBrowseClass)
       , MI(MBrowseSymbolsInFile,miBrowseFile)
@@ -2117,7 +2310,7 @@ HANDLE WINAPI OpenW(const struct OpenInfo *info)
       MenuList ml = {
            MI(MLookupSymbol, miLookupSymbol)
          , MI(MSearchFile, miSearchFile)
-         , MI(MNavigationHistory, miNavigationHistory, !NavigatorInstance.NumPositions(), 'H')
+         , MI(MNavigationHistory, miNavigationHistory, !NavigatorInstance->NumPositions(), 'H')
          , MI::Separator()
          , MI(MLoadTagsFile, miLoadTagsFile)
          , MI(MLoadFromHistory, miLoadFromHistory, !config.history_len)
@@ -2449,9 +2642,17 @@ void WINAPI GetGlobalInfoW(struct GlobalInfo *info)
 
 intptr_t WINAPI ProcessEditorEventW(const struct ProcessEditorEventInfo *info)
 {
-  if (info->Event == EE_CLOSE)
+  bool modal = IsModalMode();
+  if (info->Event == EE_READ)
+  {
+    if (modal && SafeCall(OnNewModalWindow, false) == false)
+      NavigatorInstance.reset(new InvalidNavigator);
+  }
+  else if (info->Event == EE_CLOSE)
   {
     SafeCall(std::bind(ClearTemporaryTagsByFile, GetFileNameFromEditor(info->EditorID)));
+    if (modal && SafeCall(OnCloseModalWindow, false) == false)
+      NavigatorInstance.reset(new InvalidNavigator);
   }
 
   return 0;
