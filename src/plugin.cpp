@@ -1425,18 +1425,11 @@ static std::string GetWord(int offset=0)
 }
 */
 
-static bool FileExists(WideString const& filename)
-{
-  auto attributes = GetFileAttributesW(filename.c_str());
-  return attributes != INVALID_FILE_ATTRIBUTES && !(attributes & FILE_ATTRIBUTE_DIRECTORY);
-}
-
 static void SetPos(WideString const& filename, intptr_t line, intptr_t col, intptr_t top, intptr_t left)
 {
-  if (!FileExists(filename))
+  if (I.Editor(filename.c_str(), L"", 0, 0, -1, -1,  EF_NONMODAL | EF_IMMEDIATERETURN | EF_OPENMODE_USEEXISTING, -1, -1, CP_DEFAULT) == EEC_OPEN_ERROR)
     throw Error(MEFailedToOpen);
 
-  I.Editor(filename.c_str(), L"", 0, 0, -1, -1,  EF_NONMODAL | EF_IMMEDIATERETURN | EF_OPENMODE_USEEXISTING, -1, -1, CP_DEFAULT);
   if (line < 0)
     return;
 
@@ -1450,6 +1443,12 @@ static void SetPos(WideString const& filename, intptr_t line, intptr_t col, intp
   esp.Overtype = -1;
   I.EditorControl(ei.EditorID, ECTL_SETPOSITION, 0, &esp);
   I.EditorControl(ei.EditorID, ECTL_REDRAW, 0, nullptr);
+}
+
+static void OpenInNewWindow(WideString const& filename, intptr_t line, intptr_t col)
+{
+  if (I.Editor(filename.c_str(), L"", 0, 0, -1, -1,  EF_OPENMODE_NEWIFOPEN, line, col, CP_DEFAULT) == EEC_OPEN_ERROR)
+    throw Error(MEFailedToOpen);
 }
 
 int EnsureLine(int line, std::string const& file, std::string const& regex)
@@ -1490,8 +1489,7 @@ static void OpenInNewWindow(TagInfo const& tag)
     return;
 
   auto file = ToString(tag.file);
-  if (FileExists(file))
-    I.Editor(file.c_str(), L"", 0, 0, -1, -1,  EF_OPENMODE_NEWIFOPEN, line, line < 0 ? -1 : 1, CP_DEFAULT);
+  I.Editor(file.c_str(), L"", 0, 0, -1, -1,  EF_OPENMODE_NEWIFOPEN, line, line < 0 ? -1 : 1, CP_DEFAULT);
 }
 
 static bool IsModalMode()
@@ -1539,7 +1537,7 @@ public:
 class InvalidNavigator : public Navigator
 {
 public:
-  using Navigator::Index;
+  using Index = Navigator::Index;
 
   virtual void Goto(TagInfo const&, bool) override
   {
@@ -1626,7 +1624,7 @@ private:
   void Move(WideString const& file, int line, bool setPanelDir);
 
   std::deque<Position> Stack;
-  Navigator::Index Current;
+  Index Current;
   bool Modal;
 };
 
@@ -1720,11 +1718,10 @@ void PlainNavigator::SavePosition(PlainNavigator::Position&& pos)
 void PlainNavigator::Move(WideString const& file, int line, bool setPanelDir)
 {
   Position position;
-  bool openedInCurrentEditor = IsOpenedInCurrentEditor(file);
-  bool havePosition = (!Modal || openedInCurrentEditor) && GetPosition(position);
-  if (Modal && !openedInCurrentEditor)
-//TODO: handle open error
-    I.Editor(file.c_str(), L"", 0, 0, -1, -1,  EF_OPENMODE_NEWIFOPEN, line, line < 0 ? -1 : 1, CP_DEFAULT);
+  bool needOpenInNewWindow = Modal && !IsOpenedInCurrentEditor(file);
+  bool havePosition = !needOpenInNewWindow && GetPosition(position);
+  if (needOpenInNewWindow)
+    OpenInNewWindow(file, line, line < 0 ? -1 : 1);
   else
     SetPos(file, line > 0 ? line - 1 : line, 0, line > 1 ? line - 2 : line, 0);
 
@@ -1738,7 +1735,7 @@ void PlainNavigator::Move(WideString const& file, int line, bool setPanelDir)
 class NavigatorImpl : public Navigator
 {
 public:
-  using Navigator::Index;
+  using Index = Navigator::Index;
 
   NavigatorImpl()
   {
