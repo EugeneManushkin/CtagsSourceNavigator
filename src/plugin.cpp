@@ -1331,7 +1331,7 @@ static bool LookupTagsMenu(LookupMenuVisitor& visitor, TagInfo& tag, intptr_t se
     if (filter.empty() && separatorPos > 0 && static_cast<size_t>(separatorPos) < menu.size())
       menu.insert(menu.begin() + separatorPos, FarMenuItem({MIF_SEPARATOR}));
 
-    intptr_t bkey;
+    intptr_t bkey = -1;
     WideString ftitle = !filter.empty() ? L"[Filter: " + ToString(filter) + L"]" : WideString(L" [") + title + L"]";
     WideString bottomText = L"";
     selected = -1;
