@@ -362,7 +362,7 @@ namespace TESTS
 
     void TestRepeatedFiles(std::string const& tagsFile)
     {
-      size_t const expectedTags = 30;
+      size_t const expectedTags = 32;
       ASSERT_NO_FATAL_FAILURE(LoadTagsFile(tagsFile, MultipleFileRepos, expectedTags));
       EXPECT_NO_FATAL_FAILURE(TestRepeatedFile(tagsFile, "", expectedTags, expectedTags));
       EXPECT_NO_FATAL_FAILURE(TestRepeatedFile(tagsFile, "", 10, 10));
@@ -371,7 +371,7 @@ namespace TESTS
       EXPECT_NO_FATAL_FAILURE(TestRepeatedFile(tagsFile, "10times.cpp", 0, 10));
       EXPECT_NO_FATAL_FAILURE(TestRepeatedFile(tagsFile, "10times", 0, 10));
       EXPECT_NO_FATAL_FAILURE(TestRepeatedFile(tagsFile, "10times.cpp", 10, 10));
-      EXPECT_NO_FATAL_FAILURE(TestRepeatedFile(tagsFile, "15times.cpp", 0, 15));
+      EXPECT_NO_FATAL_FAILURE(TestRepeatedFile(tagsFile, "15times.cpp", 0, 17));
       EXPECT_NO_FATAL_FAILURE(TestRepeatedFile(tagsFile, "15times", 10, 10));
       EXPECT_NO_FATAL_FAILURE(TestRepeatedFile(tagsFile, "15times.cpp", 10, 15));
     }

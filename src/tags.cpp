@@ -27,6 +27,7 @@
 #include <sys/utime.h>
 #include <string>
 #include <string.h>
+#include <tuple>
 #include <unordered_map>
 #include <vector>
 #include <memory>
@@ -891,13 +892,10 @@ public:
   }
 };
 
-static std::pair<size_t, size_t> GetMatchedOffsetRange(FILE* f, OffsetCont const& offsets, MatchVisitor const& visitor, size_t maxCount)
+static std::tuple<size_t, size_t, size_t> GetMatchedOffsetRange(FILE* f, OffsetCont const& offsets, MatchVisitor const& visitor)
 {
-  if (offsets.empty())
-    return std::make_pair(0, 0);
-
-  if (visitor.GetPattern().empty())
-    return std::make_pair(0, std::min(static_cast<size_t>(offsets.size()), maxCount));
+  if (offsets.empty() || visitor.GetPattern().empty())
+    return std::make_tuple(0, 0, offsets.size());
 
   size_t pos;
   size_t left=0;
@@ -953,9 +951,9 @@ static std::pair<size_t, size_t> GetMatchedOffsetRange(FILE* f, OffsetCont const
       }
     }
     ++endpos;
-    return std::make_pair(pos, maxCount > 0 ? std::max(exactmatchend, std::min(pos + maxCount, endpos)) : endpos);
+    return std::make_tuple(pos, exactmatchend, endpos);
   }
-  return std::make_pair(0, 0);
+  return std::make_tuple(0, 0, 0);
 }
 
 static std::vector<TagInfo> GetMatchedTags(TagFileInfo* fi, OffsetCont const& offsets, MatchVisitor const& visitor, size_t maxCount)
@@ -963,15 +961,19 @@ static std::vector<TagInfo> GetMatchedTags(TagFileInfo* fi, OffsetCont const& of
   std::vector<TagInfo> result;
   FILE *f=fi->OpenTags();
   if(!f)return result;
-  auto range = GetMatchedOffsetRange(f, offsets, visitor, maxCount);
-  for(; range.first < range.second; ++range.first)
+  auto range = GetMatchedOffsetRange(f, offsets, visitor);
+  maxCount = !maxCount ? std::numeric_limits<size_t>::max() : maxCount;
+  for(auto i = std::get<0>(range); i < std::get<1>(range) || (maxCount > 0 && i < std::get<2>(range)); ++i)
   {
-    fseek(f, offsets[range.first], SEEK_SET);
+    fseek(f, offsets[i], SEEK_SET);
     std::string line;
     GetLine(line, f);
     TagInfo tag;
     if (ParseLine(line.c_str(), *fi, tag))
+    {
       result.push_back(std::move(tag));
+      maxCount -= maxCount > 0 ? 1 : 0;
+    }
   }
   fclose(f);
   return result;
