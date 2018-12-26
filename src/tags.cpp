@@ -959,6 +959,7 @@ static std::tuple<size_t, size_t, size_t> GetMatchedOffsetRange(FILE* f, OffsetC
 static std::vector<TagInfo> GetMatchedTags(TagFileInfo* fi, OffsetCont const& offsets, MatchVisitor const& visitor, size_t maxCount)
 {
   std::vector<TagInfo> result;
+  if (visitor.GetPattern().empty() && !maxCount) return result;
   FILE *f=fi->OpenTags();
   if(!f)return result;
   auto range = GetMatchedOffsetRange(f, offsets, visitor);

@@ -364,6 +364,7 @@ namespace TESTS
     {
       size_t const expectedTags = 32;
       ASSERT_NO_FATAL_FAILURE(LoadTagsFile(tagsFile, MultipleFileRepos, expectedTags));
+      EXPECT_NO_FATAL_FAILURE(TestRepeatedFile(tagsFile, "", 0, 0));
       EXPECT_NO_FATAL_FAILURE(TestRepeatedFile(tagsFile, "", expectedTags, expectedTags));
       EXPECT_NO_FATAL_FAILURE(TestRepeatedFile(tagsFile, "", 10, 10));
       EXPECT_NO_FATAL_FAILURE(TestRepeatedFile(tagsFile, "5times.cpp", 0, 5));
