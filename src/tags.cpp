@@ -800,6 +800,11 @@ public:
   {
   }
 
+  MatchVisitor(std::string&& pattern)
+    : Pattern(std::move(pattern))
+  {
+  }
+
   virtual ~MatchVisitor() = default;
 
   std::string const& GetPattern() const
@@ -808,6 +813,11 @@ public:
   }
 
   virtual int Compare(char const*& strbuf) const = 0;
+
+  virtual bool Filter(TagInfo const& tag) const
+  {
+    return true;
+  }
 
 private:
   std::string Pattern;
@@ -836,8 +846,9 @@ private:
 class FilenamePatrialMatch : public MatchVisitor
 {
 public:
-  FilenamePatrialMatch(char const* part)
-    : MatchVisitor(part)
+  FilenamePatrialMatch(std::string&& namePart, std::string&& filter)
+    : MatchVisitor(std::move(namePart))
+    , PathFilter(std::move(filter))
   {
   }
 
@@ -851,6 +862,37 @@ public:
     strbuf = GetFilename(++strbuf);
     return FieldCompare(GetPattern().c_str(), strbuf, CaseInsensitive, PartialCompare);
   }
+
+  bool Filter(TagInfo const& tag) const override
+  {
+    if (PathFilter.empty())
+      return true;
+
+    std::string const& fullPath = tag.file;
+    auto pathIter = std::find_if(fullPath.rbegin(), fullPath.rend(), [](char c) { return IsPathSeparator(c); });
+    for (; pathIter != fullPath.rend() && IsPathSeparator(*pathIter); ++pathIter);
+    auto filterIter = PathFilter.rbegin();
+    int cmp = 0;
+////TODO: parameterize PathCompare with direction and remove code duplication
+    while (pathIter != fullPath.rend() && filterIter != PathFilter.rend() && !cmp)
+    {
+      if (IsPathSeparator(*pathIter) && IsPathSeparator(*filterIter))
+      {
+        for (; pathIter != fullPath.rend() && IsPathSeparator(*pathIter); ++pathIter);
+        for (; filterIter != PathFilter.rend() && IsPathSeparator(*filterIter); ++filterIter);
+      }
+      else if (!(cmp = CharCmp(*pathIter, *filterIter, CaseInsensitive)))
+      {
+        ++pathIter;
+        ++filterIter;
+      }
+    }
+
+    return filterIter == PathFilter.rend() && (pathIter == fullPath.rend() || IsPathSeparator(*pathIter));
+  }
+
+private:
+  std::string PathFilter;
 };
 
 class ClassMemberMatch : public MatchVisitor
@@ -970,7 +1012,7 @@ static std::vector<TagInfo> GetMatchedTags(TagFileInfo* fi, OffsetCont const& of
     std::string line;
     GetLine(line, f);
     TagInfo tag;
-    if (ParseLine(line.c_str(), *fi, tag))
+    if (ParseLine(line.c_str(), *fi, tag) && visitor.Filter(tag))
     {
       result.push_back(std::move(tag));
       maxCount -= maxCount > 0 ? 1 : 0;
@@ -1044,9 +1086,23 @@ std::vector<TagInfo> FindPartiallyMatchedTags(const char* file, const char* part
   return SortTags(ForEachFileRepository(file, caseInsensitive ? IndexType::NamesCaseInsensitive : IndexType::Names, NameMatch(part, PartialCompare, caseInsensitive), maxCount), file, sortOptions);
 }
 
+static std::pair<std::string, std::string> GetNameAndPathFilter(char const* path)
+{
+  for (; *path && IsPathSeparator(*path); ++path);
+  auto pathEnd = path;
+  for (; *pathEnd; ++pathEnd);
+  for (; pathEnd != path && pathEnd - 1 != path && IsPathSeparator(*(pathEnd - 1)); --pathEnd);
+  auto nameBegin = pathEnd - 1;
+  for (; nameBegin != path - 1 && !IsPathSeparator(*nameBegin); --nameBegin);
+  auto name = std::string(nameBegin + 1, pathEnd);
+  for (; nameBegin != path - 1 && IsPathSeparator(*nameBegin); --nameBegin);
+  return std::make_pair(std::move(name), std::string(path, nameBegin + 1));
+}
+
 std::vector<std::string> FindPartiallyMatchedFile(const char* file, const char* part, size_t maxCount)
 {
-  auto tags = ForEachFileRepository(file, IndexType::Filenames, FilenamePatrialMatch(part), maxCount);
+  auto maneAndPathFilter = GetNameAndPathFilter(part);
+  auto tags = ForEachFileRepository(file, IndexType::Filenames, FilenamePatrialMatch(std::move(maneAndPathFilter.first), std::move(maneAndPathFilter.second)), maxCount);
   std::vector<std::string> result;
   std::transform(tags.begin(), tags.end(), std::back_inserter(result), [](TagInfo const& tag) { return std::move(tag.file); });
   std::sort(result.begin(), result.end());

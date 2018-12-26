@@ -27,8 +27,11 @@ namespace
 
   std::string GetFileName(std::string const& path)
   {
-      auto pos = path.rfind('\\');
-      return pos == std::string::npos ? path : path.substr(pos + 1);
+    auto nameEnd = path.rbegin();
+    for (; nameEnd != path.rend() && *nameEnd == '\\' || *nameEnd == '/'; ++nameEnd);
+    auto trimedPath = nameEnd == path.rend() ? std::string() : std::string(path.begin(), nameEnd.base());
+    auto pos = trimedPath.find_last_of("/\\");
+    return pos == std::string::npos ? trimedPath : trimedPath.substr(pos + 1);
   }
 
   std::string ToLower(std::string const& str)
@@ -69,8 +72,9 @@ namespace
 
   bool HasFilenamePart(std::string const& path, std::string const& part)
   {
-    auto fileName = ToLower(GetFileName(path)).substr(0, part.length());
-    return fileName == ToLower(part);
+    auto partName = ToLower(GetFileName(part));
+    auto fileName = ToLower(GetFileName(path)).substr(0, partName.length());
+    return fileName == partName;
   }
 
   bool IsFullPath(std::string const& path)
@@ -369,6 +373,27 @@ namespace TESTS
       EXPECT_NO_FATAL_FAILURE(TestRepeatedFile(tagsFile, "", 10, 10));
       EXPECT_NO_FATAL_FAILURE(TestRepeatedFile(tagsFile, "5times.cpp", 0, 5));
       EXPECT_NO_FATAL_FAILURE(TestRepeatedFile(tagsFile, "5times", 0, 5));
+      EXPECT_NO_FATAL_FAILURE(TestRepeatedFile(tagsFile, "\\5times", 0, 5));
+      EXPECT_NO_FATAL_FAILURE(TestRepeatedFile(tagsFile, "/5times", 0, 5));
+      EXPECT_NO_FATAL_FAILURE(TestRepeatedFile(tagsFile, "/\\/5times", 0, 5));
+      EXPECT_NO_FATAL_FAILURE(TestRepeatedFile(tagsFile, "5times/", 0, 5));
+      EXPECT_NO_FATAL_FAILURE(TestRepeatedFile(tagsFile, "5times\\", 0, 5));
+      EXPECT_NO_FATAL_FAILURE(TestRepeatedFile(tagsFile, "5times/\\/", 0, 5));
+      EXPECT_NO_FATAL_FAILURE(TestRepeatedFile(tagsFile, "\\5times\\", 0, 5));
+      EXPECT_NO_FATAL_FAILURE(TestRepeatedFile(tagsFile, "/5times/", 0, 5));
+      EXPECT_NO_FATAL_FAILURE(TestRepeatedFile(tagsFile, "/\\/5times/\\/", 0, 5));
+      EXPECT_NO_FATAL_FAILURE(TestRepeatedFile(tagsFile, "folder1\\5times", 0, 1));
+      EXPECT_NO_FATAL_FAILURE(TestRepeatedFile(tagsFile, "folder1/5times", 0, 1));
+      EXPECT_NO_FATAL_FAILURE(TestRepeatedFile(tagsFile, "folder1/\\/5times", 0, 1));
+      EXPECT_NO_FATAL_FAILURE(TestRepeatedFile(tagsFile, "\\folder1/5times", 0, 1));
+      EXPECT_NO_FATAL_FAILURE(TestRepeatedFile(tagsFile, "/folder1/5times", 0, 1));
+      EXPECT_NO_FATAL_FAILURE(TestRepeatedFile(tagsFile, "/\\/folder1/5times", 0, 1));
+      EXPECT_NO_FATAL_FAILURE(TestRepeatedFile(tagsFile, "\\folder1/5times/", 0, 1));
+      EXPECT_NO_FATAL_FAILURE(TestRepeatedFile(tagsFile, "/folder1/5times\\", 0, 1));
+      EXPECT_NO_FATAL_FAILURE(TestRepeatedFile(tagsFile, "/\\/folder1/5times/\\/", 0, 1));
+      EXPECT_NO_FATAL_FAILURE(TestRepeatedFile(tagsFile, "folder1\\folder2\\folder3\\5times", 0, 1));
+      EXPECT_NO_FATAL_FAILURE(TestRepeatedFile(tagsFile, "folder1/folder2/folder3/5times", 0, 1));
+      EXPECT_NO_FATAL_FAILURE(TestRepeatedFile(tagsFile, "folder1/\\/folder2/\\/folder3/\\/5times", 0, 1));
       EXPECT_NO_FATAL_FAILURE(TestRepeatedFile(tagsFile, "10times.cpp", 0, 10));
       EXPECT_NO_FATAL_FAILURE(TestRepeatedFile(tagsFile, "10times", 0, 10));
       EXPECT_NO_FATAL_FAILURE(TestRepeatedFile(tagsFile, "10times.cpp", 10, 10));
