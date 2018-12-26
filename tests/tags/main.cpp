@@ -28,7 +28,7 @@ namespace
   std::string GetFileName(std::string const& path)
   {
     auto nameEnd = path.rbegin();
-    for (; nameEnd != path.rend() && *nameEnd == '\\' || *nameEnd == '/'; ++nameEnd);
+    for (; nameEnd != path.rend() && (*nameEnd == '\\' || *nameEnd == '/'); ++nameEnd);
     auto trimedPath = nameEnd == path.rend() ? std::string() : std::string(path.begin(), nameEnd.base());
     auto pos = trimedPath.find_last_of("/\\");
     return pos == std::string::npos ? trimedPath : trimedPath.substr(pos + 1);
@@ -371,6 +371,9 @@ namespace TESTS
       EXPECT_NO_FATAL_FAILURE(TestRepeatedFile(tagsFile, "", 0, 0));
       EXPECT_NO_FATAL_FAILURE(TestRepeatedFile(tagsFile, "", expectedTags, expectedTags));
       EXPECT_NO_FATAL_FAILURE(TestRepeatedFile(tagsFile, "", 10, 10));
+      EXPECT_NO_FATAL_FAILURE(TestRepeatedFile(tagsFile, "\\", 10, 10));
+      EXPECT_NO_FATAL_FAILURE(TestRepeatedFile(tagsFile, "/", 10, 10));
+      EXPECT_NO_FATAL_FAILURE(TestRepeatedFile(tagsFile, "/\\/", 10, 10));
       EXPECT_NO_FATAL_FAILURE(TestRepeatedFile(tagsFile, "5times.cpp", 0, 5));
       EXPECT_NO_FATAL_FAILURE(TestRepeatedFile(tagsFile, "5times", 0, 5));
       EXPECT_NO_FATAL_FAILURE(TestRepeatedFile(tagsFile, "\\5times", 0, 5));
