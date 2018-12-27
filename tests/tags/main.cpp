@@ -404,6 +404,27 @@ namespace TESTS
       EXPECT_NO_FATAL_FAILURE(TestRepeatedFile(tagsFile, "15times", 10, 10));
       EXPECT_NO_FATAL_FAILURE(TestRepeatedFile(tagsFile, "15times.cpp", 10, 15));
     }
+
+    void TestFindFile(std::string const& tagsFile, std::string const& path, std::string const& expectedSubpath, size_t expectedSize)
+    {
+      auto paths = FindFile(tagsFile.c_str(), path.c_str());
+      ASSERT_EQ(expectedSize, paths.size());
+      for (auto p : paths)
+      {
+        EXPECT_TRUE(!p.compare(p.length() - expectedSubpath.length(), expectedSubpath.length(), expectedSubpath));
+      }
+    }
+
+    void TestFindFile(std::string const& tagsFile)
+    {
+      size_t const expectedTags = 4;
+      ASSERT_NO_FATAL_FAILURE(LoadTagsFile(tagsFile, MultipleFileRepos, expectedTags));
+      EXPECT_NO_FATAL_FAILURE(TestFindFile(tagsFile, "", "", 0));
+      EXPECT_NO_FATAL_FAILURE(TestFindFile(tagsFile, "/", "", 0));
+      EXPECT_NO_FATAL_FAILURE(TestFindFile(tagsFile, "some/path/header", "", 0));
+      EXPECT_NO_FATAL_FAILURE(TestFindFile(tagsFile, "some/path/header.h", "some\\path\\header.h", 2));
+      EXPECT_NO_FATAL_FAILURE(TestFindFile(tagsFile, "some/path/header.h.extra.hpp", "some\\path\\header.h.extra.hpp", 2));
+    }
   };
 
   TEST_F(Tags, LoadsEmptyRepos)
@@ -517,6 +538,21 @@ namespace TESTS
   {
     ASSERT_NO_FATAL_FAILURE(LoadTagsFile("minimal_single_file_repos\\tags", MultipleFileRepos, 1));
     TestTagsLoadedForFile();
+  }
+
+  TEST_F(Tags, FindFileInCygwinIncludeFileRepos)
+  {
+    TestFindFile("include_file_repos\\tags.exuberant");
+  }
+
+  TEST_F(Tags, FindFileInExuberantIncludeFileRepos)
+  {
+    TestFindFile("include_file_repos\\tags.exuberant.w");
+  }
+
+  TEST_F(Tags, FindFileInUniversalIncludeFileRepos)
+  {
+    TestFindFile("include_file_repos\\tags.universal");
   }
 }
 

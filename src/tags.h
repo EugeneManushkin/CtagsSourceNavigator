@@ -52,6 +52,7 @@ void UnloadTags(const char* tagsFile);
 void UnloadAllTags();
 std::vector<TagInfo> Find(const char* name, const char* filename, int sortOptions = SortOptions::Default);
 std::vector<TagInfo> FindPartiallyMatchedTags(const char* file, const char* part, size_t maxCount, bool caseInsensitive, int sortOptions = SortOptions::Default);
+std::vector<std::string> FindFile(const char* file, const char* path);
 std::vector<std::string> FindPartiallyMatchedFile(const char* file, const char* part, size_t maxCount); 
 std::vector<TagInfo> FindClassMembers(const char* file, const char* classname, int sortOptions = SortOptions::Default);
 std::vector<TagInfo> FindFileSymbols(const char* file);

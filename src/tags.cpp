@@ -843,12 +843,13 @@ private:
   bool CaseSensitivity;
 };
 
-class FilenamePatrialMatch : public MatchVisitor
+class FilenameMatch : public MatchVisitor
 {
 public:
-  FilenamePatrialMatch(std::string&& namePart, std::string&& filter)
+  FilenameMatch(std::string&& namePart, std::string&& filter, bool comparationType)
     : MatchVisitor(std::move(namePart))
     , PathFilter(std::move(filter))
+    , ComparationType(comparationType)
   {
   }
 
@@ -860,7 +861,7 @@ public:
       throw std::runtime_error("Invalid tags file format");
 
     strbuf = GetFilename(++strbuf);
-    return FieldCompare(GetPattern().c_str(), strbuf, CaseInsensitive, PartialCompare);
+    return FieldCompare(GetPattern().c_str(), strbuf, CaseInsensitive, ComparationType);
   }
 
   bool Filter(TagInfo const& tag) const override
@@ -893,6 +894,7 @@ public:
 
 private:
   std::string PathFilter;
+  bool ComparationType;
 };
 
 class ClassMemberMatch : public MatchVisitor
@@ -1099,14 +1101,24 @@ static std::pair<std::string, std::string> GetNameAndPathFilter(char const* path
   return std::make_pair(std::move(name), std::string(path, nameBegin + 1));
 }
 
-std::vector<std::string> FindPartiallyMatchedFile(const char* file, const char* part, size_t maxCount)
+static std::vector<std::string> FindFile(const char* file, const char* part, bool comparationType, size_t maxCount)
 {
   auto maneAndPathFilter = GetNameAndPathFilter(part);
-  auto tags = ForEachFileRepository(file, IndexType::Filenames, FilenamePatrialMatch(std::move(maneAndPathFilter.first), std::move(maneAndPathFilter.second)), maxCount);
+  auto tags = ForEachFileRepository(file, IndexType::Filenames, FilenameMatch(std::move(maneAndPathFilter.first), std::move(maneAndPathFilter.second), comparationType), maxCount);
   std::vector<std::string> result;
   std::transform(tags.begin(), tags.end(), std::back_inserter(result), [](TagInfo const& tag) { return std::move(tag.file); });
   std::sort(result.begin(), result.end());
   return result;
+}
+
+std::vector<std::string> FindFile(const char* file, const char* path)
+{
+  return FindFile(file, path, FullCompare, 0);
+}
+
+std::vector<std::string> FindPartiallyMatchedFile(const char* file, const char* part, size_t maxCount)
+{
+  return FindFile(file, part, PartialCompare, maxCount);
 }
 
 std::vector<TagInfo> FindClassMembers(const char* file, const char* classname, int sortOptions)
