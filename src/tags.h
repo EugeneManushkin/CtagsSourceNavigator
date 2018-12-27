@@ -32,7 +32,7 @@ struct TagInfo{
   char type;
   std::string info;
 
-  TagInfo():lineno(-1){}
+  TagInfo():type(0),lineno(-1){}
 };
 
 class SortOptions

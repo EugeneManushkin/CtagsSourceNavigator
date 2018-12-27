@@ -1131,6 +1131,9 @@ enum class FormatTagFlag
 //TODO: rework
 WideString FormatTagInfo(TagInfo const& ti, size_t maxid, size_t maxDeclaration, size_t maxfile, FormatTagFlag formatFlag)
 {
+  if (ti.name.empty())
+    return ToString(TrimFilename(ti.file, maxfile));
+
   std::string name = ti.name.substr(0, maxid);
   if (formatFlag == FormatTagFlag::DisplayOnlyName)
     return ToString(name);
@@ -1401,6 +1404,26 @@ static std::string GetWord(int offset=0)
   while(end<egs.StringLength-1 && isident(egs.StringText[end+1]))end++;
   if(start==end || (!isident(egs.StringText[start])))return "";
   return ToStdString(egs.StringText).substr(start, end-start+1);
+}
+
+static std::string GetStringLiteral()
+{
+  EditorInfo ei = GetCurrentEditorInfo();
+  EditorGetString egs = {sizeof(EditorGetString)};
+  egs.StringNumber = -1;
+  I.EditorControl(ei.EditorID, ECTL_GETSTRING, 0, &egs);
+  if(ei.CurPos > egs.StringLength)
+     return std::string();
+
+  auto pos = static_cast<size_t>(ei.CurPos < 0 ? 0 : ei.CurPos);
+  std::string line = ToStdString(egs.StringText);
+  auto closeBracketPos = line.find_first_of("\"'>", pos + 1);
+  if (closeBracketPos == std::string::npos)
+    return std::string();
+
+  std::unordered_map<char, char> brackets = {{'\'', '\''}, {'"', '"'}, {'>', '<'} };
+  auto openBraketPos = line.rfind(brackets[line[closeBracketPos]], pos);
+  return openBraketPos != std::string::npos && openBraketPos < closeBracketPos ? line.substr(openBraketPos + 1, closeBracketPos - openBraketPos - 1) : std::string();
 }
 
 /*static const char* GetType(char type)
@@ -2134,12 +2157,8 @@ static std::vector<TagInfo>::const_iterator AdjustToContext(std::vector<TagInfo>
   return Reorder(context, tags);
 }
 
-static void GotoDeclaration(char const* fileName)
+static void GotoDeclaration(char const* fileName, std::string word)
 {
-  auto word = GetWord();
-  if(word.empty())
-    return;
-
   auto tags = Find(word.c_str(), fileName, GetSortOptions(config));
   if (tags.empty())
     throw Error(MNotFound);
@@ -2152,6 +2171,29 @@ static void GotoDeclaration(char const* fileName)
     NavigateTo(&tags.back());
   else
     NavigateToTag(std::move(tags), static_cast<intptr_t>(std::distance(tags.cbegin(), border)), FormatTagFlag::DisplayFile);
+}
+
+static void GotoFile(char const* fileName, std::string path)
+{
+  auto paths = FindFile(fileName, path.c_str());
+  if (paths.empty())
+    return;
+
+  std::vector<TagInfo> tags;
+  std::transform(paths.begin(), paths.end(), std::back_inserter(tags), [](std::string const& path) { TagInfo tag = TagInfo(); tag.file = path; return tag; });
+  if (tags.size() == 1)
+    NavigateTo(&tags.back());
+  else
+    NavigateToTag(std::move(tags), tags.size(), FormatTagFlag::DisplayFile);
+}
+
+static void FindSymbol(char const* fileName)
+{
+  std::string str;
+  if (!(str = GetStringLiteral()).empty())
+    GotoFile(fileName, str);
+  else if (!(str = GetWord()).empty())
+    GotoDeclaration(fileName, str);
 }
 
 static void CompleteName(char const* fileName, EditorInfo const& ei)
@@ -2239,7 +2281,7 @@ HANDLE WINAPI OpenW(const struct OpenInfo *info)
     {
       case miFindSymbol:
       {
-        SafeCall(std::bind(GotoDeclaration, ToStdString(fileName).c_str()));
+        SafeCall(std::bind(FindSymbol, ToStdString(fileName).c_str()));
       }break;
       case miGoBack:
       {
