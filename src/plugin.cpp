@@ -1406,6 +1406,12 @@ static std::string GetWord(int offset=0)
   return ToStdString(egs.StringText).substr(start, end-start+1);
 }
 
+//TODO: remove
+static bool IsCppInclude(std::string const& str)
+{
+  return std::regex_match(str, std::regex("^\\s*#\\s*include.+"));
+}
+
 static std::string GetStringLiteral()
 {
   EditorInfo ei = GetCurrentEditorInfo();
@@ -1421,9 +1427,10 @@ static std::string GetStringLiteral()
   if (closeBracketPos == std::string::npos)
     return std::string();
 
-  std::unordered_map<char, char> brackets = {{'\'', '\''}, {'"', '"'}, {'>', '<'} };
-  auto openBraketPos = line.rfind(brackets[line[closeBracketPos]], pos);
-  return openBraketPos != std::string::npos && openBraketPos < closeBracketPos ? line.substr(openBraketPos + 1, closeBracketPos - openBraketPos - 1) : std::string();
+  char openBracket = line[closeBracketPos] == '>' ? '<' : line[closeBracketPos];
+  auto openBraketPos = line.rfind(openBracket, pos);
+//TODO: remove language depending logic
+  return openBraketPos != std::string::npos && openBraketPos < closeBracketPos && (openBracket != '<' || IsCppInclude(line)) ? line.substr(openBraketPos + 1, closeBracketPos - openBraketPos - 1) : std::string();
 }
 
 /*static const char* GetType(char type)
