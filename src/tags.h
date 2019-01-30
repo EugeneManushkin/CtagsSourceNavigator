@@ -20,20 +20,10 @@
 #ifndef __TAGS_H__
 #define __TAGS_H__
 
+#include "tag_info.h"
+
 #include <string>
 #include <vector>
-
-struct TagInfo{
-  std::string name;
-  std::string file;
-  std::string declaration;
-  std::string re;
-  int lineno;
-  char type;
-  std::string info;
-
-  TagInfo():type(0),lineno(-1){}
-};
 
 class SortOptions
 {
