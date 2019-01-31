@@ -31,28 +31,30 @@ namespace
     {
       std::vector<std::pair<TagInfo, size_t>> result;
       auto limit = Capacity;
-      for (auto i = Frequency.begin(); limit > 0 && i != Frequency.end(); ++i, --limit)
+      for (auto i = Frequency.rbegin(); limit > 0 && i != Frequency.rend(); ++i, --limit)
         result.push_back(std::make_pair(*i->second, i->first));
 
       return result;
     }
 
-    virtual void Insert(TagInfo const& tag) override
+    virtual void Insert(TagInfo const& tag, size_t freq) override
     {
-      auto found = Tags.lower_bound(tag);
-      size_t freq = 1;
-      if (found != Tags.end() && !TagLess()(tag, found->first))
+      auto desiredTag = Tags.lower_bound(tag);
+      bool found = desiredTag != Tags.end() && !TagLess()(tag, desiredTag->first);
+      freq = !freq ? 1 : freq;
+      freq += found ? desiredTag->second->first : 0;
+      if (found && Capacity >= Tags.size())
       {
-        freq = found->second->first + 1;
-        Frequency.erase(found->second);
+        Frequency.erase(desiredTag->second);
       }
       else
       {
-        FitToCapacity();
-        found = Tags.insert(found, std::make_pair(tag, Frequency.end()));
+        desiredTag = Capacity <= Tags.size() ? Tags.end() : desiredTag;
+        Resize(Capacity - 1);
+        desiredTag = Tags.insert(desiredTag, std::make_pair(tag, Frequency.end()));
       }
 
-      found->second = Frequency.insert(std::make_pair(freq, &found->first));
+      desiredTag->second = Frequency.insert(std::make_pair(freq, &desiredTag->first));
     }
 
     virtual void SetCapacity(size_t capacity) override
@@ -61,12 +63,12 @@ namespace
     }
 
   private:
-    void FitToCapacity()
+    void Resize(size_t newSize)
     {
-      for (auto size = Tags.size(); size > Capacity; --size)
+      for (auto size = Tags.size(); size > newSize; --size)
       {
-        Tags.erase(*Frequency.rbegin()->second);
-        Frequency.erase(--Frequency.end());
+        Tags.erase(*Frequency.begin()->second);
+        Frequency.erase(Frequency.begin());
       }
     }
 
