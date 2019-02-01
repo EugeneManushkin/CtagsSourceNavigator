@@ -1,5 +1,7 @@
 #include "tags_cache.h"
 
+#include <algorithm>
+#include <iterator>
 #include <map>
 
 namespace
@@ -27,13 +29,21 @@ namespace
     {
     }
 
-    virtual std::vector<std::pair<TagInfo, size_t>> Get() const override
+    virtual std::vector<TagInfo> Get(size_t limit) const override
+    {
+      std::vector<TagInfo> result;
+      limit = !limit ? Capacity : std::min(Capacity, limit);
+      for (auto i = Frequency.rbegin(); limit > 0 && i != Frequency.rend(); ++i, --limit)
+        result.push_back(*i->second);
+
+      return result;
+    }
+
+    virtual std::vector<std::pair<TagInfo, size_t>> GetStat() const override
     {
       std::vector<std::pair<TagInfo, size_t>> result;
-      auto limit = Capacity;
-      for (auto i = Frequency.rbegin(); limit > 0 && i != Frequency.rend(); ++i, --limit)
-        result.push_back(std::make_pair(*i->second, i->first));
-
+      result.reserve(Frequency.size());
+      std::transform(Frequency.rbegin(), Frequency.rend(), std::back_inserter(result), [](FrequencyToTagInfo::value_type const& v) {return std::make_pair(*v.second, v.first);});
       return result;
     }
 
