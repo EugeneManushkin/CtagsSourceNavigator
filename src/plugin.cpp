@@ -1236,28 +1236,26 @@ public:
 
   std::vector<WideString> ApplyFilter(char const* filter) override
   {
-    Paths = FindPartiallyMatchedFile(File.c_str(), filter, config.max_results);
+    Tags = FindPartiallyMatchedFile(File.c_str(), filter, config.max_results);
     auto maxfile = GetMenuWidth();
     std::vector<WideString> menuStrings;
-    std::transform(Paths.begin(), Paths.end(), std::back_inserter(menuStrings), [=](std::string const& path) {return ToString(TrimFilename(path, maxfile));});
+    std::transform(Tags.begin(), Tags.end(), std::back_inserter(menuStrings), [=](TagInfo const& tag) {return ToString(TrimFilename(tag.file, maxfile));});
     return menuStrings;
   }
 
   virtual std::string GetClipboardText(intptr_t index) const override
   {
-    return Paths.at(index);
+    return Tags.at(index).file;
   }
 
   virtual TagInfo GetTag(intptr_t index) const override
   {
-    TagInfo result = {};
-    result.file = Paths.at(index);
-    return result;
+    return Tags.at(index);
   }
 
 private:
   std::string const File;
-  std::vector<std::string> Paths;
+  std::vector<TagInfo> Tags;
 };
 
 class FilterMenuVisitor : public LookupMenuVisitor
@@ -2186,15 +2184,10 @@ static void GotoDeclaration(char const* fileName, std::string word)
 
 static void GotoFile(char const* fileName, std::string path)
 {
-  auto paths = FindFile(fileName, path.c_str());
-  if (paths.empty())
-    return;
-
-  std::vector<TagInfo> tags;
-  std::transform(paths.begin(), paths.end(), std::back_inserter(tags), [](std::string const& path) { TagInfo tag = TagInfo(); tag.file = path; return tag; });
+  auto tags = FindFile(fileName, path.c_str());
   if (tags.size() == 1)
     NavigateTo(&tags.back());
-  else
+  else if (!tags.empty())
     NavigateToTag(std::move(tags), tags.size(), FormatTagFlag::DisplayFile);
 }
 

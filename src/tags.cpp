@@ -1116,22 +1116,20 @@ static std::pair<std::string, std::string> GetNameAndPathFilter(char const* path
   return std::make_pair(std::move(name), std::string(path, nameBegin + 1));
 }
 
-static std::vector<std::string> FindFile(const char* file, const char* part, bool comparationType, size_t maxCount)
+static std::vector<TagInfo> FindFile(const char* file, const char* part, bool comparationType, size_t maxCount)
 {
   auto maneAndPathFilter = GetNameAndPathFilter(part);
   auto tags = ForEachFileRepository(file, IndexType::Filenames, FilenameMatch(std::move(maneAndPathFilter.first), std::move(maneAndPathFilter.second), comparationType), maxCount);
-  std::vector<std::string> result;
-  std::transform(tags.begin(), tags.end(), std::back_inserter(result), [](TagInfo const& tag) { return std::move(tag.file); });
-  std::sort(result.begin(), result.end());
-  return result;
+  std::for_each(tags.begin(), tags.end(), [](TagInfo& tag) {TagInfo tmp; tmp.Owner = std::move(tag.Owner); tmp.file = std::move(tag.file); std::swap(tmp, tag);});
+  return SortTags(std::move(tags), "", SortOptions::Default);
 }
 
-std::vector<std::string> FindFile(const char* file, const char* path)
+std::vector<TagInfo> FindFile(const char* file, const char* path)
 {
   return FindFile(file, path, FullCompare, 0);
 }
 
-std::vector<std::string> FindPartiallyMatchedFile(const char* file, const char* part, size_t maxCount)
+std::vector<TagInfo> FindPartiallyMatchedFile(const char* file, const char* part, size_t maxCount)
 {
   return FindFile(file, part, PartialCompare, maxCount);
 }

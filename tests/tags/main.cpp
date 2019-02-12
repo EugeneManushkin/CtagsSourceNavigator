@@ -88,6 +88,13 @@ namespace
     return stat(filename.c_str(), &st) == -1 ? 0 : std::max(st.st_mtime, st.st_ctime);
   }
 
+  std::vector<std::string> ToStrings(std::vector<TagInfo>&& tags)
+  {
+    std::vector<std::string> result;
+    std::transform(tags.begin(), tags.end(), std::back_inserter(result), [](TagInfo const& tag) { return std::move(tag.file); });
+    return result;
+  }
+
   struct MetaTag
   {
     MetaTag(std::string const& line, std::string const& repoRoot)
@@ -281,7 +288,7 @@ namespace TESTS
       std::string part = fileName + "extra";
       while (!part.empty())
       {
-        auto paths = FindPartiallyMatchedFile(metaTag.FullPath.c_str(), part.c_str(), 0);
+        auto paths = ToStrings(FindPartiallyMatchedFile(metaTag.FullPath.c_str(), part.c_str(), 0));
         ASSERT_EQ(part.length() > fileName.length(), paths.empty()) << "Part: " << part;
         ASSERT_EQ(part.length() > fileName.length(), std::find_if(paths.begin(), paths.end(), std::bind(HasFilenamePart, std::placeholders::_1, part)) == paths.end()) << "Part: " << part;
         part.resize(part.length() - 1);
@@ -353,7 +360,7 @@ namespace TESTS
 
     void TestRepeatedFile(std::string const& reposFile, std::string const& filePart, size_t maxCount, size_t expectedCount)
     {
-      auto paths = FindPartiallyMatchedFile(reposFile.c_str(), filePart.c_str(), maxCount);
+      auto paths = ToStrings(FindPartiallyMatchedFile(reposFile.c_str(), filePart.c_str(), maxCount));
       ASSERT_EQ(expectedCount, paths.size());
       if (filePart.empty())
         return;
@@ -407,7 +414,7 @@ namespace TESTS
 
     void TestFindFile(std::string const& tagsFile, std::string const& path, std::string const& expectedSubpath, size_t expectedSize)
     {
-      auto paths = FindFile(tagsFile.c_str(), path.c_str());
+      auto paths = ToStrings(FindFile(tagsFile.c_str(), path.c_str()));
       ASSERT_EQ(expectedSize, paths.size());
       for (auto p : paths)
       {
