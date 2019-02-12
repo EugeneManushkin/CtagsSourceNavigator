@@ -1206,7 +1206,8 @@ public:
 
   std::vector<WideString> ApplyFilter(char const* filter) override
   {
-    Tags = FindPartiallyMatchedTags(File.c_str(), filter, config.max_results, !config.casesens, GetSortOptions(config));
+    Tags = !*filter ? GetCachedNames(File.c_str(), config.max_results) : Tags;
+    Tags = !!*filter || Tags.empty() ? FindPartiallyMatchedTags(File.c_str(), filter, config.max_results, !config.casesens, GetSortOptions(config)) : Tags;
     return GetMenuStrings(Tags);
   }
 
@@ -1674,6 +1675,9 @@ void PlainNavigator::Goto(TagInfo const& tag, bool setPanelDir)
     if (line < 0)
       return;
   }
+
+  if (!tag.name.empty())
+    CacheName(tag, config.max_results);
 
   Move(ToString(tag.file), line, setPanelDir);
 }

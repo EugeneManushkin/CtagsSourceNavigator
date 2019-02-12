@@ -34,6 +34,7 @@
 #define NOMINMAX
 #include <windows.h>
 #include "tags.h"
+#include "tags_cache.h"
 
 static bool FileExists(char const* filename)
 {
@@ -62,6 +63,7 @@ struct TagFileInfo{
     , indexFile(filename + ".idx")
     , singlefilerepos(singleFileRepos)
     , modtm(0)
+    , NamesCache(TagsInternal::CreateTagsCache(0))
   {
     if (filename.empty() || IsPathSeparator(filename.back()))
       throw std::logic_error("Invalid tags file name");
@@ -95,6 +97,17 @@ struct TagFileInfo{
 
   int Load();
 
+  void CacheName(TagInfo const& tag, size_t cacheSize)
+  {
+    NamesCache->SetCapacity(cacheSize);
+    NamesCache->Insert(tag);
+  }
+
+  std::vector<TagInfo> GetCachedNames(size_t limit) const
+  {
+    return NamesCache->Get(limit);
+  }
+
 private:
   int CreateIndex(time_t tagsModTime, bool singleFileRepos);
   bool LoadIndex(time_t tagsModTime);
@@ -111,6 +124,7 @@ private:
   bool singlefilerepos;
   bool fullpathrepo;
   time_t modtm;
+  std::shared_ptr<TagsInternal::TagsCache> NamesCache;
 };
 
 using TagFileInfoPtr = std::shared_ptr<TagFileInfo>;
@@ -1016,6 +1030,7 @@ static std::vector<TagInfo> GetMatchedTags(TagFileInfo* fi, OffsetCont const& of
     TagInfo tag;
     if (ParseLine(line.c_str(), *fi, tag) && visitor.Filter(tag))
     {
+      tag.Owner = {fi->GetName(), offsets[i]};
       result.push_back(std::move(tag));
       maxCount -= maxCount > 0 ? 1 : 0;
     }
@@ -1227,4 +1242,26 @@ inline bool TagsOpposite(TagInfo const& left, TagInfo const& right)
 std::vector<TagInfo>::const_iterator Reorder(TagInfo const& context, std::vector<TagInfo>& tags)
 {
   return std::stable_partition(tags.begin(), tags.end(), [&](TagInfo const& tag) { return TagsOpposite(tag, context); });
+}
+
+void CacheName(TagInfo const& tag, size_t cacheSize)
+{
+  auto repos = std::find_if(files.begin(), files.end(), [&](TagFileInfoPtr const& repos) {return repos->HasName(tag.Owner.TagsFile.c_str());});
+  if (repos != files.end())
+    (*repos)->CacheName(tag, cacheSize);
+}
+
+std::vector<TagInfo> GetCachedNames(const char* file, size_t limit)
+{
+  std::vector<TagInfo> result;
+  for (auto const& repos : files)
+  {
+    if (!repos->GetRelativePath(file))
+      continue;
+
+    auto tags = repos->GetCachedNames(limit);
+    std::move(tags.begin(), tags.end(), std::back_inserter(result));
+  }
+
+  return result;
 }
