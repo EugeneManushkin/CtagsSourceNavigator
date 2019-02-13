@@ -64,6 +64,7 @@ struct TagFileInfo{
     , singlefilerepos(singleFileRepos)
     , modtm(0)
     , NamesCache(TagsInternal::CreateTagsCache(0))
+    , FilesCache(TagsInternal::CreateTagsCache(0))
   {
     if (filename.empty() || IsPathSeparator(filename.back()))
       throw std::logic_error("Invalid tags file name");
@@ -97,15 +98,21 @@ struct TagFileInfo{
 
   int Load();
 
-  void CacheName(TagInfo const& tag, size_t cacheSize)
+  void CacheTag(TagInfo const& tag, size_t cacheSize)
   {
-    NamesCache->SetCapacity(cacheSize);
-    NamesCache->Insert(tag);
+    TagsInternal::TagsCache& cache = tag.name.empty() ? *FilesCache : *NamesCache;
+    cache.SetCapacity(cacheSize);
+    cache.Insert(tag);
   }
 
   std::vector<TagInfo> GetCachedNames(size_t limit) const
   {
     return NamesCache->Get(limit);
+  }
+
+  std::vector<TagInfo> GetCachedFiles(size_t limit) const
+  {
+    return FilesCache->Get(limit);
   }
 
 private:
@@ -125,6 +132,7 @@ private:
   bool fullpathrepo;
   time_t modtm;
   std::shared_ptr<TagsInternal::TagsCache> NamesCache;
+  std::shared_ptr<TagsInternal::TagsCache> FilesCache;
 };
 
 using TagFileInfoPtr = std::shared_ptr<TagFileInfo>;
@@ -1242,14 +1250,14 @@ std::vector<TagInfo>::const_iterator Reorder(TagInfo const& context, std::vector
   return std::stable_partition(tags.begin(), tags.end(), [&](TagInfo const& tag) { return TagsOpposite(tag, context); });
 }
 
-void CacheName(TagInfo const& tag, size_t cacheSize)
+void CacheTag(TagInfo const& tag, size_t cacheSize)
 {
   auto repos = std::find_if(files.begin(), files.end(), [&](TagFileInfoPtr const& repos) {return repos->HasName(tag.Owner.TagsFile.c_str());});
   if (repos != files.end())
-    (*repos)->CacheName(tag, cacheSize);
+    (*repos)->CacheTag(tag, cacheSize);
 }
 
-std::vector<TagInfo> GetCachedNames(const char* file, size_t limit)
+std::vector<TagInfo> GetCachedTags(const char* file, size_t limit, bool getFiles)
 {
   std::vector<TagInfo> result;
   for (auto const& repos : files)
@@ -1257,7 +1265,7 @@ std::vector<TagInfo> GetCachedNames(const char* file, size_t limit)
     if (!repos->GetRelativePath(file))
       continue;
 
-    auto tags = repos->GetCachedNames(limit);
+    auto tags = getFiles ? repos->GetCachedFiles(limit) : repos->GetCachedNames(limit);
     std::move(tags.begin(), tags.end(), std::back_inserter(result));
   }
 

@@ -1206,7 +1206,7 @@ public:
 
   std::vector<WideString> ApplyFilter(char const* filter) override
   {
-    Tags = !*filter ? GetCachedNames(File.c_str(), config.max_results) : Tags;
+    Tags = !*filter ? GetCachedTags(File.c_str(), config.max_results, false) : Tags;
     Tags = !!*filter || Tags.empty() ? FindPartiallyMatchedTags(File.c_str(), filter, config.max_results, !config.casesens, GetSortOptions(config)) : Tags;
     return GetMenuStrings(Tags);
   }
@@ -1236,7 +1236,8 @@ public:
 
   std::vector<WideString> ApplyFilter(char const* filter) override
   {
-    Tags = FindPartiallyMatchedFile(File.c_str(), filter, config.max_results);
+    Tags = !*filter ? GetCachedTags(File.c_str(), config.max_results, true) : Tags;
+    Tags = !!*filter || Tags.empty() ? FindPartiallyMatchedFile(File.c_str(), filter, config.max_results) : Tags;
     auto maxfile = GetMenuWidth();
     std::vector<WideString> menuStrings;
     std::transform(Tags.begin(), Tags.end(), std::back_inserter(menuStrings), [=](TagInfo const& tag) {return ToString(TrimFilename(tag.file, maxfile));});
@@ -1674,9 +1675,7 @@ void PlainNavigator::Goto(TagInfo const& tag, bool setPanelDir)
       return;
   }
 
-  if (!tag.name.empty())
-    CacheName(tag, config.max_results);
-
+  CacheTag(tag, config.max_results);
   Move(ToString(tag.file), line, setPanelDir);
 }
 
