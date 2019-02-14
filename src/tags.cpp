@@ -723,11 +723,6 @@ int TagFileInfo::CreateIndex(time_t tagsModTime, bool singleFileRepos)
     poolfirst=pool;
   }
   fclose(g);
-
-  utimbuf tm;
-  tm.actime=fi->modtm;
-  tm.modtime=fi->modtm;
-  utime(fi->indexFile.c_str(),&tm);
   return 1;
 }
 
