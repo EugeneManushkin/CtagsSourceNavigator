@@ -822,8 +822,10 @@ int Load(const char* filename, bool singleFileRepos, size_t& symbolsLoaded)
   auto iter = std::find_if(files.begin(), files.end(), [&](TagFileInfoPtr const& file) {return file->HasName(filename);});
   TagFileInfoPtr fi = iter == files.end() ? std::shared_ptr<TagFileInfo>(new TagFileInfo(filename, singleFileRepos)) : *iter;
   if (auto err = fi->Load(symbolsLoaded))
-//TODO: consider removing iter if load failed
+  {
+    files.erase(iter);
     return err;
+  }
 
   if (iter == files.end())
     files.push_back(fi);
