@@ -823,7 +823,7 @@ int Load(const char* filename, bool singleFileRepos, size_t& symbolsLoaded)
   TagFileInfoPtr fi = iter == files.end() ? std::shared_ptr<TagFileInfo>(new TagFileInfo(filename, singleFileRepos)) : *iter;
   if (auto err = fi->Load(symbolsLoaded))
   {
-    files.erase(iter);
+    files.erase(iter, iter != files.end() ? iter + 1: iter);
     return err;
   }
 
