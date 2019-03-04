@@ -2074,10 +2074,20 @@ static WideString SearchTagsFile(WideString const& fileName)
   return tagsFile;
 }
 
+static bool LoadMultipleTags(std::vector<std::string> const& tags)
+{
+  auto errCount = 0;
+  for (auto const& tag : tags)
+    errCount += SafeCall([&tag]() { LoadTagsImpl(tag); return 0; }, 1);
+
+  return errCount < tags.size();
+}
+
 static bool EnsureTagsLoaded(WideString const& fileName, bool createTempTags)
 {
-  if (TagsLoadedForFile(ToStdString(fileName).c_str()))
-    return true;
+  auto tags = GetLoadedTags(ToStdString(fileName).c_str());
+  if (!tags.empty())
+    return LoadMultipleTags(tags);
 
   auto tagsFile = IsInTempDirectory(fileName) ? WideString() : SearchTagsFile(fileName);
   if (tagsFile.empty())

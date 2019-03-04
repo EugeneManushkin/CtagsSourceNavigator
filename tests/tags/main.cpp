@@ -323,7 +323,7 @@ namespace TESTS
 
     void TestFileBelongsToRepo(char const* file, bool belongs)
     {
-      EXPECT_EQ(belongs, TagsLoadedForFile(file)) << "File: " << file;
+      EXPECT_EQ(belongs, !GetLoadedTags(file).empty()) << "File: " << file;
       EXPECT_EQ(belongs, !Find("main", file).empty()) << "File: " << file;
     }
 

@@ -1189,6 +1189,18 @@ std::vector<std::string> GetFiles()
   return result;
 }
 
+std::vector<std::string> GetLoadedTags(const char* file)
+{
+  std::vector<std::string> result;
+  for (auto const& repos : files)
+  {
+    if (repos->GetRelativePath(file))
+      result.push_back(repos->GetName());
+  }
+
+  return result;
+}
+
 void UnloadTags(const char* tagsFile)
 {
   auto pos = std::find_if(files.begin(), files.end(), [&](TagFileInfoPtr const& repos) {return repos->HasName(tagsFile);});
@@ -1213,11 +1225,6 @@ bool IsTagFile(const char* file)
   fclose(f);
   return result && !pattern.compare(0, std::string::npos, result, pattern.length());
 };
-
-bool TagsLoadedForFile(const char* file)
-{
-  return std::find_if(files.begin(), files.end(), [&](TagFileInfoPtr const& repos) {return repos->GetRelativePath(file); }) != files.end();
-}
 
 std::vector<TagInfo>::const_iterator FindContextTag(std::vector<TagInfo> const& tags, char const* fileName, int lineNumber, char const* lineText)
 {
