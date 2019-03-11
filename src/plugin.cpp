@@ -193,22 +193,27 @@ private:
 
 VisitedTagsLru VisitedTags(0);
 
+static const wchar_t* GetMsg(int MsgId);
+WideString ToString(std::string const& str);
 //TODO: Make additional fields, replace throw std::exception with throw Error(code)
 class Error
 {
 public:
-  Error(int code)
+  Error(int code, std::string const& fieldName = "", std::string const& fieldValue = "")
     : Code(code)
+    , Field(std::move(fieldName), std::move(fieldValue))
   {
   }
 
-  int GetCode() const
+  WideString What() const
   {
-    return Code;
+    auto message = WideString(GetMsg(Code));
+    return Field.first.empty() ? message : message + L"\n" + ToString(Field.first) + L": " + ToString(Field.second);
   }
 
 private:
   int Code;
+  std::pair<std::string, std::string> Field;
 };
 
 //TODO: Synchronization must be reworked
@@ -274,8 +279,9 @@ GUID StringToGuid(const std::string& str)
 //TODO: determine MaxMenuWidth depending on max Far Manager window width
 size_t const MaxMenuWidth = 120;
 
-WideString ToString(std::string const& str, UINT codePage = CP_ACP)
+WideString ToString(std::string const& str)
 {
+  UINT const codePage = CP_ACP;
   auto sz = MultiByteToWideChar(codePage, 0, str.c_str(), static_cast<int>(str.length()), nullptr, 0);
   if (!sz)
     return WideString();
@@ -285,8 +291,9 @@ WideString ToString(std::string const& str, UINT codePage = CP_ACP)
   return WideString(buffer.begin(), buffer.end());
 }
 
-std::string ToStdString(WideString const& str, UINT codePage = CP_ACP)
+std::string ToStdString(WideString const& str)
 {
+  UINT const codePage = CP_ACP;
   auto sz = WideCharToMultiByte(codePage, 0, str.c_str(), static_cast<int>(str.length()), nullptr, 0, nullptr, nullptr);
   if (!sz)
     return std::string();
@@ -367,7 +374,7 @@ auto SafeCall(CallType call, decltype(call()) errorResult) ->decltype(call())
   }
   catch(Error const& err)
   {
-    Msg(err.GetCode());
+    Msg(err.What().c_str());
   }
 
   return errorResult;
@@ -950,7 +957,7 @@ static size_t LoadTagsImpl(std::string const& tagsFile, bool singleFileRepos = f
   size_t symbolsLoaded = 0;
   auto message = LongOperationMessage(GetMsg(MLoadingTags));
   if (auto err = Load(tagsFile.c_str(), singleFileRepos, symbolsLoaded))
-    throw Error(err == ENOENT ? MEFailedToOpen : MFailedToWriteIndex);
+    throw Error(err == ENOENT ? MEFailedToOpen : MFailedToWriteIndex, "Tags file", tagsFile);
 
   return symbolsLoaded;
 }
@@ -2074,10 +2081,20 @@ static WideString SearchTagsFile(WideString const& fileName)
   return tagsFile;
 }
 
+static bool LoadMultipleTags(std::vector<std::string> const& tags)
+{
+  auto errCount = 0;
+  for (auto const& tag : tags)
+    errCount += SafeCall([&tag]() { LoadTagsImpl(tag); return 0; }, 1);
+
+  return errCount < tags.size();
+}
+
 static bool EnsureTagsLoaded(WideString const& fileName, bool createTempTags)
 {
-  if (TagsLoadedForFile(ToStdString(fileName).c_str()))
-    return true;
+  auto tags = GetLoadedTags(ToStdString(fileName).c_str());
+  if (!tags.empty())
+    return LoadMultipleTags(tags);
 
   auto tagsFile = IsInTempDirectory(fileName) ? WideString() : SearchTagsFile(fileName);
   if (tagsFile.empty())

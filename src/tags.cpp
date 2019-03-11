@@ -46,6 +46,11 @@ inline bool IsPathSeparator(std::string::value_type c)
     return c == '/' || c == '\\';
 }
 
+static std::shared_ptr<FILE> FOpen(char const* path, char const* mode)
+{
+  return std::shared_ptr<FILE>(fopen(path, mode), [](FILE* f) { if (f) fclose(f); });
+}
+
 using OffsetType = uint32_t;
 using OffsetCont = std::vector<OffsetType>;
 enum class IndexType
@@ -62,15 +67,15 @@ struct TagFileInfo{
     : filename(fname)
     , indexFile(filename + ".idx")
     , singlefilerepos(singleFileRepos)
-    , modtm(0)
+    , loaded(false)
     , NamesCache(TagsInternal::CreateTagsCache(0))
     , FilesCache(TagsInternal::CreateTagsCache(0))
   {
     if (filename.empty() || IsPathSeparator(filename.back()))
       throw std::logic_error("Invalid tags file name");
-  }
 
-  OffsetCont offsets;
+    LoadCache();
+  }
 
   char const* GetRelativePath(char const* fileName) const;
 
@@ -89,14 +94,9 @@ struct TagFileInfo{
     return filename;
   }
 
-  FILE* OpenTags()
-  {
-    return !Load() ? fopen(filename.c_str(), "rb") : nullptr;
-  }
+  std::shared_ptr<FILE> OpenTags(OffsetCont& offsets, IndexType index);
 
-  OffsetCont GetOffsets(IndexType type);
-
-  int Load();
+  int Load(size_t& symbolsLoaded);
 
   void CacheTag(TagInfo const& tag, size_t cacheSize)
   {
@@ -116,12 +116,13 @@ struct TagFileInfo{
   }
 
 private:
-  int CreateIndex(time_t tagsModTime, bool singleFileRepos);
-  bool LoadIndex(time_t tagsModTime);
-  FILE* OpenIndex()
+  bool CreateIndex(time_t tagsModTime, bool singleFileRepos);
+  bool LoadCache();
+  std::shared_ptr<FILE> OpenIndex();
+  OffsetCont GetOffsets(FILE* f, IndexType type);
+  bool Synchronized()
   {
-    modtm = !FileExists(indexFile.c_str()) ? 0 : modtm;
-    return !Load() ? fopen(indexFile.c_str(), "rb") : nullptr;
+    return !!OpenIndex();
   }
 
   std::string filename;
@@ -130,9 +131,10 @@ private:
   std::string singlefile;
   bool singlefilerepos;
   bool fullpathrepo;
-  time_t modtm;
+  bool loaded;
   std::shared_ptr<TagsInternal::TagsCache> NamesCache;
   std::shared_ptr<TagsInternal::TagsCache> FilesCache;
+  OffsetCont NamesOffsets;
 };
 
 using TagFileInfoPtr = std::shared_ptr<TagFileInfo>;
@@ -168,7 +170,7 @@ static bool ReadSignature(FILE* f)
   return true;
 }
 
-static bool ReadFilePath(FILE* f, std::string& filePath)
+static bool ReadString(FILE* f, std::string& filePath)
 {
   uint32_t pathLen = 0;
   if (fread(&pathLen, sizeof(pathLen), 1, f) != 1)
@@ -190,9 +192,24 @@ static bool ReadFilePath(FILE* f, std::string& filePath)
   return true;
 }
 
+static bool SkipString(FILE* f)
+{
+  uint32_t pathLen = 0;
+  if (fread(&pathLen, sizeof(pathLen), 1, f) != 1)
+    return false;
+
+  fseek(f, pathLen, SEEK_CUR);
+  return true;
+}
+
 static bool ReadRepoRoot(FILE* f, std::string& repoRoot, std::string& singleFile)
 {
-  return ReadFilePath(f, repoRoot) && ReadFilePath(f, singleFile);
+  return ReadString(f, repoRoot) && ReadString(f, singleFile);
+}
+
+static bool SkipRepoRoot(FILE* f)
+{
+  return SkipString(f) && SkipString(f);
 }
 
 static int ToInt(std::string const& str)
@@ -554,18 +571,22 @@ static bool ReadOffsets(FILE* f, OffsetCont& offsets)
   return !sz ? true : fread(&offsets[0], sizeof(offsets[0]), sz, f) == offsets.size();
 }
 
-OffsetCont TagFileInfo::GetOffsets(IndexType type)
+std::shared_ptr<FILE> TagFileInfo::OpenTags(OffsetCont& offsets, IndexType index)
 {
-  FILE *f = OpenIndex();
-  std::shared_ptr<void> fileCloser(0, [&](void*){ fclose(f); });
-  if (!f || !ReadSignature(f))
-    throw std::logic_error("Signature must be valid");
+  auto f = OpenIndex();
+  if (!f)
+    throw std::logic_error("Not synchronized");
 
-  fseek(f, sizeof(time_t), SEEK_CUR);
-  std::string repoRoot, singleFile;
-  if (!ReadRepoRoot(f, repoRoot, singleFile))
-    throw std::logic_error("Reporoot must be valid");
+  if (index == IndexType::Names)
+    offsets = NamesOffsets;
+  else
+    std::swap(offsets, GetOffsets(&*f, index));
 
+  return FOpen(filename.c_str(), "rb");
+}
+
+OffsetCont TagFileInfo::GetOffsets(FILE* f, IndexType type)
+{
   for (int i = 0; i != static_cast<int>(type); ++i)
   {
     OffsetType sz;
@@ -582,17 +603,15 @@ OffsetCont TagFileInfo::GetOffsets(IndexType type)
   return result;
 }
 
-int TagFileInfo::CreateIndex(time_t tagsModTime, bool singleFileRepos)
+bool TagFileInfo::CreateIndex(time_t tagsModTime, bool singleFileRepos)
 {
   TagFileInfo* fi = this;
   int pos=0;
   FILE *f=fopen(fi->filename.c_str(),"rb");
-  if(!f)return 0;
+  if(!f)return false;
   fseek(f,0,SEEK_END);
   int sz=ftell(f);
   fseek(f,0,SEEK_SET);
-  fi->offsets.clear();
-//  fi->offsets.SetSize(sz/80);
   std::vector<LineInfo*> lines;
   std::vector<LineInfo*> classes;
   lines.reserve(sz/80);
@@ -602,7 +621,7 @@ int TagFileInfo::CreateIndex(time_t tagsModTime, bool singleFileRepos)
   if(!GetLine(strbuf, buffer, f) || strncmp(strbuf,"!_TAG_FILE_FORMAT",17))
   {
     fclose(f);
-    return 0;
+    return false;
   }
 
   LineInfo *li;
@@ -688,7 +707,7 @@ int TagFileInfo::CreateIndex(time_t tagsModTime, bool singleFileRepos)
       delete poolfirst;
       poolfirst=pool;
     }
-    return 0;
+    return false;
   }
   fwrite(IndexFileSignature, 1, sizeof(IndexFileSignature), g);
   fwrite(&tagsModTime,sizeof(tagsModTime),1,g);
@@ -704,8 +723,6 @@ int TagFileInfo::CreateIndex(time_t tagsModTime, bool singleFileRepos)
 
   std::sort(lines.begin(), lines.end(), [](LineInfo* left, LineInfo* right) { return FieldLess(left->line, right->line); });
   WriteOffsets(g, lines.begin(), lines.end());
-  fi->offsets.reserve(lines.size());
-  std::transform(lines.begin(), lines.end(), std::back_inserter(fi->offsets), [](LineInfo* line){ return line->pos; });
   std::sort(lines.begin(), lines.end(), [](LineInfo* left, LineInfo* right) { return FieldLess(left->line, right->line, CaseInsensitive); });
   WriteOffsets(g, lines.begin(), lines.end());
   std::sort(lines.begin(), lines.end(), [](LineInfo* left, LineInfo* right) { return PathLess(left->fn, right->fn); });
@@ -723,53 +740,58 @@ int TagFileInfo::CreateIndex(time_t tagsModTime, bool singleFileRepos)
     poolfirst=pool;
   }
   fclose(g);
-  return 1;
+  return LoadCache();
 }
 
-bool TagFileInfo::LoadIndex(time_t tagsModTime)
+bool TagFileInfo::LoadCache()
 {
-  TagFileInfo* fi = this;
-  FILE *f=fopen(fi->indexFile.c_str(),"rb");
-  if (!f)
-    return false;
+  loaded = false;
+  auto f = FOpen(indexFile.c_str(), "rb");
+  if (!f || !ReadSignature(&*f))
+    return loaded;
 
-  std::shared_ptr<void> fileCloser(0, [&](void*){ fclose(f); });
-  if(!ReadSignature(f))
-    return false;
-
-  time_t storedTagsModTime = 0;
-  fread(&storedTagsModTime,sizeof(storedTagsModTime),1,f);
-  if (storedTagsModTime != tagsModTime)
-    return false;
-
-  if (!ReadRepoRoot(f, reporoot, singlefile))
-    return false;
+  fseek(&*f, sizeof(time_t), SEEK_CUR);
+  if (!ReadRepoRoot(&*f, reporoot, singlefile))
+    return loaded;
 
   fullpathrepo = !reporoot.empty();
   reporoot = reporoot.empty() ? GetDirOfFile(filename) : reporoot;
-  bool result = ReadOffsets(f, fi->offsets);
-  fclose(f);
-  return result;
+  loaded = ReadOffsets(&*f, NamesOffsets);
+  return loaded;
 }
 
-int TagFileInfo::Load()
+std::shared_ptr<FILE> TagFileInfo::OpenIndex()
+{
+  struct stat tagsStat;
+  if (stat(filename.c_str(), &tagsStat) == -1)
+    return std::shared_ptr<FILE>();
+
+  auto f = FOpen(indexFile.c_str(),"rb");
+  if (!f || !ReadSignature(&*f))
+    return std::shared_ptr<FILE>();
+
+  time_t storedTagsModTime = 0;
+  if (fread(&storedTagsModTime, sizeof(storedTagsModTime), 1, &*f) != 1 || storedTagsModTime != tagsStat.st_mtime)
+    return std::shared_ptr<FILE>();
+
+  return SkipRepoRoot(&*f) ? f : std::shared_ptr<FILE>();
+}
+
+int TagFileInfo::Load(size_t& symbolsLoaded)
 {
   struct stat st;
   if (stat(filename.c_str(), &st) == -1)
 //TODO: return Error(...)
     return ENOENT;
 
-  if (modtm == st.st_mtime)
-    return 0;
-
-  if (!LoadIndex(st.st_mtime) && !CreateIndex(st.st_mtime, singlefilerepos))
+  if ((!loaded || !Synchronized()) && !CreateIndex(st.st_mtime, singlefilerepos))
   {
     remove(indexFile.c_str());
 //TODO: return Error(...)
     return EIO;
   }
 
-  modtm = st.st_mtime;
+  symbolsLoaded = NamesOffsets.size();
   return 0;
 }
 
@@ -799,13 +821,15 @@ int Load(const char* filename, bool singleFileRepos, size_t& symbolsLoaded)
 {
   auto iter = std::find_if(files.begin(), files.end(), [&](TagFileInfoPtr const& file) {return file->HasName(filename);});
   TagFileInfoPtr fi = iter == files.end() ? std::shared_ptr<TagFileInfo>(new TagFileInfo(filename, singleFileRepos)) : *iter;
-  if (auto err = fi->Load())
+  if (auto err = fi->Load(symbolsLoaded))
+  {
+    files.erase(iter, iter != files.end() ? iter + 1: iter);
     return err;
+  }
 
   if (iter == files.end())
     files.push_back(fi);
 
-  symbolsLoaded = fi->offsets.size();
   return 0;
 }
 
@@ -1017,19 +1041,20 @@ static std::tuple<size_t, size_t, size_t> GetMatchedOffsetRange(FILE* f, OffsetC
   return std::make_tuple(0, 0, 0);
 }
 
-static std::vector<TagInfo> GetMatchedTags(TagFileInfo* fi, OffsetCont const& offsets, MatchVisitor const& visitor, size_t maxCount)
+static std::vector<TagInfo> GetMatchedTags(TagFileInfo* fi, IndexType index, MatchVisitor const& visitor, size_t maxCount)
 {
   std::vector<TagInfo> result;
   if (visitor.GetPattern().empty() && !maxCount) return result;
-  FILE *f=fi->OpenTags();
+  OffsetCont offsets;
+  auto f = fi->OpenTags(offsets, index);
   if(!f)return result;
-  auto range = GetMatchedOffsetRange(f, offsets, visitor);
+  auto range = GetMatchedOffsetRange(&*f, offsets, visitor);
   maxCount = !maxCount ? std::numeric_limits<size_t>::max() : maxCount;
   for(auto i = std::get<0>(range); i < std::get<1>(range) || (maxCount > 0 && i < std::get<2>(range)); ++i)
   {
-    fseek(f, offsets[i], SEEK_SET);
+    fseek(&*f, offsets[i], SEEK_SET);
     std::string line;
-    GetLine(line, f);
+    GetLine(line, &*f);
     TagInfo tag;
     if (ParseLine(line.c_str(), *fi, tag) && visitor.Filter(tag))
     {
@@ -1038,7 +1063,6 @@ static std::vector<TagInfo> GetMatchedTags(TagFileInfo* fi, OffsetCont const& of
       maxCount -= maxCount > 0 ? 1 : 0;
     }
   }
-  fclose(f);
   return result;
 }
 
@@ -1050,7 +1074,7 @@ static std::vector<TagInfo> ForEachFileRepository(char const* fileFullPath, Inde
     if (!repos->GetRelativePath(fileFullPath))
       continue;
 
-    auto tags = GetMatchedTags(repos.get(), index == IndexType::Names ? repos->offsets : repos->GetOffsets(index), visitor, maxCount);
+    auto tags = GetMatchedTags(repos.get(), index, visitor, maxCount);
     std::move(tags.begin(), tags.end(), std::back_inserter(result));
   }
 
@@ -1151,7 +1175,7 @@ std::vector<TagInfo> FindFileSymbols(const char* file)
     if (!relativePath || !*relativePath)
       continue;
 
-    auto tags = GetMatchedTags(repos.get(), repos->GetOffsets(IndexType::Paths), PathMatch(repos->IsFullPathRepo() ? file : relativePath), 0);
+    auto tags = GetMatchedTags(repos.get(), IndexType::Paths, PathMatch(repos->IsFullPathRepo() ? file : relativePath), 0);
     std::move(tags.begin(), tags.end(), std::back_inserter(result));
   }
 
@@ -1162,6 +1186,18 @@ std::vector<std::string> GetFiles()
 {
   std::vector<std::string> result;
   std::transform(files.begin(), files.end(), std::back_inserter(result), [](TagFileInfoPtr const& file) {return file->GetName();});
+  return result;
+}
+
+std::vector<std::string> GetLoadedTags(const char* file)
+{
+  std::vector<std::string> result;
+  for (auto const& repos : files)
+  {
+    if (repos->GetRelativePath(file))
+      result.push_back(repos->GetName());
+  }
+
   return result;
 }
 
@@ -1189,11 +1225,6 @@ bool IsTagFile(const char* file)
   fclose(f);
   return result && !pattern.compare(0, std::string::npos, result, pattern.length());
 };
-
-bool TagsLoadedForFile(const char* file)
-{
-  return std::find_if(files.begin(), files.end(), [&](TagFileInfoPtr const& repos) {return repos->GetRelativePath(file); }) != files.end();
-}
 
 std::vector<TagInfo>::const_iterator FindContextTag(std::vector<TagInfo> const& tags, char const* fileName, int lineNumber, char const* lineText)
 {

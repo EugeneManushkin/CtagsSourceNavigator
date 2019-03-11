@@ -47,8 +47,8 @@ std::vector<TagInfo> FindPartiallyMatchedFile(const char* file, const char* part
 std::vector<TagInfo> FindClassMembers(const char* file, const char* classname, int sortOptions = SortOptions::Default);
 std::vector<TagInfo> FindFileSymbols(const char* file);
 std::vector<std::string> GetFiles();
+std::vector<std::string> GetLoadedTags(const char* file);
 bool IsTagFile(const char* file);
-bool TagsLoadedForFile(const char* file);
 std::vector<TagInfo>::const_iterator FindContextTag(std::vector<TagInfo> const& tags, char const* fileName, int lineNumber, char const* lineText);
 std::vector<TagInfo>::const_iterator Reorder(TagInfo const& context, std::vector<TagInfo>& tags);
 void CacheTag(TagInfo const& tag, size_t cacheSize);
