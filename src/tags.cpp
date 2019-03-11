@@ -560,7 +560,7 @@ static std::string GetIntersection(char const* left, char const* right)
 
 static void WriteOffsets(FILE* f, std::vector<LineInfo*>::iterator begin, std::vector<LineInfo*>::iterator end)
 {
-  OffsetType sz = static_cast<OffsetType>(std::distance(begin, end));
+  auto sz = static_cast<OffsetType>(std::distance(begin, end));
   fwrite(&sz, sizeof(sz), 1, f);
   for (; begin != end; ++begin)
   {
@@ -570,12 +570,22 @@ static void WriteOffsets(FILE* f, std::vector<LineInfo*>::iterator begin, std::v
 
 static bool ReadOffsets(FILE* f, OffsetCont& offsets)
 {
-  OffsetType sz;
+  auto sz = static_cast<OffsetType>(0);
   if (fread(&sz, sizeof(sz), 1, f) != 1)
     return false;
 
   offsets.resize(sz);
   return !sz ? true : fread(&offsets[0], sizeof(offsets[0]), sz, f) == offsets.size();
+}
+
+static bool SkipOffsets(FILE* f)
+{
+  auto sz = static_cast<OffsetType>(0);
+  if (fread(&sz, sizeof(sz), 1, f) != 1)
+    return false;
+
+  fseek(f, sizeof(OffsetType) * sz, SEEK_CUR);
+  return true;
 }
 
 std::shared_ptr<FILE> TagFileInfo::OpenTags(OffsetCont& offsets, IndexType index)
@@ -596,11 +606,8 @@ OffsetCont TagFileInfo::GetOffsets(FILE* f, IndexType type)
 {
   for (int i = 0; i != static_cast<int>(type); ++i)
   {
-    OffsetType sz;
-    if (fread(&sz, sizeof(sz), 1, f) != 1)
+    if (!SkipOffsets(f))
       throw std::runtime_error("Invalid file format");
-
-    fseek(f, sizeof(OffsetType) * sz, SEEK_CUR);
   }
 
   OffsetCont result;
