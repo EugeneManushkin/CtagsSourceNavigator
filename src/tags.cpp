@@ -41,6 +41,15 @@ static bool FileExists(char const* filename)
   return GetFileAttributesA(filename) != INVALID_FILE_ATTRIBUTES;
 }
 
+static bool IsEndOfFile(FILE* f)
+{
+  auto curPos = ftell(&*f);
+  fseek(f, 0, SEEK_END);
+  auto endPos = ftell(&*f);
+  fseek(f, curPos, SEEK_SET);
+  return curPos == endPos;
+}
+
 inline bool IsPathSeparator(std::string::value_type c)
 {
     return c == '/' || c == '\\';
@@ -60,6 +69,7 @@ enum class IndexType
   Paths,
   Classes,
   Filenames,
+  EndOfEnum,
 };
 
 struct TagFileInfo{
@@ -202,11 +212,55 @@ static bool SkipString(FILE* f)
   return true;
 }
 
-static void WriteString(std::string const& str, FILE* f)
+static void WriteString(FILE* f, std::string const& str)
 {
   auto len = static_cast<uint32_t>(str.length());
   fwrite(&len, 1, sizeof(len), f);
   fwrite(str.c_str(), 1, str.length(), f);
+}
+
+template<typename StoredType, typename ValueType> bool ReadInt(FILE* f, ValueType& value)
+{
+  auto val = static_cast<StoredType>(0);
+  bool success = fread(&val, sizeof(val), 1, f) == 1;
+  value = success ? static_cast<ValueType>(val) : value;
+  return success;
+}
+
+template<typename StoredType, typename ValueType> void WriteInt(FILE* f, ValueType value)
+{
+  auto val = static_cast<StoredType>(value);
+  fwrite(&val, 1, sizeof(val), f);
+}
+
+static bool ReadSignedInt(FILE* f, int& value)
+{
+  return ReadInt<int32_t>(f, value);
+}
+
+static void WriteSignedInt(FILE* f, int value)
+{
+  WriteInt<int32_t>(f, value);
+}
+
+static bool ReadSignedChar(FILE* f, char& value)
+{
+  return ReadInt<int32_t>(f, value);
+}
+
+static void WriteSignedChar(FILE* f, char value)
+{
+  WriteInt<int32_t>(f, value);
+}
+
+static bool ReadUnsignedInt(FILE* f, size_t& value)
+{
+  return ReadInt<uint32_t>(f, value);
+}
+
+static void WriteUnsignedInt(FILE* f, size_t value)
+{
+  WriteInt<uint32_t>(f, value);
 }
 
 static bool ReadRepoRoot(FILE* f, std::string& repoRoot, std::string& singleFile)
@@ -217,6 +271,68 @@ static bool ReadRepoRoot(FILE* f, std::string& repoRoot, std::string& singleFile
 static bool SkipRepoRoot(FILE* f)
 {
   return SkipString(f) && SkipString(f);
+}
+
+static void WriteTagInfo(FILE* f, TagInfo const& tag)
+{
+  WriteString(f, tag.name);
+  WriteString(f, tag.file);
+  WriteString(f, tag.re);
+  WriteString(f, tag.info);
+  WriteSignedInt(f, tag.lineno);
+  WriteSignedChar(f, tag.type);
+  WriteUnsignedInt(f, tag.Owner.Offset);
+}
+
+static bool ReadTagInfo(FILE* f, TagInfo& tag)
+{
+  TagInfo val;
+  bool success = true;
+  success = success && ReadString(f, val.name);
+  success = success && ReadString(f, val.file);
+  success = success && ReadString(f, val.re);
+  success = success && ReadString(f, val.info);
+  success = success && ReadSignedInt(f, val.lineno);
+  success = success && ReadSignedChar(f, val.type);
+  success = success && ReadUnsignedInt(f, val.Owner.Offset);
+  if (success)
+    tag = std::move(val);
+
+  return success;
+}
+
+static void WriteTagsStat(FILE* f, std::vector<std::pair<TagInfo, size_t>> const& stat)
+{
+  WriteUnsignedInt(f, stat.size());
+  for (auto i = stat.rbegin(); i != stat.rend(); ++i)
+  {
+    WriteTagInfo(f, i->first);
+    WriteUnsignedInt(f, i->second);
+  }
+}
+
+static bool ReadTagsCache(FILE* f, TagsInternal::TagsCache& cache, std::string const& tagsFile)
+{
+  size_t sz = 0;
+  if (!ReadUnsignedInt(f, sz))
+    return false;
+
+  cache.SetCapacity(sz);
+  for (; !!sz; --sz)
+  {
+    TagInfo tag;
+    if (!ReadTagInfo(f, tag))
+      return false;
+
+    size_t freq = 0;
+    if (!ReadUnsignedInt(f, freq))
+      return false;
+
+    tag.Owner.TagsFile = tagsFile;
+    cache.Insert(tag, freq);
+  }
+
+  return true;
 }
 
 static int ToInt(std::string const& str)
@@ -725,8 +841,8 @@ bool TagFileInfo::CreateIndex(time_t tagsModTime, bool singleFileRepos)
   }
   fwrite(IndexFileSignature, 1, sizeof(IndexFileSignature), g);
   fwrite(&tagsModTime,sizeof(tagsModTime),1,g);
-  WriteString(fullpathrepo ? reporoot : std::string(), g);
-  WriteString(singlefile, g);
+  WriteString(g, fullpathrepo ? reporoot : std::string());
+  WriteString(g, singlefile);
   std::sort(lines.begin(), lines.end(), [](LineInfo* left, LineInfo* right) { return FieldLess(left->line, right->line); });
   WriteOffsets(g, lines.begin(), lines.end());
   std::sort(lines.begin(), lines.end(), [](LineInfo* left, LineInfo* right) { return FieldLess(left->line, right->line, CaseInsensitive); });
@@ -738,6 +854,9 @@ bool TagFileInfo::CreateIndex(time_t tagsModTime, bool singleFileRepos)
   auto linesEnd = std::unique(lines.begin(), lines.end(), [](LineInfo* left, LineInfo* right) { return PathsEqual(left->fn, right->fn); });
   std::sort(lines.begin(), linesEnd, [](LineInfo* left, LineInfo* right) { return FieldLess(GetFilename(left->fn), GetFilename(right->fn), CaseInsensitive); });
   WriteOffsets(g, lines.begin(), linesEnd);
+  //TODO: refresh tags in cache
+  WriteTagsStat(g, NamesCache->GetStat());
+  WriteTagsStat(g, FilesCache->GetStat());
   delete [] linespool;
   while(poolfirst)
   {
@@ -762,7 +881,23 @@ bool TagFileInfo::LoadCache()
 
   fullpathrepo = !reporoot.empty();
   reporoot = reporoot.empty() ? GetDirOfFile(filename) : reporoot;
-  loaded = ReadOffsets(&*f, NamesOffsets);
+  if (!ReadOffsets(&*f, NamesOffsets))
+    return loaded;
+
+  for (int i = 1; i != static_cast<int>(IndexType::EndOfEnum); ++i)
+  {
+    if (!SkipOffsets(&*f))
+      return loaded;
+  }
+
+  loaded = true;
+  if (IsEndOfFile(&*f))
+    return loaded;
+
+  NamesCache = TagsInternal::CreateTagsCache(0);
+  FilesCache = TagsInternal::CreateTagsCache(0);
+  loaded = loaded && ReadTagsCache(&*f, *NamesCache, filename);
+  loaded = loaded && ReadTagsCache(&*f, *FilesCache, filename);
   return loaded;
 }
 

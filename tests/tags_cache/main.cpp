@@ -215,6 +215,32 @@ namespace TagsInternal
       ASSERT_TRUE(Equal(SecondTag, TagAt(1, sut)));
       ASSERT_EQ(1, FreqAt(1, sut));
     }
+
+    TEST(TagsCache, ReturnsTagsInReversedOrderTagsShouldBeInserted)
+    {
+      auto cache = MakeCache({FirstTag, SecondTag, ThirdTag});
+      auto tags = cache->Get();
+      auto sut = MakeCache(std::vector<TagInfo>(tags.rbegin(), tags.rend()));
+      ASSERT_TRUE(Equal(TagAt(0, cache), TagAt(0, sut)));
+      ASSERT_TRUE(Equal(TagAt(1, cache), TagAt(1, sut)));
+      ASSERT_TRUE(Equal(TagAt(2, cache), TagAt(2, sut)));
+    }
+
+    TEST(TagsCache, ReturnsTagsStatisticsInReversedOrderTagsShouldBeInserted)
+    {
+      auto cache = MakeCache({FirstTag, FirstTag, SecondTag, SecondTag, SecondTag, ThirdTag, ThirdTag});
+      auto stat = cache->GetStat();
+      auto sut = CreateTagsCache(stat.size());
+      for (auto i = stat.rbegin(); i != stat.rend(); ++i)
+        sut->Insert(i->first, i->second);
+      
+      ASSERT_TRUE(Equal(TagAt(0, cache), TagAt(0, sut)));
+      ASSERT_TRUE(Equal(TagAt(1, cache), TagAt(1, sut)));
+      ASSERT_TRUE(Equal(TagAt(2, cache), TagAt(2, sut)));
+      ASSERT_EQ(FreqAt(0, cache), FreqAt(0, sut));
+      ASSERT_EQ(FreqAt(1, cache), FreqAt(1, sut));
+      ASSERT_EQ(FreqAt(2, cache), FreqAt(2, sut));
+    }
   }
 }
 
