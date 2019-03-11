@@ -202,6 +202,13 @@ static bool SkipString(FILE* f)
   return true;
 }
 
+static void WriteString(std::string const& str, FILE* f)
+{
+  auto len = static_cast<uint32_t>(str.length());
+  fwrite(&len, 1, sizeof(len), f);
+  fwrite(str.c_str(), 1, str.length(), f);
+}
+
 static bool ReadRepoRoot(FILE* f, std::string& repoRoot, std::string& singleFile)
 {
   return ReadString(f, repoRoot) && ReadString(f, singleFile);
@@ -711,16 +718,8 @@ bool TagFileInfo::CreateIndex(time_t tagsModTime, bool singleFileRepos)
   }
   fwrite(IndexFileSignature, 1, sizeof(IndexFileSignature), g);
   fwrite(&tagsModTime,sizeof(tagsModTime),1,g);
-  uint32_t rootLen = static_cast<uint32_t>(fullpathrepo ? reporoot.length() : 0);
-  fwrite(&rootLen, 1, sizeof(rootLen), g);
-  if (fullpathrepo)
-    fwrite(reporoot.c_str(), 1, reporoot.length(), g);
-
-  uint32_t singlefileLen = static_cast<uint32_t>(singlefile.length());
-  fwrite(&singlefileLen, 1, sizeof(singlefileLen), g);
-  if (!singlefile.empty())
-    fwrite(singlefile.c_str(), 1, singlefile.length(), g);
-
+  WriteString(fullpathrepo ? reporoot : std::string(), g);
+  WriteString(singlefile, g);
   std::sort(lines.begin(), lines.end(), [](LineInfo* left, LineInfo* right) { return FieldLess(left->line, right->line); });
   WriteOffsets(g, lines.begin(), lines.end());
   std::sort(lines.begin(), lines.end(), [](LineInfo* left, LineInfo* right) { return FieldLess(left->line, right->line, CaseInsensitive); });
