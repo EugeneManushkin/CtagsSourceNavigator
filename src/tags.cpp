@@ -77,14 +77,12 @@ struct TagFileInfo{
     : filename(fname)
     , indexFile(filename + ".idx")
     , singlefilerepos(singleFileRepos)
-    , loaded(false)
+    , IndexModTime(0)
     , NamesCache(TagsInternal::CreateTagsCache(0))
     , FilesCache(TagsInternal::CreateTagsCache(0))
   {
     if (filename.empty() || IsPathSeparator(filename.back()))
       throw std::logic_error("Invalid tags file name");
-
-    LoadCache();
   }
 
   char const* GetRelativePath(char const* fileName) const;
@@ -135,13 +133,19 @@ private:
     return !!OpenIndex();
   }
 
+  bool IndexModified() const
+  {
+    struct stat st;
+    return !IndexModTime || stat(indexFile.c_str(), &st) == -1 || IndexModTime != st.st_mtime;
+  }
+
   std::string filename;
   std::string indexFile;
   std::string reporoot;
   std::string singlefile;
   bool singlefilerepos;
   bool fullpathrepo;
-  bool loaded;
+  time_t IndexModTime;
   std::shared_ptr<TagsInternal::TagsCache> NamesCache;
   std::shared_ptr<TagsInternal::TagsCache> FilesCache;
   OffsetCont NamesOffsets;
@@ -870,35 +874,37 @@ bool TagFileInfo::CreateIndex(time_t tagsModTime, bool singleFileRepos)
 
 bool TagFileInfo::LoadCache()
 {
-  loaded = false;
+  IndexModTime = 0;
   auto f = FOpen(indexFile.c_str(), "rb");
   if (!f || !ReadSignature(&*f))
-    return loaded;
+    return false;
 
   fseek(&*f, sizeof(time_t), SEEK_CUR);
   if (!ReadRepoRoot(&*f, reporoot, singlefile))
-    return loaded;
+    return false;
 
   fullpathrepo = !reporoot.empty();
   reporoot = reporoot.empty() ? GetDirOfFile(filename) : reporoot;
   if (!ReadOffsets(&*f, NamesOffsets))
-    return loaded;
+    return false;
 
   for (int i = 1; i != static_cast<int>(IndexType::EndOfEnum); ++i)
   {
     if (!SkipOffsets(&*f))
-      return loaded;
+      return false;
   }
 
-  loaded = true;
-  if (IsEndOfFile(&*f))
-    return loaded;
+  if (!IsEndOfFile(&*f))
+  {
+    NamesCache = TagsInternal::CreateTagsCache(0);
+    FilesCache = TagsInternal::CreateTagsCache(0);
+    if (!ReadTagsCache(&*f, *NamesCache, filename) || !ReadTagsCache(&*f, *FilesCache, filename))
+      return false;
+  }
 
-  NamesCache = TagsInternal::CreateTagsCache(0);
-  FilesCache = TagsInternal::CreateTagsCache(0);
-  loaded = loaded && ReadTagsCache(&*f, *NamesCache, filename);
-  loaded = loaded && ReadTagsCache(&*f, *FilesCache, filename);
-  return loaded;
+  struct stat st;
+  IndexModTime = stat(indexFile.c_str(), &st) != -1 ? st.st_mtime : IndexModTime;
+  return !!IndexModTime;
 }
 
 std::shared_ptr<FILE> TagFileInfo::OpenIndex()
@@ -925,7 +931,10 @@ int TagFileInfo::Load(size_t& symbolsLoaded)
 //TODO: return Error(...)
     return ENOENT;
 
-  if ((!loaded || !Synchronized()) && !CreateIndex(st.st_mtime, singlefilerepos))
+  if (IndexModified())
+    LoadCache();
+
+  if ((!IndexModTime || !Synchronized()) && !CreateIndex(st.st_mtime, singlefilerepos))
   {
     remove(indexFile.c_str());
 //TODO: return Error(...)
