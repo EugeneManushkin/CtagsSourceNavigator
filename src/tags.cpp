@@ -123,10 +123,12 @@ struct TagFileInfo{
     return FilesCache->Get(limit);
   }
 
+  void FlushCachedTags();
+
 private:
   bool CreateIndex(time_t tagsModTime, bool singleFileRepos);
   bool LoadCache();
-  std::shared_ptr<FILE> OpenIndex() const;
+  std::shared_ptr<FILE> OpenIndex(char const* mode = "rb") const;
   OffsetCont GetOffsets(FILE* f, IndexType type) const;
   bool Synchronized() const
   {
@@ -737,6 +739,25 @@ OffsetCont TagFileInfo::GetOffsets(FILE* f, IndexType type) const
   return result;
 }
 
+void TagFileInfo::FlushCachedTags()
+{
+  auto f = OpenIndex("r+b");
+  if (!f)
+    return;
+
+  for (int i = 0; i != static_cast<int>(IndexType::EndOfEnum); ++i)
+  {
+    if (!SkipOffsets(&*f))
+      return;
+  }
+  
+  WriteTagsStat(&*f, NamesCache->GetStat());
+  WriteTagsStat(&*f, FilesCache->GetStat());
+  f.reset();
+  struct stat st;
+  IndexModTime = stat(indexFile.c_str(), &st) != -1 ? st.st_mtime : 0;
+}
+
 bool TagFileInfo::CreateIndex(time_t tagsModTime, bool singleFileRepos)
 {
   TagFileInfo* fi = this;
@@ -902,18 +923,22 @@ bool TagFileInfo::LoadCache()
       return false;
   }
 
+  f.reset();
   struct stat st;
   IndexModTime = stat(indexFile.c_str(), &st) != -1 ? st.st_mtime : IndexModTime;
   return !!IndexModTime;
 }
 
-std::shared_ptr<FILE> TagFileInfo::OpenIndex() const
+std::shared_ptr<FILE> TagFileInfo::OpenIndex(char const* mode) const
 {
+  if (IndexModified())
+    return std::shared_ptr<FILE>();
+
   struct stat tagsStat;
   if (stat(filename.c_str(), &tagsStat) == -1)
     return std::shared_ptr<FILE>();
 
-  auto f = FOpen(indexFile.c_str(),"rb");
+  auto f = FOpen(indexFile.c_str(), mode);
   if (!f || !ReadSignature(&*f))
     return std::shared_ptr<FILE>();
 
@@ -1426,11 +1451,15 @@ std::vector<TagInfo>::const_iterator Reorder(TagInfo const& context, std::vector
   return std::stable_partition(tags.begin(), tags.end(), [&](TagInfo const& tag) { return TagsOpposite(tag, context); });
 }
 
-void CacheTag(TagInfo const& tag, size_t cacheSize)
+void CacheTag(TagInfo const& tag, size_t cacheSize, bool flush)
 {
   auto repos = std::find_if(files.begin(), files.end(), [&](TagFileInfoPtr const& repos) {return repos->HasName(tag.Owner.TagsFile.c_str());});
   if (repos != files.end())
+  {
     (*repos)->CacheTag(tag, cacheSize);
+    if (flush)
+      (*repos)->FlushCachedTags();
+  }
 }
 
 std::vector<TagInfo> GetCachedTags(const char* file, size_t limit, bool getFiles)

@@ -1682,7 +1682,7 @@ void PlainNavigator::Goto(TagInfo const& tag, bool setPanelDir)
       return;
   }
 
-  CacheTag(tag, config.max_results);
+  CacheTag(tag, config.max_results, true);
   Move(ToString(tag.file), line, setPanelDir);
 }
 
