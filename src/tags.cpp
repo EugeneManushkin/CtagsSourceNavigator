@@ -126,9 +126,9 @@ struct TagFileInfo{
 private:
   bool CreateIndex(time_t tagsModTime, bool singleFileRepos);
   bool LoadCache();
-  std::shared_ptr<FILE> OpenIndex();
-  OffsetCont GetOffsets(FILE* f, IndexType type);
-  bool Synchronized()
+  std::shared_ptr<FILE> OpenIndex() const;
+  OffsetCont GetOffsets(FILE* f, IndexType type) const;
+  bool Synchronized() const
   {
     return !!OpenIndex();
   }
@@ -722,7 +722,7 @@ std::shared_ptr<FILE> TagFileInfo::OpenTags(OffsetCont& offsets, IndexType index
   return FOpen(filename.c_str(), "rb");
 }
 
-OffsetCont TagFileInfo::GetOffsets(FILE* f, IndexType type)
+OffsetCont TagFileInfo::GetOffsets(FILE* f, IndexType type) const
 {
   for (int i = 0; i != static_cast<int>(type); ++i)
   {
@@ -907,7 +907,7 @@ bool TagFileInfo::LoadCache()
   return !!IndexModTime;
 }
 
-std::shared_ptr<FILE> TagFileInfo::OpenIndex()
+std::shared_ptr<FILE> TagFileInfo::OpenIndex() const
 {
   struct stat tagsStat;
   if (stat(filename.c_str(), &tagsStat) == -1)

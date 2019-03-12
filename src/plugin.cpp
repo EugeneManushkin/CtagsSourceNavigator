@@ -2083,7 +2083,7 @@ static WideString SearchTagsFile(WideString const& fileName)
 
 static bool LoadMultipleTags(std::vector<std::string> const& tags)
 {
-  auto errCount = 0;
+  auto errCount = static_cast<size_t>(0);
   for (auto const& tag : tags)
     errCount += SafeCall([&tag]() { LoadTagsImpl(tag); return 0; }, 1);
 
