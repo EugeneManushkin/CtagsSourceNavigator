@@ -287,7 +287,6 @@ static void WriteTagInfo(FILE* f, TagInfo const& tag)
   WriteString(f, tag.info);
   WriteSignedInt(f, tag.lineno);
   WriteSignedChar(f, tag.type);
-  WriteUnsignedInt(f, tag.Owner.Offset);
 }
 
 static bool ReadTagInfo(FILE* f, TagInfo& tag)
@@ -300,7 +299,6 @@ static bool ReadTagInfo(FILE* f, TagInfo& tag)
   success = success && ReadString(f, val.info);
   success = success && ReadSignedInt(f, val.lineno);
   success = success && ReadSignedChar(f, val.type);
-  success = success && ReadUnsignedInt(f, val.Owner.Offset);
   if (success)
     tag = std::move(val);
 
@@ -1235,7 +1233,7 @@ static std::vector<TagInfo> GetMatchedTags(TagFileInfo* fi, FILE* f, OffsetCont 
     TagInfo tag;
     if (ParseLine(line.c_str(), *fi, tag) && visitor.Filter(tag))
     {
-      tag.Owner = {fi->GetName(), offsets[i]};
+      tag.Owner = {fi->GetName()};
       result.push_back(std::move(tag));
       maxCount -= maxCount > 0 ? 1 : 0;
     }

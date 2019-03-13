@@ -15,7 +15,6 @@ struct TagInfo
   struct
   {
     std::string TagsFile;
-    size_t Offset;
   } Owner;
 
   TagInfo()
