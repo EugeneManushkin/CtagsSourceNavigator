@@ -758,6 +758,9 @@ void TagFileInfo::FlushCachedTags()
   IndexModTime = stat(indexFile.c_str(), &st) != -1 ? st.st_mtime : 0;
 }
 
+static std::vector<std::pair<TagInfo, size_t>> RefreshNamesCache(TagFileInfo* fi, FILE* f, OffsetCont const& offsets, std::vector<std::pair<TagInfo, size_t>>&& tagsWithFreq);
+static std::vector<std::pair<TagInfo, size_t>> RefreshFilesCache(TagFileInfo* fi, FILE* f, OffsetCont const& offsets, std::vector<std::pair<TagInfo, size_t>>&& tagsWithFreq);
+
 bool TagFileInfo::CreateIndex(time_t tagsModTime, bool singleFileRepos)
 {
   TagFileInfo* fi = this;
@@ -851,7 +854,6 @@ bool TagFileInfo::CreateIndex(time_t tagsModTime, bool singleFileRepos)
   fullpathrepo = !pathIntersection.empty();
   reporoot = pathIntersection.empty() ? GetDirOfFile(filename) : MakeFilename(pathIntersection);
   singlefile = singleFileRepos && !lines.empty() ? std::string(GetFilename(lines.back()->fn), GetFilenameEnd(lines.back()->fn)) : "";
-  fclose(f);
   FILE *g=fopen(fi->indexFile.c_str(),"wb");
   if(!g)
   {
@@ -869,6 +871,8 @@ bool TagFileInfo::CreateIndex(time_t tagsModTime, bool singleFileRepos)
   WriteString(g, fullpathrepo ? reporoot : std::string());
   WriteString(g, singlefile);
   std::sort(lines.begin(), lines.end(), [](LineInfo* left, LineInfo* right) { return FieldLess(left->line, right->line); });
+  OffsetCont namesOffsets;
+  std::transform(lines.begin(), lines.end(), std::back_inserter(namesOffsets), [](LineInfo* line){ return line->pos; });
   WriteOffsets(g, lines.begin(), lines.end());
   std::sort(lines.begin(), lines.end(), [](LineInfo* left, LineInfo* right) { return FieldLess(left->line, right->line, CaseInsensitive); });
   WriteOffsets(g, lines.begin(), lines.end());
@@ -878,10 +882,12 @@ bool TagFileInfo::CreateIndex(time_t tagsModTime, bool singleFileRepos)
   WriteOffsets(g, classes.begin(), classes.end());
   auto linesEnd = std::unique(lines.begin(), lines.end(), [](LineInfo* left, LineInfo* right) { return PathsEqual(left->fn, right->fn); });
   std::sort(lines.begin(), linesEnd, [](LineInfo* left, LineInfo* right) { return FieldLess(GetFilename(left->fn), GetFilename(right->fn), CaseInsensitive); });
+  OffsetCont filesOffsets;
+  std::transform(lines.begin(), linesEnd, std::back_inserter(filesOffsets), [](LineInfo* line){ return line->pos; });
   WriteOffsets(g, lines.begin(), linesEnd);
-  //TODO: refresh tags in cache
-  WriteTagsStat(g, NamesCache->GetStat());
-  WriteTagsStat(g, FilesCache->GetStat());
+  WriteTagsStat(g, RefreshNamesCache(fi, f, namesOffsets, NamesCache->GetStat()));
+  WriteTagsStat(g, RefreshFilesCache(fi, f, filesOffsets, FilesCache->GetStat()));
+  fclose(f);
   delete [] linespool;
   while(poolfirst)
   {
@@ -1216,13 +1222,9 @@ static std::tuple<size_t, size_t, size_t> GetMatchedOffsetRange(FILE* f, OffsetC
   return std::make_tuple(0, 0, 0);
 }
 
-static std::vector<TagInfo> GetMatchedTags(TagFileInfo* fi, IndexType index, MatchVisitor const& visitor, size_t maxCount)
+static std::vector<TagInfo> GetMatchedTags(TagFileInfo* fi, FILE* f, OffsetCont const& offsets, MatchVisitor const& visitor, size_t maxCount)
 {
   std::vector<TagInfo> result;
-  if (visitor.GetPattern().empty() && !maxCount) return result;
-  OffsetCont offsets;
-  auto f = fi->OpenTags(offsets, index);
-  if(!f)return result;
   auto range = GetMatchedOffsetRange(&*f, offsets, visitor);
   maxCount = !maxCount ? std::numeric_limits<size_t>::max() : maxCount;
   for(auto i = std::get<0>(range); i < std::get<1>(range) || (maxCount > 0 && i < std::get<2>(range)); ++i)
@@ -1239,6 +1241,16 @@ static std::vector<TagInfo> GetMatchedTags(TagFileInfo* fi, IndexType index, Mat
     }
   }
   return result;
+}
+
+static std::vector<TagInfo> GetMatchedTags(TagFileInfo* fi, IndexType index, MatchVisitor const& visitor, size_t maxCount)
+{
+  if (visitor.GetPattern().empty() && !maxCount)
+    return std::vector<TagInfo>();
+
+  OffsetCont offsets;
+  auto f = fi->OpenTags(offsets, index);
+  return !f ? std::vector<TagInfo>() : GetMatchedTags(fi, &*f, offsets, visitor, maxCount);
 }
 
 static std::vector<TagInfo> ForEachFileRepository(char const* fileFullPath, IndexType index, MatchVisitor const& visitor, size_t maxCount)
@@ -1475,4 +1487,58 @@ std::vector<TagInfo> GetCachedTags(const char* file, size_t limit, bool getFiles
   }
 
   return result;
+}
+
+class TagMatch : public NameMatch
+{
+public:
+  TagMatch(TagInfo const& tag)
+    : NameMatch(tag.name.c_str(), FullCompare, CaseSensitive)
+    , Tag(tag)
+  {
+  }
+
+  virtual bool Filter(TagInfo const& tag) const
+  {
+    return Tag.type == tag.type &&
+           Tag.info == tag.info &&
+           Tag.re == tag.re &&
+           Tag.file == tag.file &&
+           true;
+  }
+
+private:
+  TagInfo const& Tag;
+};
+
+static std::vector<std::pair<TagInfo, size_t>> RefreshNamesCache(TagFileInfo* fi, FILE* f, OffsetCont const& offsets, std::vector<std::pair<TagInfo, size_t>>&& tagsWithFreq)
+{
+  auto cur = tagsWithFreq.begin();
+  for (auto i = tagsWithFreq.begin(); i != tagsWithFreq.end(); ++i)
+  {
+    auto visitor = TagMatch(i->first);
+    auto foundTags = GetMatchedTags(fi, f, offsets, visitor, 0);
+    if (!foundTags.empty())
+      (cur++)->first = std::move(foundTags.back());
+  }
+
+  tagsWithFreq.erase(cur, tagsWithFreq.end());
+  return tagsWithFreq;
+}
+
+static std::vector<std::pair<TagInfo, size_t>> RefreshFilesCache(TagFileInfo* fi, FILE* f, OffsetCont const& offsets, std::vector<std::pair<TagInfo, size_t>>&& tagsWithFreq)
+{
+//TODO: refactor duplicated code
+  auto cur = tagsWithFreq.begin();
+  for (auto i = tagsWithFreq.begin(); i != tagsWithFreq.end(); ++i)
+  {
+    auto nameAndPathFilter = GetNameAndPathFilter(i->first.file.c_str());
+    auto visitor = FilenameMatch(std::move(nameAndPathFilter.first), std::move(nameAndPathFilter.second), FullCompare);
+    auto foundTags = GetMatchedTags(fi, f, offsets, visitor, 0);
+    if (!foundTags.empty())
+      (cur++)->first = std::move(foundTags.back());
+  }
+
+  tagsWithFreq.erase(cur, tagsWithFreq.end());
+  return tagsWithFreq;
 }
