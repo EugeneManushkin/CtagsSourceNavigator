@@ -1330,11 +1330,20 @@ static std::pair<std::string, std::string> GetNameAndPathFilter(char const* path
   return std::make_pair(std::move(name), std::string(path, nameBegin + 1));
 }
 
+inline TagInfo MakeFileTag(TagInfo&& tag)
+{
+  TagInfo temp;
+  temp.Owner = std::move(tag.Owner);
+  temp.file = std::move(tag.file);
+  std::swap(tag, temp);
+  return std::move(tag);
+}
+
 static std::vector<TagInfo> FindFile(const char* file, const char* part, bool comparationType, size_t maxCount)
 {
   auto maneAndPathFilter = GetNameAndPathFilter(part);
   auto tags = ForEachFileRepository(file, IndexType::Filenames, FilenameMatch(std::move(maneAndPathFilter.first), std::move(maneAndPathFilter.second), comparationType), maxCount);
-  std::for_each(tags.begin(), tags.end(), [](TagInfo& tag) {TagInfo tmp; tmp.Owner = std::move(tag.Owner); tmp.file = std::move(tag.file); std::swap(tmp, tag);});
+  std::transform(std::make_move_iterator(tags.begin()), std::make_move_iterator(tags.end()), tags.begin(), MakeFileTag);
   return SortTags(std::move(tags), "", SortOptions::Default);
 }
 
@@ -1523,7 +1532,7 @@ static std::vector<std::pair<TagInfo, size_t>> RefreshNamesCache(TagFileInfo* fi
   }
 
   tagsWithFreq.erase(cur, tagsWithFreq.end());
-  return tagsWithFreq;
+  return std::move(tagsWithFreq);
 }
 
 static std::vector<std::pair<TagInfo, size_t>> RefreshFilesCache(TagFileInfo* fi, FILE* f, OffsetCont const& offsets, std::vector<std::pair<TagInfo, size_t>>&& tagsWithFreq)
@@ -1536,9 +1545,9 @@ static std::vector<std::pair<TagInfo, size_t>> RefreshFilesCache(TagFileInfo* fi
     auto visitor = FilenameMatch(std::move(nameAndPathFilter.first), std::move(nameAndPathFilter.second), FullCompare);
     auto foundTags = GetMatchedTags(fi, f, offsets, visitor, 0);
     if (!foundTags.empty())
-      (cur++)->first = std::move(foundTags.back());
+      (cur++)->first = MakeFileTag(std::move(foundTags.back()));
   }
 
   tagsWithFreq.erase(cur, tagsWithFreq.end());
-  return tagsWithFreq;
+  return std::move(tagsWithFreq);
 }
