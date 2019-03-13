@@ -431,7 +431,7 @@ static std::string MakeDeclaration(std::string const& str)
   declaration.resize(std::unique(declaration.begin(), declaration.end(), [](char a, char b) {return a == ' ' && a == b;}) - declaration.begin());
   declaration = !declaration.empty() && *declaration.begin() == ' ' ? declaration.substr(1) : declaration;
   declaration = !declaration.empty() && *declaration.rbegin() == ' ' ? declaration.substr(0, declaration.length() - 1) : declaration;
-  return declaration;
+  return std::move(declaration);
 }
 
 static std::string MakeFilename(std::string const& str)
@@ -439,7 +439,7 @@ static std::string MakeFilename(std::string const& str)
   std::string result = str;
   std::replace(result.begin(), result.end(), '/', '\\');
   result.erase(std::unique(result.begin(), result.end(), [](char a, char b) {return a == '\\' && a == b; }), result.end());
-  return result;
+  return std::move(result);
 }
 
 inline bool IsLineEnd(char c)
@@ -736,7 +736,7 @@ OffsetCont TagFileInfo::GetOffsets(FILE* f, IndexType type) const
   if (!ReadOffsets(f, result))
     throw std::runtime_error("Invalid file format");
 
-  return result;
+  return std::move(result);
 }
 
 void TagFileInfo::FlushCachedTags()
@@ -952,7 +952,7 @@ std::shared_ptr<FILE> TagFileInfo::OpenIndex(char const* mode) const
   if (fread(&storedTagsModTime, sizeof(storedTagsModTime), 1, &*f) != 1 || storedTagsModTime != tagsStat.st_mtime)
     return std::shared_ptr<FILE>();
 
-  return SkipRepoRoot(&*f) ? f : std::shared_ptr<FILE>();
+  return SkipRepoRoot(&*f) ? std::move(f) : std::shared_ptr<FILE>();
 }
 
 int TagFileInfo::Load(size_t& symbolsLoaded)
@@ -1240,7 +1240,7 @@ static std::vector<TagInfo> GetMatchedTags(TagFileInfo* fi, FILE* f, OffsetCont 
       maxCount -= maxCount > 0 ? 1 : 0;
     }
   }
-  return result;
+  return std::move(result);
 }
 
 static std::vector<TagInfo> GetMatchedTags(TagFileInfo* fi, IndexType index, MatchVisitor const& visitor, size_t maxCount)
@@ -1265,7 +1265,7 @@ static std::vector<TagInfo> ForEachFileRepository(char const* fileFullPath, Inde
     std::move(tags.begin(), tags.end(), std::back_inserter(result));
   }
 
-  return result;
+  return std::move(result);
 }
 
 class TagsLess
@@ -1382,7 +1382,7 @@ std::vector<std::string> GetFiles()
 {
   std::vector<std::string> result;
   std::transform(files.begin(), files.end(), std::back_inserter(result), [](TagFileInfoPtr const& file) {return file->GetName();});
-  return result;
+  return std::move(result);
 }
 
 std::vector<std::string> GetLoadedTags(const char* file)
@@ -1394,7 +1394,7 @@ std::vector<std::string> GetLoadedTags(const char* file)
       result.push_back(repos->GetName());
   }
 
-  return result;
+  return std::move(result);
 }
 
 void UnloadTags(const char* tagsFile)
@@ -1495,7 +1495,7 @@ std::vector<TagInfo> GetCachedTags(const char* file, size_t limit, bool getFiles
     std::move(tags.begin(), tags.end(), std::back_inserter(result));
   }
 
-  return result;
+  return std::move(result);
 }
 
 class TagMatch : public NameMatch
