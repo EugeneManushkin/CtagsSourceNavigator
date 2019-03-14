@@ -19,6 +19,7 @@
 
 #include <algorithm>
 #include <functional>
+#include <io.h>
 #include <iterator>
 #include <regex>
 #include <set>
@@ -900,7 +901,7 @@ bool TagFileInfo::CreateIndex(time_t tagsModTime, bool singleFileRepos)
 bool TagFileInfo::LoadCache()
 {
   IndexModTime = 0;
-  auto f = FOpen(indexFile.c_str(), "rb");
+  auto f = FOpen(indexFile.c_str(), "r+b");
   if (!f || !ReadSignature(&*f))
     return false;
 
@@ -921,10 +922,20 @@ bool TagFileInfo::LoadCache()
 
   if (!IsEndOfFile(&*f))
   {
-    NamesCache = TagsInternal::CreateTagsCache(0);
-    FilesCache = TagsInternal::CreateTagsCache(0);
-    if (!ReadTagsCache(&*f, *NamesCache, filename) || !ReadTagsCache(&*f, *FilesCache, filename))
-      return false;
+    auto namesCache = TagsInternal::CreateTagsCache(0);
+    auto filesCache = TagsInternal::CreateTagsCache(0);
+    auto tagsCacheBegins = ftell(&*f);
+    if (!ReadTagsCache(&*f, *namesCache, filename) || !ReadTagsCache(&*f, *filesCache, filename))
+    {
+      NamesCache = TagsInternal::CreateTagsCache(0);
+      FilesCache = TagsInternal::CreateTagsCache(0);
+      _chsize(_fileno(&*f), tagsCacheBegins);
+    }
+    else
+    {
+      NamesCache = std::move(namesCache);
+      FilesCache = std::move(filesCache);
+    }
   }
 
   f.reset();
