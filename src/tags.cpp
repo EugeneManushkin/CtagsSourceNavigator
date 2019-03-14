@@ -142,6 +142,13 @@ private:
     return !IndexModTime || stat(indexFile.c_str(), &st) == -1 || IndexModTime != st.st_mtime;
   }
 
+  void CloseIndexFile(std::shared_ptr<FILE>&& f)
+  {
+    f.reset();
+    struct stat st;
+    IndexModTime = stat(indexFile.c_str(), &st) != -1 ? st.st_mtime : 0;
+  }
+
   std::string filename;
   std::string indexFile;
   std::string reporoot;
@@ -752,9 +759,8 @@ void TagFileInfo::FlushCachedTags()
   
   WriteTagsStat(&*f, NamesCache->GetStat());
   WriteTagsStat(&*f, FilesCache->GetStat());
-  f.reset();
-  struct stat st;
-  IndexModTime = stat(indexFile.c_str(), &st) != -1 ? st.st_mtime : 0;
+  _chsize(_fileno(&*f), ftell(&*f));
+  CloseIndexFile(std::move(f));
 }
 
 static std::vector<std::pair<TagInfo, size_t>> RefreshNamesCache(TagFileInfo* fi, FILE* f, OffsetCont const& offsets, std::vector<std::pair<TagInfo, size_t>>&& tagsWithFreq);
@@ -938,9 +944,7 @@ bool TagFileInfo::LoadCache()
     }
   }
 
-  f.reset();
-  struct stat st;
-  IndexModTime = stat(indexFile.c_str(), &st) != -1 ? st.st_mtime : IndexModTime;
+  CloseIndexFile(std::move(f));
   return !!IndexModTime;
 }
 
