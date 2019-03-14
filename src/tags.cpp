@@ -194,23 +194,25 @@ static bool ReadSignature(FILE* f)
   return true;
 }
 
-static bool ReadString(FILE* f, std::string& filePath)
+static uint32_t const stringLengthThreshold = 32 * 1024;
+
+static bool ReadString(FILE* f, std::string& str)
 {
-  uint32_t pathLen = 0;
-  if (fread(&pathLen, sizeof(pathLen), 1, f) != 1)
+  uint32_t len = 0;
+  if (fread(&len, sizeof(len), 1, f) != 1 || len > stringLengthThreshold)
     return false;
 
-  if (pathLen > 0)
+  if (len > 0)
   {
-    std::vector<char> buf(pathLen);
-    if (fread(&buf[0], 1, buf.size(), f) != buf.size())
+    std::vector<char> buf(len);
+    if (fread(&buf[0], 1, buf.size(), f) != buf.size() || std::find(buf.begin(), buf.end(), 0) != buf.end())
       return false;  
 
-    filePath = std::string(buf.begin(), buf.end());
+    str = std::string(buf.begin(), buf.end());
   }
   else
   {
-    filePath.clear();
+    str.clear();
   }
 
   return true;
@@ -218,11 +220,11 @@ static bool ReadString(FILE* f, std::string& filePath)
 
 static bool SkipString(FILE* f)
 {
-  uint32_t pathLen = 0;
-  if (fread(&pathLen, sizeof(pathLen), 1, f) != 1)
+  uint32_t len = 0;
+  if (fread(&len, sizeof(len), 1, f) != 1 || len > stringLengthThreshold)
     return false;
 
-  fseek(f, pathLen, SEEK_CUR);
+  fseek(f, len, SEEK_CUR);
   return true;
 }
 
@@ -325,8 +327,9 @@ static void WriteTagsStat(FILE* f, std::vector<std::pair<TagInfo, size_t>> const
 
 static bool ReadTagsCache(FILE* f, TagsInternal::TagsCache& cache, std::string const& tagsFile)
 {
+  size_t const capacityThreshold = 500;
   size_t sz = 0;
-  if (!ReadUnsignedInt(f, sz))
+  if (!ReadUnsignedInt(f, sz) || sz > capacityThreshold)
     return false;
 
   cache.SetCapacity(sz);
