@@ -23,9 +23,16 @@ endif(MSVC)
 
 add_library(ctags SHARED ${SOURCES})
 set(PLUGIN_DIR ${CMAKE_BINARY_DIR}/$<CONFIG>/ctags)
+execute_process(COMMAND git rev-parse HEAD
+                WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+                OUTPUT_VARIABLE CTAGS_GIT_COMMIT
+                OUTPUT_STRIP_TRAILING_WHITESPACE
+)
+
 target_compile_definitions(ctags PUBLIC CTAGS_VERSION_MAJOR=${CTAGS_VERSION_MAJOR}
                                  PUBLIC CTAGS_VERSION_MINOR=${CTAGS_VERSION_MINOR}
                                  PUBLIC CTAGS_BUILD=${CTAGS_BUILD}
+                                 PUBLIC CTAGS_GIT_COMMIT="${CTAGS_GIT_COMMIT}"
 )
 
 add_custom_command(TARGET ctags POST_BUILD

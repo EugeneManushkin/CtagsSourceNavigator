@@ -14,4 +14,4 @@
 #endif
 #define CTAGS_FILENAME "ctags.dll"
 #define CTAGS_PRODUCT_NAME L"Ctags Source Navigator"
-#define CTAGS_FILE_DESCR L"Far Manager source code browsing plugin"
+#define CTAGS_FILE_DESCR L"Far Manager source code browsing plugin. Git revision: " CTAGS_GIT_COMMIT
