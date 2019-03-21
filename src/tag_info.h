@@ -6,7 +6,6 @@ struct TagInfo
 {
   std::string name;
   std::string file;
-  std::string declaration;
   std::string re;
   int lineno;
   char type;

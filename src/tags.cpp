@@ -415,32 +415,20 @@ static void QuoteMeta(std::string& str)
 static void ReplaceSpaces(std::string& str)
 {
   std::string dst;
-  for(size_t i=0;i<str.length();i++)
+  size_t begin = str.length() > 2 && str.front() == '^' ? 1 : 0;
+  size_t end = str.length() > 2 && str.back() == '$' ? str.size() - 1: str.size();
+  for(size_t i = begin; i < end; ++i)
   {
-    if(str[i]==' ')
+    if(isspace(str[i]))
     {
-      while(i<str.length() && str[i]==' ')i++;
-      dst+="\\s+";
+      bool optional = i == begin;
+      for (; i < end && isspace(str[i]); ++i);
+      optional = optional || i == end;
+      dst+=optional ? "\\s*" : "\\s+";
     }
     dst+=str[i];
   }
   str=dst;
-}
-
-//TODO: consider optimization
-static std::string MakeDeclaration(std::string const& str)
-{
-  std::string declaration = str;
-  size_t begin = declaration.length() > 2 && declaration.front() == '^' ? 1 : 0;
-  size_t end = declaration.length() > 2 && declaration.back() == '$' ? declaration.length() - 1 : declaration.length();
-  if (end - begin != declaration.length())
-    declaration = std::string(declaration.begin() + begin, declaration.begin() + end);
-
-  std::replace(declaration.begin(), declaration.end(), '\t', ' ');
-  declaration.resize(std::unique(declaration.begin(), declaration.end(), [](char a, char b) {return a == ' ' && a == b;}) - declaration.begin());
-  declaration = !declaration.empty() && *declaration.begin() == ' ' ? declaration.substr(1) : declaration;
-  declaration = !declaration.empty() && *declaration.rbegin() == ' ' ? declaration.substr(0, declaration.length() - 1) : declaration;
-  return std::move(declaration);
 }
 
 static std::string MakeFilename(std::string const& str)
@@ -500,7 +488,6 @@ bool ParseLine(const char* buf, TagFileInfo const& fi, TagInfo& result)
       return false;
 
     excmd = excmd.substr(1, excmd.length() - 2);
-    result.declaration = MakeDeclaration(excmd);
     QuoteMeta(excmd);
     ReplaceSpaces(excmd);
     result.re = std::move(excmd);

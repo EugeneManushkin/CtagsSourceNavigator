@@ -64,6 +64,18 @@ static const wchar_t* ConfigFileName=L"config";
 
 static const wchar_t* const DefaultTagsFilename = L"tags";
 
+std::bitset<256> GetCharsMap(std::string const& str)
+{
+  std::bitset<256> result;
+  result.reset();
+  for (auto c : str)
+  {
+    result.set(static_cast<unsigned char>(c), true);
+  }
+
+  return std::move(result);
+}
+
 struct Config{
   Config();
   void SetWordchars(std::string const& str);
@@ -118,11 +130,7 @@ Config::Config()
 void Config::SetWordchars(std::string const& str)
 {
   wordchars = str;
-  wordCharsMap.reset();
-  for (auto c : str)
-  {
-    wordCharsMap.set((unsigned char)c, true);
-  }
+  wordCharsMap = GetCharsMap(wordchars);
 }
 
 Config config;
@@ -1128,6 +1136,48 @@ std::string TrimFilename(const std::string& file,size_t maxlength)
                                  : file.substr(file.length() - maxlength);
 }
 
+static std::string::iterator ReplaceRegexSpecialChars(std::string::iterator begin, std::string::iterator end)
+{
+  static const auto unquotMap = GetCharsMap("s.$^*()|+[]{}?\\");
+  auto cur = begin;
+  int lexlen = 0;
+  for (; begin != end; ++begin)
+  {
+    if (lexlen == 1 && unquotMap[static_cast<unsigned char>(*begin)])
+      ++lexlen;
+    else if (lexlen == 2 && (*begin == '+' || *begin == '*'))
+      ++lexlen;
+    else
+      lexlen = 0;
+
+    if (lexlen == 0 && *begin == '\\')
+      ++lexlen;
+
+    if (lexlen > 1 && *begin != 's')
+    {
+      cur -= lexlen - 1;
+      *cur = lexlen == 3 ? ' ' : *begin;
+      cur += *begin != '*' ? 1 : 0;
+      lexlen = 0;
+    }
+    else
+    {
+      *cur++ = *begin;
+    }
+  }
+
+  return cur;
+}
+
+static std::string RegexToDeclaration(std::string const& regex)
+{
+  auto begin = regex.size() > 2 && regex.front() == '^' ? regex.begin() + 1 : regex.begin();
+  auto end = regex.size() > 2 && regex.back() == '$' ? regex.end() - 1 : regex.end();
+  auto result = std::string(begin, end);
+  result.erase(ReplaceRegexSpecialChars(result.begin(), result.end()), result.end());
+  return std::move(result);
+}
+
 enum class FormatTagFlag
 {
   DisplayFile,
@@ -1145,7 +1195,7 @@ WideString FormatTagInfo(TagInfo const& ti, size_t maxid, size_t maxDeclaration,
   if (formatFlag == FormatTagFlag::DisplayOnlyName)
     return ToString(name);
 
-  std::string declaration = ti.declaration.substr(0, maxDeclaration);
+  std::string declaration = RegexToDeclaration(ti.re).substr(0, maxDeclaration);
   std::stringstream str;
   str << ti.type << ":" << name << std::string(maxid - name.length(), ' ') << " " << declaration << std::string(maxDeclaration - declaration.length(), ' ');
   if (formatFlag == FormatTagFlag::DisplayFile || ti.lineno >= 0)
@@ -1164,8 +1214,8 @@ std::vector<WideString> GetMenuStrings(std::vector<TagInfo const*> const& tags, 
   size_t maxinfo = 0;
   for (auto const& ti : tags)
   {
-    if (ti->name.length() > maxid)maxid = ti->name.length();
-    if (ti->declaration.length() > maxinfo)maxinfo = ti->declaration.length();
+    maxid = std::max(maxid, ti->name.length());
+    maxinfo = std::max(maxinfo, RegexToDeclaration(ti->re).length());
   }
 
   const size_t currentWidth = GetMenuWidth();
@@ -1290,7 +1340,7 @@ public:
     for (auto const& tag : Tags)
     {
       std::wsmatch matchResult;
-      auto str = FormatTagInfo(tag, tag.name.length(), tag.declaration.length(), tag.file.length(), FormatFlag);
+      auto str = FormatTagInfo(tag, tag.name.length(), RegexToDeclaration(tag.re).length(), tag.file.length(), FormatFlag);
       if (std::regex_search(str, matchResult, regexFilter) && !matchResult.empty())
         idx.insert(std::make_pair(matchResult.position(), &tag));
     }
