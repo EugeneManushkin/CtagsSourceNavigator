@@ -1138,7 +1138,7 @@ std::string TrimFilename(const std::string& file,size_t maxlength)
 
 static std::string::iterator ReplaceRegexSpecialChars(std::string::iterator begin, std::string::iterator end)
 {
-  static const auto unquotMap = GetCharsMap("s.$^*()|+[]{}?\\");
+  static const auto unquotMap = GetCharsMap("s.$^*()|+[]{}?\\/");
   auto cur = begin;
   int lexlen = 0;
   for (; begin != end; ++begin)
@@ -1157,7 +1157,7 @@ static std::string::iterator ReplaceRegexSpecialChars(std::string::iterator begi
     {
       cur -= lexlen - 1;
       *cur = lexlen == 3 ? ' ' : *begin;
-      cur += *begin != '*' ? 1 : 0;
+      cur += lexlen == 3 && *begin == '*' ? 0 : 1;
       lexlen = 0;
     }
     else
