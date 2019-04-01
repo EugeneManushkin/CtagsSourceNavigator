@@ -64,6 +64,8 @@ static const wchar_t* ConfigFileName=L"config";
 
 static const wchar_t* const DefaultTagsFilename = L"tags";
 
+static const bool FlushTagsCache = true;
+
 std::bitset<256> GetCharsMap(std::string const& str)
 {
   std::bitset<256> result;
@@ -1295,7 +1297,7 @@ public:
   virtual void Erase(intptr_t index) override
   {
     if (UsedCachedTags)
-      EraseCachedTag(Tags.at(index), true);
+      EraseCachedTag(Tags.at(index), FlushTagsCache);
   }
 
 protected:
@@ -1759,7 +1761,7 @@ void PlainNavigator::Goto(TagInfo const& tag, bool setPanelDir)
       return;
   }
 
-  CacheTag(tag, config.max_results, true);
+  CacheTag(tag, config.max_results, FlushTagsCache);
   Move(ToString(tag.file), line, setPanelDir);
 }
 
