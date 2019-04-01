@@ -114,6 +114,12 @@ struct TagFileInfo{
     cache.Insert(tag);
   }
 
+  void EraseCachedTag(TagInfo const& tag)
+  {
+    TagsInternal::TagsCache& cache = tag.name.empty() ? *FilesCache : *NamesCache;
+    cache.Erase(tag);
+  }
+
   std::vector<TagInfo> GetCachedNames(size_t limit) const
   {
     return NamesCache->Get(limit);
@@ -1481,6 +1487,17 @@ void CacheTag(TagInfo const& tag, size_t cacheSize, bool flush)
   if (repos != files.end())
   {
     (*repos)->CacheTag(tag, cacheSize);
+    if (flush)
+      (*repos)->FlushCachedTags();
+  }
+}
+
+void EraseCachedTag(TagInfo const& tag, bool flush)
+{
+  auto repos = std::find_if(files.begin(), files.end(), [&](TagFileInfoPtr const& repos) {return repos->HasName(tag.Owner.TagsFile.c_str());});
+  if (repos != files.end())
+  {
+    (*repos)->EraseCachedTag(tag);
     if (flush)
       (*repos)->FlushCachedTags();
   }

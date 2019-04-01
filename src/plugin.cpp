@@ -1093,6 +1093,8 @@ std::vector<FarKey> GetFarKeys(std::string const& filterkeys)
   fk.push_back({ 0x43, LEFT_CTRL_PRESSED });
   fk.push_back({ 0x43, RIGHT_CTRL_PRESSED });
   fk.push_back({VK_F4});
+  fk.push_back({VK_DELETE, LEFT_CTRL_PRESSED});
+  fk.push_back({VK_DELETE, RIGHT_CTRL_PRESSED});
   fk.push_back(FarKey());
   return fk;
 }
@@ -1108,6 +1110,11 @@ bool IsCtrlC(FarKey const& key)
 bool IsF4(FarKey const& key)
 {
   return key.VirtualKeyCode == VK_F4;
+}
+
+bool IsCtrlDel(FarKey const& key)
+{
+  return key.VirtualKeyCode == VK_DELETE && (key.ControlKeyState == LEFT_CTRL_PRESSED || key.ControlKeyState == RIGHT_CTRL_PRESSED);
 }
 
 static bool GetRegex(WideString const& filter, bool caseInsensitive, std::wregex& result)
@@ -1251,26 +1258,33 @@ public:
   virtual std::vector<WideString> ApplyFilter(char const* filter) = 0;
   virtual std::string GetClipboardText(intptr_t index) const = 0;
   virtual TagInfo GetTag(intptr_t index) const = 0;
+  virtual void Erase(intptr_t index)
+  {
+  }
 };
 
-class LookupTagsVisitor : public LookupMenuVisitor
+class CacheBasedVisitor : public LookupMenuVisitor
 {
 public:
-  LookupTagsVisitor(std::string const& file)
+  CacheBasedVisitor(std::string const& file, bool getFiles)
     : File(file)
+    , GetFiles(getFiles)
+    , UsedCachedTags(false)
   {
   }
 
   std::vector<WideString> ApplyFilter(char const* filter) override
   {
-    Tags = !*filter ? GetCachedTags(File.c_str(), config.max_results, false) : Tags;
-    Tags = !!*filter || Tags.empty() ? FindPartiallyMatchedTags(File.c_str(), filter, config.max_results, !config.casesens, GetSortOptions(config)) : Tags;
+    Tags = !*filter ? GetCachedTags(File.c_str(), config.max_results, GetFiles) : Tags;
+    UsedCachedTags = !*filter && !Tags.empty();
+    Tags = !UsedCachedTags ? SearchTags(File.c_str(), filter) : Tags;
     return GetMenuStrings(Tags);
   }
 
   virtual std::string GetClipboardText(intptr_t index) const override
   {
-    return Tags.at(index).name;
+    auto const& tag = Tags.at(index);
+    return tag.name.empty() ? tag.file : tag.name;
   }
 
   virtual TagInfo GetTag(intptr_t index) const override
@@ -1278,42 +1292,50 @@ public:
     return Tags.at(index);
   }
 
+  virtual void Erase(intptr_t index) override
+  {
+    if (UsedCachedTags)
+      EraseCachedTag(Tags.at(index), true);
+  }
+
+protected:
+  virtual std::vector<TagInfo> SearchTags(char const* file, char const* filter) const = 0;
+
 private:
   std::string const File;
   std::vector<TagInfo> Tags;
+  bool GetFiles;
+  bool UsedCachedTags;
 };
 
-class SearchFileVisitor : public LookupMenuVisitor
+class LookupTagsVisitor : public CacheBasedVisitor
+{
+public:
+  LookupTagsVisitor(std::string const& file)
+    : CacheBasedVisitor(file, false)
+  {
+  }
+
+private:
+  virtual std::vector<TagInfo> SearchTags(char const* file, char const* filter) const override
+  {
+    return FindPartiallyMatchedTags(file, filter, config.max_results, !config.casesens, GetSortOptions(config));
+  }
+};
+
+class SearchFileVisitor : public CacheBasedVisitor
 {
 public:
   SearchFileVisitor(std::string const& file)
-    : File(file)
+    : CacheBasedVisitor(file, true)
   {
-  }
-
-  std::vector<WideString> ApplyFilter(char const* filter) override
-  {
-    Tags = !*filter ? GetCachedTags(File.c_str(), config.max_results, true) : Tags;
-    Tags = !!*filter || Tags.empty() ? FindPartiallyMatchedFile(File.c_str(), filter, config.max_results) : Tags;
-    auto maxfile = GetMenuWidth();
-    std::vector<WideString> menuStrings;
-    std::transform(Tags.begin(), Tags.end(), std::back_inserter(menuStrings), [=](TagInfo const& tag) {return ToString(TrimFilename(tag.file, maxfile));});
-    return menuStrings;
-  }
-
-  virtual std::string GetClipboardText(intptr_t index) const override
-  {
-    return Tags.at(index).file;
-  }
-
-  virtual TagInfo GetTag(intptr_t index) const override
-  {
-    return Tags.at(index);
   }
 
 private:
-  std::string const File;
-  std::vector<TagInfo> Tags;
+  virtual std::vector<TagInfo> SearchTags(char const* file, char const* filter) const override
+  {
+    return FindPartiallyMatchedFile(file, filter, config.max_results);
+  }
 };
 
 class FilterMenuVisitor : public LookupMenuVisitor
@@ -1414,6 +1436,11 @@ static bool LookupTagsMenu(LookupMenuVisitor& visitor, TagInfo& tag, intptr_t se
     {
       OpenInNewWindow(visitor.GetTag(menu[res].UserData));
       selected = res;
+      continue;
+    }
+    if (IsCtrlDel(fk[bkey]))
+    {
+      visitor.Erase(menu[res].UserData);
       continue;
     }
     if (static_cast<size_t>(bkey) >= filterkeys.length())

@@ -52,6 +52,7 @@ bool IsTagFile(const char* file);
 std::vector<TagInfo>::const_iterator FindContextTag(std::vector<TagInfo> const& tags, char const* fileName, int lineNumber, char const* lineText);
 std::vector<TagInfo>::const_iterator Reorder(TagInfo const& context, std::vector<TagInfo>& tags);
 void CacheTag(TagInfo const& tag, size_t cacheSize, bool flush);
+void EraseCachedTag(TagInfo const& tag, bool flush);
 std::vector<TagInfo> GetCachedTags(const char* file, size_t limit, bool getFiles);
 
 #endif
