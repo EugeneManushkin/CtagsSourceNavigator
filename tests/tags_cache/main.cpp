@@ -241,6 +241,43 @@ namespace TagsInternal
       ASSERT_EQ(FreqAt(1, cache), FreqAt(1, sut));
       ASSERT_EQ(FreqAt(2, cache), FreqAt(2, sut));
     }
+
+    TEST(TagsCache, ErasesTag)
+    {
+      auto sut = MakeCache({FirstTag});
+      ASSERT_NO_THROW(sut->Erase(FirstTag));
+      ASSERT_EQ(0, Size(sut));
+      ASSERT_EQ(0, sut->GetStat().size());
+    }
+
+    TEST(TagsCache, ErasesMiddleTag)
+    {
+      auto sut = MakeCache({FirstTag, FirstTag, FirstTag, SecondTag, SecondTag, ThirdTag});
+      auto const totalTags = Size(sut);
+      ASSERT_NO_THROW(sut->Erase(SecondTag));
+      ASSERT_EQ(totalTags - 1, Size(sut));
+      ASSERT_TRUE(Equal(FirstTag, TagAt(0, sut)));
+      ASSERT_TRUE(Equal(ThirdTag, TagAt(1, sut)));
+      ASSERT_EQ(3, FreqAt(0, sut));
+      ASSERT_EQ(1, FreqAt(1, sut));
+    }
+
+    TEST(TagsCache, NotChangesEmptyCacheWhileErasingTag)
+    {
+      auto sut = CreateTagsCache(0);
+      ASSERT_NO_THROW(sut->Erase(FirstTag));
+      ASSERT_EQ(0, Size(sut));
+    }
+
+    TEST(TagsCache, NotChangesCacheWhileErasingNotFoundTag)
+    {
+      auto sut = MakeCache({SecondTag, FirstTag});
+      auto const totalTags = Size(sut);
+      ASSERT_NO_THROW(sut->Erase(ThirdTag));
+      ASSERT_EQ(totalTags, Size(sut));
+      ASSERT_TRUE(Equal(FirstTag, TagAt(0, sut)));
+      ASSERT_TRUE(Equal(SecondTag, TagAt(1, sut)));
+    }
   }
 }
 

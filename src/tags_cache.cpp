@@ -67,6 +67,16 @@ namespace
       desiredTag->second = Frequency.insert(std::make_pair(freq, &desiredTag->first));
     }
 
+    virtual void Erase(TagInfo const& tag) override
+    {
+      auto found = Tags.find(tag);
+      if (found == Tags.end())
+        return;
+
+      Frequency.erase(found->second);
+      Tags.erase(found);
+    }
+
     virtual void SetCapacity(size_t capacity) override
     {
       Capacity = capacity;
