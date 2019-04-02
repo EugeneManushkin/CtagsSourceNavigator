@@ -104,6 +104,7 @@ struct Config{
   bool index_edited_file;
   bool sort_class_members_by_name;
   static const size_t max_history_len;
+  bool use_built_in_ctags;
 
 private:
   std::string wordchars;
@@ -125,6 +126,7 @@ Config::Config()
   , cur_file_first(true)
   , index_edited_file(true)
   , sort_class_members_by_name(false)
+  , use_built_in_ctags(true)
 {
   SetWordchars("0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz~$_");
 }
@@ -643,12 +645,14 @@ static WideString GetSelectedItem(WideString const& DotDotSubst = L".")
   return JoinPath(GetPanelDir(), selected == L".." ? DotDotSubst : selected);
 }
 
+static WideString GetCtagsUtilityPath();
+
 int TagDirectory(WideString const& dir)
 {
   if (!(GetFileAttributesW(dir.c_str()) & FILE_ATTRIBUTE_DIRECTORY))
     throw std::runtime_error("Selected item is not a direcory");
 
-  ExecuteScript(ExpandEnvString(ToString(config.exe)), ToString(config.opt), dir, WideString(GetMsg(MTagingCurrentDirectory)) + L"\n" + dir);
+  ExecuteScript(GetCtagsUtilityPath(), ToString(config.opt), dir, WideString(GetMsg(MTagingCurrentDirectory)) + L"\n" + dir);
   return 1;
 }
 
@@ -744,6 +748,11 @@ static WideString GetModulePath()
 static WideString GetConfigFilePath()
 {
   return JoinPath(GetModulePath(), ConfigFileName);
+}
+
+static WideString GetCtagsUtilityPath()
+{
+  return config.use_built_in_ctags ? JoinPath(JoinPath(GetModulePath(), ToString(CTAGS_UTIL_DIR)), L"ctags.exe") : ExpandEnvString(ToString(config.exe));
 }
 
 static DWORD ToFarControlState(WORD controlState)
@@ -876,6 +885,10 @@ static void LoadConfig(std::string const& fileName)
     else if(key == "sortclassmembersbyname")
     {
       config.sort_class_members_by_name = val == "true";
+    }
+    else if(key == "usebuiltinctags")
+    {
+      config.use_built_in_ctags = val == "true";
     }
   }
 
@@ -2080,7 +2093,7 @@ static bool IndexSingleFile(WideString const& fileFullPath, WideString const& ta
   auto args = ToString(RemoveFileMask(config.opt));
   args += args.empty() || args.back() == ' ' ? L" " : L"";
   args += L"\"" + fileFullPath + L"\"";
-  ExecuteScript(ExpandEnvString(ToString(config.exe)), args, tagsDirectoryPath);
+  ExecuteScript(GetCtagsUtilityPath(), args, tagsDirectoryPath);
   return !!LoadTagsImpl(ToStdString(JoinPath(tagsDirectoryPath, DefaultTagsFilename)), true);
 }
 
@@ -2676,6 +2689,13 @@ WideString get_text(HANDLE hDlg, intptr_t ctrl_id) {
   return WideString(item.PtrData, item.PtrLength);
 }
 
+static FarDialogItem GetItem(HANDLE hDlg, intptr_t id)
+{
+  FarDialogItem item;
+  I.SendDlgMessage(hDlg, DM_GETDLGITEMSHORT, id, &item);
+  return std::move(item);
+}
+
 intptr_t WINAPI ConfigureDlgProc(
     HANDLE   hDlg,
     intptr_t Msg,
@@ -2694,6 +2714,7 @@ intptr_t WINAPI ConfigureDlgProc(
     items[Param1].Selected = reinterpret_cast<intptr_t>(Param2);
   }
 
+  I.SendDlgMessage(hDlg, DM_ENABLE , 2, reinterpret_cast<void*>(!GetItem(hDlg, 3).Selected));
   return I.DefDlgProc(hDlg, Msg, Param1, Param2);
 }
 
@@ -2704,9 +2725,10 @@ static intptr_t ConfigurePlugin()
   WideString menuTitle = WideString(GetMsg(MPlugin)) + L" " + PluginVersionString();
   struct InitDialogItem initItems[]={
 //    Type        X1  Y2  X2 Y2  F S           Flags D Data
-    DI_DOUBLEBOX, 3, ++y, 64,26, 0,0,              0,0,-1,menuTitle.c_str(),{},
+    DI_DOUBLEBOX, 3, ++y, 64,27, 0,0,              0,0,-1,menuTitle.c_str(),{},
     DI_TEXT,      5, ++y,  0, 0, 0,0,              0,0,MPathToExe,L"",{},
     DI_EDIT,      5, ++y, 62, 3, 1,0,              0,0,-1,ToString(config.exe),{"pathtoexe", true},
+    DI_CHECKBOX,  5, ++y, 62,10, 1,config.use_built_in_ctags,0,0,MUseBuiltInCtags,L"",{"usebuiltinctags", false, true},
     DI_TEXT,      5, ++y,  0, 0, 0,0,              0,0,MCmdLineOptions,L"",{},
     DI_EDIT,      5, ++y, 62, 5, 1,0,              0,0,-1,ToString(config.opt),{"commandline"},
     DI_TEXT,      5, ++y, 62,10, 1,0,DIF_SEPARATOR|DIF_BOXCOLOR,0,-1,L"",{},
@@ -2755,7 +2777,7 @@ static intptr_t ConfigurePlugin()
 
   std::shared_ptr<void> handleHolder(handle, [](void* h){I.DialogFree(h);});
   auto ExitCode = I.DialogRun(handle);
-  if(ExitCode!=24)return FALSE;
+  if(ExitCode!=itemsCount-2)return FALSE;
   if (SaveConfig(initItems, itemsCount))
     SynchronizeConfig();
 

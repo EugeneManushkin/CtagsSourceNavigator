@@ -66,4 +66,5 @@ enum{
   MPluginConfiguration,
   MNavigationHistory,
   MNavigationHistoryMenuTitle,
+  MUseBuiltInCtags,
 };
