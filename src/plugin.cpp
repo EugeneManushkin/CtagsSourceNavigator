@@ -517,6 +517,60 @@ static size_t GetMenuWidth()
   return borderLen > width ? 0 : width - borderLen;
 }
 
+static bool FindFarWindow(WideString const& file, intptr_t id, WindowInfo& info)
+{
+  auto i = I.AdvControl(&PluginGuid, ACTL_GETWINDOWCOUNT, 0, nullptr);
+  WindowInfo wi = {sizeof(WindowInfo)};
+  for (; i > 0; --i)
+  {
+    wi.Pos = i - 1;
+    I.AdvControl(&PluginGuid, ACTL_GETWINDOWINFO, 0, &wi);
+    if (wi.Id == id || id < 0 && file.empty() && wi.Flags == WIF_CURRENT)
+      break;
+
+    if (file.empty() || wi.Type != WTYPE_EDITOR || !wi.NameSize)
+      continue;
+
+    std::vector<wchar_t> name(wi.NameSize);
+    wi.Name = &name[0];
+    I.AdvControl(&PluginGuid, ACTL_GETWINDOWINFO, 0, &wi);
+    if (!!FSF.ProcessName(file.c_str(), wi.Name, 0, PN_CMPNAME))
+      break;
+  }
+
+  if (!i)
+    return false;
+
+  info = wi;
+  info.Name = nullptr;
+  return true;
+}
+
+static intptr_t FindEditorID(WideString const& file)
+{
+  WindowInfo found;
+  FindFarWindow(WideString(), -1, found);
+  intptr_t currentID = found.Id;
+  if (!FindFarWindow(file, -1, found))
+    return -1;
+
+  I.AdvControl(&PluginGuid, ACTL_SETCURRENTWINDOW, found.Pos, nullptr);
+  I.AdvControl(&PluginGuid, ACTL_COMMIT, 0, nullptr);
+  auto editorInfo = GetCurrentEditorInfo();
+  FindFarWindow(WideString(), currentID, found);
+  I.AdvControl(&PluginGuid, ACTL_SETCURRENTWINDOW, found.Pos, nullptr);
+  I.AdvControl(&PluginGuid, ACTL_COMMIT, 0, nullptr);
+  return editorInfo.EditorID;
+}
+
+static bool LineMatches(int line, std::wregex const& re, intptr_t editorID)
+{
+  EditorGetString egs = {sizeof(EditorGetString)};
+  egs.StringNumber = line;
+  I.EditorControl(editorID, ECTL_GETSTRING, 0, &egs);
+  return std::regex_match(egs.StringText, re);
+}
+
 static WideString ExpandEnvString(WideString const& str)
 {
   auto sz = ::ExpandEnvironmentStringsW(str.c_str(), nullptr, 0);
@@ -1580,11 +1634,8 @@ static void OpenInNewWindow(WideString const& filename, intptr_t line, intptr_t 
     throw Error(MEFailedToOpen);
 }
 
-int EnsureLine(int line, std::string const& file, std::string const& regex)
+static int EnsureLineInFile(int line, std::string const& file, std::string const& regex)
 {
-  if (regex.empty())
-    return line;
-
   std::regex re = std::regex(regex);
   std::ifstream f;
   f.exceptions(std::ifstream::goodbit);
@@ -1609,6 +1660,31 @@ int EnsureLine(int line, std::string const& file, std::string const& regex)
   }
 
   return line;
+}
+
+static int EnsureLineInEditor(int line, intptr_t editorID, std::string const& regex)
+{
+  auto re = std::wregex(ToString(regex));
+  EditorInfo ei = {sizeof(EditorInfo)};
+  I.EditorControl(editorID, ECTL_GETINFO, 0, &ei);
+  line = line >= ei.TotalLines || !LineMatches(line - 1, re, editorID) ? -1 : line;
+  if (line < 0)
+  {
+    auto messageHolder = LongOperationMessage(L"not found in place, searching");
+    for (line = 0; line < ei.TotalLines && !LineMatches(line, re, editorID); ++line);
+    line = line >= ei.TotalLines ? -1 : line + 1;
+  }
+
+  return line;
+}
+
+int EnsureLine(int line, std::string const& file, std::string const& regex)
+{
+  if (regex.empty())
+    return line;
+
+  auto id = FindEditorID(ToString(file));
+  return id < 0 ? EnsureLineInFile(line, file, regex) : EnsureLineInEditor(line, id, regex);
 }
 
 static void OpenInNewWindow(TagInfo const& tag)
