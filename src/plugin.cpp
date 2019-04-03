@@ -523,6 +523,7 @@ static bool FindFarWindow(WideString const& file, intptr_t id, WindowInfo& info)
   WindowInfo wi = {sizeof(WindowInfo)};
   for (; i > 0; --i)
   {
+    wi = {sizeof(WindowInfo)};
     wi.Pos = i - 1;
     I.AdvControl(&PluginGuid, ACTL_GETWINDOWINFO, 0, &wi);
     if (wi.Id == id || id < 0 && file.empty() && wi.Flags == WIF_CURRENT)
