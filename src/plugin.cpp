@@ -526,7 +526,7 @@ static bool FindFarWindow(WideString const& file, intptr_t id, WindowInfo& info)
     wi = {sizeof(WindowInfo)};
     wi.Pos = i - 1;
     I.AdvControl(&PluginGuid, ACTL_GETWINDOWINFO, 0, &wi);
-    if (wi.Id == id || id < 0 && file.empty() && wi.Flags == WIF_CURRENT)
+    if (wi.Id == id || id < 0 && file.empty() && !!(wi.Flags & WIF_CURRENT))
       break;
 
     if (file.empty() || wi.Type != WTYPE_EDITOR || !wi.NameSize)
@@ -549,7 +549,7 @@ static bool FindFarWindow(WideString const& file, intptr_t id, WindowInfo& info)
 
 static intptr_t FindEditorID(WideString const& file)
 {
-  WindowInfo found;
+  WindowInfo found = {sizeof(WindowInfo)};
   FindFarWindow(WideString(), -1, found);
   intptr_t currentID = found.Id;
   if (!FindFarWindow(file, -1, found))
@@ -1701,14 +1701,7 @@ static void OpenInNewWindow(TagInfo const& tag)
 static bool IsModalMode()
 {
   WindowInfo info = {sizeof(WindowInfo)};
-  for (auto numWindows = I.AdvControl(&PluginGuid, ACTL_GETWINDOWCOUNT, 0, nullptr); numWindows > 0 && !(info.Flags & WIF_CURRENT); --numWindows)
-  {
-    info.Pos = numWindows - 1;
-    info.Flags = WIF_NONE;
-    I.AdvControl(&PluginGuid, ACTL_GETWINDOWINFO, 0, &info);
-  }
-
-  return !!(info.Flags & WIF_CURRENT) && !!(info.Flags & WIF_MODAL);
+  return FindFarWindow(WideString(), -1, info) && !!(info.Flags & WIF_MODAL);
 }
 
 static bool IsOpenedInCurrentEditor(WideString const& file)
@@ -2879,16 +2872,15 @@ void WINAPI GetGlobalInfoW(struct GlobalInfo *info)
 
 intptr_t WINAPI ProcessEditorEventW(const struct ProcessEditorEventInfo *info)
 {
-  bool modal = IsModalMode();
   if (info->Event == EE_READ)
   {
-    if (modal && SafeCall(OnNewModalWindow, false) == false)
+    if (IsModalMode() && SafeCall(OnNewModalWindow, false) == false)
       NavigatorInstance.reset(new InvalidNavigator);
   }
   else if (info->Event == EE_CLOSE)
   {
     SafeCall(std::bind(ClearTemporaryTagsByFile, GetFileNameFromEditor(info->EditorID)));
-    if (modal && SafeCall(OnCloseModalWindow, false) == false)
+    if (IsModalMode() && SafeCall(OnCloseModalWindow, false) == false)
       NavigatorInstance.reset(new InvalidNavigator);
   }
 
