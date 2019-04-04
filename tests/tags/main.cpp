@@ -412,13 +412,14 @@ namespace TESTS
       EXPECT_NO_FATAL_FAILURE(TestRepeatedFile(tagsFile, "15times.cpp", 10, 15));
     }
 
-    void TestFindFile(std::string const& tagsFile, std::string const& path, std::string const& expectedSubpath, size_t expectedSize)
+    void TestFindFile(std::string const& tagsFile, std::string const& path, std::string const& expectedSubpath, size_t expectedSize, int expectedLineNum = -1)
     {
-      auto paths = ToStrings(FindFile(tagsFile.c_str(), path.c_str()));
-      ASSERT_EQ(expectedSize, paths.size());
-      for (auto p : paths)
+      auto tags = FindFile(tagsFile.c_str(), path.c_str());
+      ASSERT_EQ(expectedSize, tags.size());
+      for (auto const& tag : tags)
       {
-        EXPECT_TRUE(!p.compare(p.length() - expectedSubpath.length(), expectedSubpath.length(), expectedSubpath));
+        EXPECT_TRUE(!tag.file.compare(tag.file.length() - expectedSubpath.length(), expectedSubpath.length(), expectedSubpath));
+        EXPECT_EQ(expectedLineNum, tag.lineno);
       }
     }
 
@@ -430,7 +431,17 @@ namespace TESTS
       EXPECT_NO_FATAL_FAILURE(TestFindFile(tagsFile, "/", "", 0));
       EXPECT_NO_FATAL_FAILURE(TestFindFile(tagsFile, "some/path/header", "", 0));
       EXPECT_NO_FATAL_FAILURE(TestFindFile(tagsFile, "some/path/header.h", "some\\path\\header.h", 2));
+      EXPECT_NO_FATAL_FAILURE(TestFindFile(tagsFile, "some/path/header.h:", "some\\path\\header.h", 2));
+      EXPECT_NO_FATAL_FAILURE(TestFindFile(tagsFile, "some/path/header.h:asdf", "", 0));
+      EXPECT_NO_FATAL_FAILURE(TestFindFile(tagsFile, "some/path/header.h:7", "some\\path\\header.h", 2, 7));
+      EXPECT_NO_FATAL_FAILURE(TestFindFile(tagsFile, "some/path/header.h:12345", "some\\path\\header.h", 2, 12345));
+      EXPECT_NO_FATAL_FAILURE(TestFindFile(tagsFile, "some/path/header.h:123456", "", 0));
       EXPECT_NO_FATAL_FAILURE(TestFindFile(tagsFile, "some/path/header.h.extra.hpp", "some\\path\\header.h.extra.hpp", 2));
+      EXPECT_NO_FATAL_FAILURE(TestFindFile(tagsFile, "some/path/header.h.extra.hpp:", "some\\path\\header.h.extra.hpp", 2));
+      EXPECT_NO_FATAL_FAILURE(TestFindFile(tagsFile, "some/path/header.h.extra.hpp:asdf", "", 0));
+      EXPECT_NO_FATAL_FAILURE(TestFindFile(tagsFile, "some/path/header.h.extra.hpp:7", "some\\path\\header.h.extra.hpp", 2, 7));
+      EXPECT_NO_FATAL_FAILURE(TestFindFile(tagsFile, "some/path/header.h.extra.hpp:12345", "some\\path\\header.h.extra.hpp", 2, 12345));
+      EXPECT_NO_FATAL_FAILURE(TestFindFile(tagsFile, "some/path/header.h.extra.hpp:123456", "", 0));
     }
   };
 

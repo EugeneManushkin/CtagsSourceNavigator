@@ -1835,7 +1835,7 @@ PlainNavigator::PlainNavigator(bool modal)
 
 void PlainNavigator::Goto(TagInfo const& tag, bool setPanelDir)
 {
-  int line = -1;
+  int line = tag.lineno;
   if (!tag.name.empty())
   {
     line = EnsureLine(tag.lineno, tag.file, tag.re);

@@ -73,6 +73,25 @@ enum class IndexType
   EndOfEnum,
 };
 
+struct MakeFileTag
+{
+  MakeFileTag(int lineNum)
+    : LineNum(lineNum)
+  {
+  }
+
+  TagInfo operator()(TagInfo&& tag) const
+  {
+    TagInfo temp;
+    temp.Owner = std::move(tag.Owner);
+    temp.file = std::move(tag.file);
+    temp.lineno = LineNum;
+    return std::move(temp);
+  }
+
+  int LineNum;
+};
+
 struct TagFileInfo{
   TagFileInfo(char const* fname, bool singleFileRepos)
     : filename(fname)
@@ -111,7 +130,7 @@ struct TagFileInfo{
   {
     TagsInternal::TagsCache& cache = tag.name.empty() ? *FilesCache : *NamesCache;
     cache.SetCapacity(cacheSize);
-    cache.Insert(tag);
+    cache.Insert(tag.name.empty() ? MakeFileTag(-1)(TagInfo(tag)) : tag);
   }
 
   void EraseCachedTag(TagInfo const& tag)
@@ -1326,33 +1345,31 @@ std::vector<TagInfo> FindPartiallyMatchedTags(const char* file, const char* part
   return SortTags(ForEachFileRepository(file, caseInsensitive ? IndexType::NamesCaseInsensitive : IndexType::Names, NameMatch(part, PartialCompare, caseInsensitive), maxCount), file, sortOptions);
 }
 
-static std::pair<std::string, std::string> GetNameAndPathFilter(char const* path)
+static std::tuple<std::string, std::string, int> GetNamePathLine(char const* path)
 {
   for (; *path && IsPathSeparator(*path); ++path);
   auto pathEnd = path;
   for (; *pathEnd; ++pathEnd);
+  auto linenumBegin = pathEnd;
+  auto linenumEnd = pathEnd;
+  size_t const linenumLimit = 5;
+  for (; linenumEnd - linenumBegin < linenumLimit && linenumBegin != path && linenumBegin - 1 != path && isdigit(*(linenumBegin - 1)); --linenumBegin);
+  pathEnd = linenumBegin != path && *(linenumBegin - 1) == ':' ? linenumBegin - 1 : pathEnd;
+  linenumBegin = pathEnd != linenumBegin - 1 ? linenumEnd : linenumBegin;
   for (; pathEnd != path && pathEnd - 1 != path && IsPathSeparator(*(pathEnd - 1)); --pathEnd);
   auto nameBegin = pathEnd - 1;
   for (; nameBegin != path - 1 && !IsPathSeparator(*nameBegin); --nameBegin);
   auto name = std::string(nameBegin + 1, pathEnd);
   for (; nameBegin != path - 1 && IsPathSeparator(*nameBegin); --nameBegin);
-  return std::make_pair(std::move(name), std::string(path, nameBegin + 1));
-}
-
-inline TagInfo MakeFileTag(TagInfo&& tag)
-{
-  TagInfo temp;
-  temp.Owner = std::move(tag.Owner);
-  temp.file = std::move(tag.file);
-  std::swap(tag, temp);
-  return std::move(tag);
+  int lineNum = linenumBegin == linenumEnd ? -1 : std::stoi(std::string(linenumBegin, linenumEnd));
+  return std::make_tuple(std::move(name), std::string(path, nameBegin + 1), lineNum);
 }
 
 static std::vector<TagInfo> FindFile(const char* file, const char* part, bool comparationType, size_t maxCount)
 {
-  auto maneAndPathFilter = GetNameAndPathFilter(part);
-  auto tags = ForEachFileRepository(file, IndexType::Filenames, FilenameMatch(std::move(maneAndPathFilter.first), std::move(maneAndPathFilter.second), comparationType), maxCount);
-  std::transform(std::make_move_iterator(tags.begin()), std::make_move_iterator(tags.end()), tags.begin(), MakeFileTag);
+  auto namePathLine = GetNamePathLine(part);
+  auto tags = ForEachFileRepository(file, IndexType::Filenames, FilenameMatch(std::move(std::get<0>(namePathLine)), std::move(std::get<1>(namePathLine)), comparationType), maxCount);
+  std::transform(std::make_move_iterator(tags.begin()), std::make_move_iterator(tags.end()), tags.begin(), MakeFileTag(std::get<2>(namePathLine)));
   return SortTags(std::move(tags), "", SortOptions::Default);
 }
 
@@ -1561,11 +1578,11 @@ static std::vector<std::pair<TagInfo, size_t>> RefreshFilesCache(TagFileInfo* fi
   auto cur = tagsWithFreq.begin();
   for (auto i = tagsWithFreq.begin(); i != tagsWithFreq.end(); ++i)
   {
-    auto nameAndPathFilter = GetNameAndPathFilter(i->first.file.c_str());
-    auto visitor = FilenameMatch(std::move(nameAndPathFilter.first), std::move(nameAndPathFilter.second), FullCompare);
+    auto namePathLine = GetNamePathLine(i->first.file.c_str());
+    auto visitor = FilenameMatch(std::move(std::get<0>(namePathLine)), std::move(std::get<1>(namePathLine)), FullCompare);
     auto foundTags = GetMatchedTags(fi, f, offsets, visitor, 0);
     if (!foundTags.empty())
-      (cur++)->first = MakeFileTag(std::move(foundTags.back()));
+      (cur++)->first = MakeFileTag(-1)(std::move(foundTags.back()));
   }
 
   tagsWithFreq.erase(cur, tagsWithFreq.end());
