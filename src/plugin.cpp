@@ -38,6 +38,7 @@
 #define _FAR_NO_NAMELESS_UNIONS
 #include <plugin_sdk/plugin.hpp>
 #include "tags.h"
+#include "tag_view.h"
 #include "text.h"
 #include "resource.h"
 
@@ -46,6 +47,7 @@
 #include <deque>
 #include <functional>
 #include <iterator>
+#include <numeric>
 #include <regex>
 #include <sstream> 
 #include <stack>
@@ -1187,13 +1189,13 @@ bool IsCtrlDel(FarKey const& key)
   return key.VirtualKeyCode == VK_DELETE && (key.ControlKeyState == LEFT_CTRL_PRESSED || key.ControlKeyState == RIGHT_CTRL_PRESSED);
 }
 
-static bool GetRegex(WideString const& filter, bool caseInsensitive, std::wregex& result)
+static bool GetRegex(char const* filter, bool caseInsensitive, std::regex& result)
 {
   try
   {
     std::regex_constants::syntax_option_type regexFlags = std::regex_constants::ECMAScript;
     regexFlags = caseInsensitive ? regexFlags | std::regex_constants::icase : regexFlags;
-    result = std::wregex(filter, regexFlags);
+    result = std::regex(filter, regexFlags);
     return true;
   }
   catch(std::exception const&)
@@ -1203,264 +1205,170 @@ static bool GetRegex(WideString const& filter, bool caseInsensitive, std::wregex
   return false;
 }
 
-std::string TrimFilename(const std::string& file,size_t maxlength)
-{
-  if(file.length()<=maxlength)return file;
-  size_t const prefixLen = 3;
-  std::string const junction = "...";
-  size_t const beginingLen = prefixLen + junction.length();
-  return maxlength > beginingLen ? file.substr(0, prefixLen) + junction + file.substr(file.length() - maxlength + beginingLen)
-                                 : file.substr(file.length() - maxlength);
-}
-
-static std::string::iterator ReplaceRegexSpecialChars(std::string::iterator begin, std::string::iterator end)
-{
-  static const auto unquotMap = GetCharsMap("s.$^*()|+[]{}?\\/");
-  auto cur = begin;
-  int lexlen = 0;
-  for (; begin != end; ++begin)
-  {
-    if (lexlen == 1 && unquotMap[static_cast<unsigned char>(*begin)])
-      ++lexlen;
-    else if (lexlen == 2 && (*begin == '+' || *begin == '*'))
-      ++lexlen;
-    else
-      lexlen = 0;
-
-    if (lexlen == 0 && *begin == '\\')
-      ++lexlen;
-
-    if (lexlen > 1 && *begin != 's')
-    {
-      cur -= lexlen - 1;
-      *cur = lexlen == 3 ? ' ' : *begin;
-      cur += lexlen == 3 && *begin == '*' ? 0 : 1;
-      lexlen = 0;
-    }
-    else
-    {
-      *cur++ = *begin;
-    }
-  }
-
-  return cur;
-}
-
-static std::string RegexToDeclaration(std::string const& regex)
-{
-  auto begin = regex.size() > 2 && regex.front() == '^' ? regex.begin() + 1 : regex.begin();
-  auto end = regex.size() > 2 && regex.back() == '$' ? regex.end() - 1 : regex.end();
-  auto result = std::string(begin, end);
-  result.erase(ReplaceRegexSpecialChars(result.begin(), result.end()), result.end());
-  return std::move(result);
-}
-
-enum class FormatTagFlag
-{
-  DisplayFile,
-  NotDisplayFile,
-  DisplayOnlyName,
-};
-
-//TODO: rework
-WideString FormatTagInfo(TagInfo const& ti, size_t maxid, size_t maxDeclaration, size_t maxfile, FormatTagFlag formatFlag)
-{
-  if (ti.name.empty())
-    return ToString(TrimFilename(ti.file, maxfile));
-
-  std::string name = ti.name.substr(0, maxid);
-  if (formatFlag == FormatTagFlag::DisplayOnlyName)
-    return ToString(name);
-
-  std::string declaration = RegexToDeclaration(ti.re).substr(0, maxDeclaration);
-  std::stringstream str;
-  str << ti.type << ":" << name << std::string(maxid - name.length(), ' ') << " " << declaration << std::string(maxDeclaration - declaration.length(), ' ');
-  if (formatFlag == FormatTagFlag::DisplayFile || ti.lineno >= 0)
-  {
-    auto lineNumber = ti.lineno >= 0 ? ":" + std::to_string(ti.lineno + 1) : std::string();
-    str << " " << TrimFilename((formatFlag == FormatTagFlag::DisplayFile ? ti.file : std::string("Line")) + lineNumber, maxfile);
-  }
-
-  return ToString(str.str());
-}
-
-//TODO: rework
-std::vector<WideString> GetMenuStrings(std::vector<TagInfo const*> const& tags, FormatTagFlag formatFlag)
-{
-  size_t maxid = 0;
-  size_t maxinfo = 0;
-  for (auto const& ti : tags)
-  {
-    maxid = std::max(maxid, ti->name.length());
-    maxinfo = std::max(maxinfo, RegexToDeclaration(ti->re).length());
-  }
-
-  const size_t currentWidth = GetMenuWidth();
-  maxid = std::min(maxid, currentWidth);
-  maxinfo = std::min(maxinfo, (currentWidth - maxid) / 2);
-  size_t len = maxid + maxinfo;
-  size_t maxfile = len > currentWidth ? 0 : currentWidth - len;
-  std::vector<WideString> result;
-  for (auto const& i : tags)
-  {
-    result.push_back(FormatTagInfo(*i, maxid, maxinfo, maxfile, formatFlag));
-  }
-
-  return result;
-}
-
-std::vector<WideString> GetMenuStrings(std::vector<TagInfo> const& tags, FormatTagFlag formatFlag = FormatTagFlag::DisplayFile)
-{
-  std::vector<TagInfo const*> tagsPtrs;
-  std::transform(tags.begin(), tags.end(), std::back_inserter(tagsPtrs), [](TagInfo const& tag) {return &tag;});
-  return GetMenuStrings(tagsPtrs, formatFlag);
-}
-
 inline int GetSortOptions(Config const& config)
 {
   return SortOptions::SortByName | (config.cur_file_first ? SortOptions::CurFileFirst : 0);
+}
+
+using TagsInternal::TagView;
+using TagsInternal::FormatTagFlag;
+
+class TagsView
+{
+public:
+  TagsView()
+  {
+  }
+
+  TagsView(std::vector<TagInfo>&& tags)
+    : Tags(std::move(tags))
+  {
+  }
+
+  size_t Size() const
+  {
+    return Tags.empty() ? Views.size() : Tags.size();
+  }
+
+  TagView operator[] (size_t index) const
+  {
+    return Tags.empty() ? Views[index] : TagView(&Tags[index]);
+  }
+
+  void PushBack(TagInfo const* tag)
+  {
+    Views.push_back(TagView(tag));
+  }
+
+private:
+  std::vector<TagInfo> Tags;
+  std::vector<TagView> Views;
+};
+
+static std::string GetRaw(TagView const& view, FormatTagFlag formatFlag, std::vector<size_t> const& colLengths)
+{
+  std::string result;
+  auto colCount = view.ColumnCount(formatFlag);
+  for (size_t i = 0; i < colCount; ++i)
+    result += (colLengths.empty() ? view.GetColumn(i, formatFlag) : view.GetColumn(i, formatFlag, colLengths[i])) + " ";
+
+  return std::move(result);
+}
+
+static std::vector<size_t> GetMaxColumnsLengths(TagsView const& tagsView, FormatTagFlag formatFlag)
+{
+  std::vector<size_t> maxColLengths;
+  for (size_t i = 0; i < tagsView.Size(); ++i)
+  {
+    auto view = tagsView[i];
+    auto columns = view.ColumnCount(formatFlag);
+    maxColLengths = maxColLengths.empty() ? std::vector<size_t>(columns) : maxColLengths;
+    for (size_t col = 0; col < columns; ++col)
+      maxColLengths[col] = std::max(maxColLengths[col], view.GetColumnLen(col, formatFlag));
+  }
+
+  return std::move(maxColLengths);
+}
+
+static std::vector<size_t> GetColumnsLengths(TagsView const& tagsView, size_t menuWidth, FormatTagFlag formatFlag)
+{
+  auto colLengths = GetMaxColumnsLengths(tagsView, formatFlag);
+  auto maxRawLen = std::accumulate(colLengths.begin(), colLengths.end(), size_t(0)) + colLengths.size() - 1;
+  if (maxRawLen <= menuWidth)
+    return colLengths;
+
+  if (colLengths.size() <= 1)
+    return {menuWidth};
+
+  auto fixedSize = maxRawLen - *(colLengths.end() - 1) - *(colLengths.end() - 2) - 1;
+  auto remains = (menuWidth <= fixedSize ? 0 : menuWidth - fixedSize) + 2;
+  auto smaller = colLengths.end() - 1;
+  auto larger = colLengths.end() - 2;
+  if (*smaller > *larger)
+    std::swap(smaller, larger);
+
+  *smaller = std::min(*smaller, remains/2);
+  *larger = remains - *smaller;
+  return colLengths;
+}
+
+static std::vector<WideString> GetMenuStrings(TagsView const& tagsView, size_t menuWidth, FormatTagFlag formatFlag)
+{
+  auto colLengths = GetColumnsLengths(tagsView, menuWidth, formatFlag);
+  std::vector<WideString> result;
+  for (size_t i = 0; i < tagsView.Size(); result.push_back(ToString(GetRaw(tagsView[i], formatFlag, colLengths))), ++i);
+  return std::move(result);
 }
 
 class LookupMenuVisitor
 {
 public:
   virtual ~LookupMenuVisitor() = default;
-  virtual std::vector<WideString> ApplyFilter(char const* filter) = 0;
-  virtual std::string GetClipboardText(intptr_t index) const = 0;
-  virtual TagInfo GetTag(intptr_t index) const = 0;
-  virtual void Erase(intptr_t index)
-  {
-  }
+  virtual TagsView GetView(char const* filter, FormatTagFlag formatFlag) = 0;
 };
 
-class CacheBasedVisitor : public LookupMenuVisitor
+class PartiallyMatchVisitor : public LookupMenuVisitor
 {
 public:
-  CacheBasedVisitor(std::string const& file, bool getFiles)
+  PartiallyMatchVisitor(std::string const& file, bool getFiles)
     : File(file)
     , GetFiles(getFiles)
-    , UsedCachedTags(false)
   {
   }
 
-  std::vector<WideString> ApplyFilter(char const* filter) override
+  TagsView GetView(char const* filter, FormatTagFlag) override
   {
-    Tags = !*filter ? GetCachedTags(File.c_str(), config.max_results, GetFiles) : Tags;
-    UsedCachedTags = !*filter && !Tags.empty();
-    Tags = !UsedCachedTags ? SearchTags(File.c_str(), filter) : Tags;
-    return GetMenuStrings(Tags);
+    auto tags = !*filter ? GetCachedTags(File.c_str(), config.max_results, GetFiles) : std::vector<TagInfo>();
+    tags = !tags.empty() ? tags : GetFiles ? FindPartiallyMatchedFile(File.c_str(), filter, config.max_results) :
+                                             FindPartiallyMatchedTags(File.c_str(), filter, config.max_results, !config.casesens, GetSortOptions(config));
+    return TagsView(std::move(tags));
   }
-
-  virtual std::string GetClipboardText(intptr_t index) const override
-  {
-    auto const& tag = Tags.at(index);
-    return tag.name.empty() ? tag.file : tag.name;
-  }
-
-  virtual TagInfo GetTag(intptr_t index) const override
-  {
-    return Tags.at(index);
-  }
-
-  virtual void Erase(intptr_t index) override
-  {
-    if (UsedCachedTags)
-      EraseCachedTag(Tags.at(index), FlushTagsCache);
-  }
-
-protected:
-  virtual std::vector<TagInfo> SearchTags(char const* file, char const* filter) const = 0;
 
 private:
   std::string const File;
-  std::vector<TagInfo> Tags;
   bool GetFiles;
-  bool UsedCachedTags;
 };
 
-class LookupTagsVisitor : public CacheBasedVisitor
+class FilterTagsVisitor : public LookupMenuVisitor
 {
 public:
-  LookupTagsVisitor(std::string const& file)
-    : CacheBasedVisitor(file, false)
-  {
-  }
-
-private:
-  virtual std::vector<TagInfo> SearchTags(char const* file, char const* filter) const override
-  {
-    return FindPartiallyMatchedTags(file, filter, config.max_results, !config.casesens, GetSortOptions(config));
-  }
-};
-
-class SearchFileVisitor : public CacheBasedVisitor
-{
-public:
-  SearchFileVisitor(std::string const& file)
-    : CacheBasedVisitor(file, true)
-  {
-  }
-
-private:
-  virtual std::vector<TagInfo> SearchTags(char const* file, char const* filter) const override
-  {
-    return FindPartiallyMatchedFile(file, filter, config.max_results);
-  }
-};
-
-class FilterMenuVisitor : public LookupMenuVisitor
-{
-public:
-  FilterMenuVisitor(std::vector<TagInfo>&& tags, bool caseInsensitive, FormatTagFlag formatFlag)
+  FilterTagsVisitor(std::vector<TagInfo>&& tags, bool caseInsensitive)
     : Tags(std::move(tags))
     , CaseInsensitive(caseInsensitive)
-    , FormatFlag(formatFlag)
   {
   }
 
-  std::vector<WideString> ApplyFilter(char const* filter) override
+  TagsView GetView(char const* filter, FormatTagFlag formatFlag) override
   {
-    FilteredTags.clear();
-    std::wregex regexFilter;
-    if (!*filter || !GetRegex(ToString(filter), CaseInsensitive, regexFilter))
+    TagsView result;
+    std::regex regexFilter;
+    if (!*filter || !GetRegex(filter, CaseInsensitive, regexFilter))
     {
-      std::transform(Tags.begin(), Tags.end(), std::back_inserter(FilteredTags), [](TagInfo const& val){return &val;});
-      return GetMenuStrings(FilteredTags, FormatFlag);
+      for (auto const& tag : Tags) result.PushBack(&tag);
+      return std::move(result);
     }
 
     std::multimap<WideString::difference_type, TagInfo const*> idx;
     for (auto const& tag : Tags)
     {
-      std::wsmatch matchResult;
-      auto str = FormatTagInfo(tag, tag.name.length(), RegexToDeclaration(tag.re).length(), tag.file.length(), FormatFlag);
+      std::smatch matchResult;
+      auto str = GetRaw(TagView(&tag), formatFlag, {});
       if (std::regex_search(str, matchResult, regexFilter) && !matchResult.empty())
         idx.insert(std::make_pair(matchResult.position(), &tag));
     }
 
-    std::transform(idx.begin(), idx.end(), std::back_inserter(FilteredTags), [](std::multimap<WideString::difference_type, TagInfo const*>::value_type const& val){return val.second;});
-    return GetMenuStrings(FilteredTags, FormatFlag);
-  }
-
-  virtual std::string GetClipboardText(intptr_t index) const override
-  {
-    return FilteredTags.at(index)->name;
-  }
-
-  virtual TagInfo GetTag(intptr_t index) const override
-  {
-    return *FilteredTags.at(index);
+    for (auto const& v : idx) result.PushBack(v.second);
+    return std::move(result);
   }
 
 private:
   std::vector<TagInfo> const Tags;
   bool const CaseInsensitive;
-  FormatTagFlag const FormatFlag;
-  std::vector<TagInfo const*> FilteredTags;
 };
 
 static void OpenInNewWindow(TagInfo const& tag);
 
-static bool LookupTagsMenu(LookupMenuVisitor& visitor, TagInfo& tag, intptr_t separatorPos = -1)
+static bool LookupTagsMenu(LookupMenuVisitor& visitor, TagInfo& tag, FormatTagFlag formatFlag = FormatTagFlag::Default, intptr_t separatorPos = -1)
 {
   std::string filter;
   auto title = GetMsg(MSelectSymbol);
@@ -1470,7 +1378,8 @@ static bool LookupTagsMenu(LookupMenuVisitor& visitor, TagInfo& tag, intptr_t se
   intptr_t selected = -1;
   while(true)
   {
-    auto menuStrings = visitor.ApplyFilter(filter.c_str());
+    auto tagsView = visitor.GetView(filter.c_str(), formatFlag);
+    auto menuStrings = GetMenuStrings(tagsView, GetMenuWidth(), formatFlag);
     std::vector<FarMenuItem> menu;
     intptr_t counter = 0;
     for (auto const& i : menuStrings)
@@ -1490,27 +1399,28 @@ static bool LookupTagsMenu(LookupMenuVisitor& visitor, TagInfo& tag, intptr_t se
     auto res = I.Menu(&PluginGuid, &CtagsMenuGuid,-1,-1,0,FMENU_WRAPMODE|FMENU_SHOWAMPERSAND,ftitle.c_str(),
                      bottomText.c_str(),L"content",&fk[0],&bkey, menu.empty() ? nullptr : &menu[0],menu.size());
     if(res==-1 && bkey==-1)return false;
+    auto selectedTag = res >= 0 ? tagsView[menu[res].UserData].GetTag() : nullptr;
     if(bkey==-1)
     {
-      tag = visitor.GetTag(menu[res].UserData);
+      tag = *selectedTag;
       return true;
     }
     if (IsCtrlC(fk[bkey]))
     {
-      if (res != -1)
-        SetClipboardText(visitor.GetClipboardText(menu[res].UserData));
+      if (selectedTag)
+        SetClipboardText(selectedTag->name.empty() ? selectedTag->file : selectedTag->name);
 
       return false;
     }
     if (IsF4(fk[bkey]))
     {
-      OpenInNewWindow(visitor.GetTag(menu[res].UserData));
+      OpenInNewWindow(*selectedTag);
       selected = res;
       continue;
     }
     if (IsCtrlDel(fk[bkey]))
     {
-      visitor.Erase(menu[res].UserData);
+      EraseCachedTag(*selectedTag, FlushTagsCache);
       continue;
     }
     if (static_cast<size_t>(bkey) >= filterkeys.length())
@@ -2289,11 +2199,12 @@ static WideString ReindexRepository(WideString const& fileName)
   return tagsFile;
 }
 
-static void Lookup(WideString const& file, bool setPanelDir, LookupMenuVisitor& visitor, bool createTempTags)
+static void Lookup(WideString const& file, bool setPanelDir, bool getFile, bool createTempTags)
 {
   if (!EnsureTagsLoaded(file, createTempTags))
     return;
 
+  PartiallyMatchVisitor visitor(ToStdString(file), getFile);
   TagInfo selectedTag;
   if (LookupTagsMenu(visitor, selectedTag))
     NavigateTo(&selectedTag, setPanelDir);
@@ -2301,24 +2212,22 @@ static void Lookup(WideString const& file, bool setPanelDir, LookupMenuVisitor& 
 
 static void LookupSymbol(WideString const& file, bool setPanelDir, bool createTempTags)
 {
-  LookupTagsVisitor visitor(ToStdString(file));
-  Lookup(file, setPanelDir, visitor, createTempTags);
+  Lookup(file, setPanelDir, false, createTempTags);
 }
 
 static void LookupFile(WideString const& file, bool setPanelDir)
 {
-  SearchFileVisitor visitor(ToStdString(file));
-  Lookup(file, setPanelDir, visitor, false);
+  Lookup(file, setPanelDir, true, false);
 }
 
-static void NavigateToTag(std::vector<TagInfo>&& ta, intptr_t separatorPos, FormatTagFlag formatFlag)
+static void NavigateToTag(std::vector<TagInfo>&& ta, intptr_t separatorPos, FormatTagFlag formatFlag = FormatTagFlag::Default)
 {
   if (ta.empty())
     throw Error(MNothingFound);
 
   TagInfo tag;
-  FilterMenuVisitor visitor(std::move(ta), !config.casesens, formatFlag);
-  if (LookupTagsMenu(visitor, tag, separatorPos))
+  FilterTagsVisitor visitor(std::move(ta), !config.casesens);
+  if (LookupTagsMenu(visitor, tag, formatFlag, separatorPos))
     NavigateTo(&tag);
 }
 
@@ -2357,7 +2266,7 @@ static void GotoDeclaration(char const* fileName, std::string word)
   if (tags.size() == 1)
     NavigateTo(&tags.back());
   else
-    NavigateToTag(std::move(tags), static_cast<intptr_t>(std::distance(tags.cbegin(), border)), FormatTagFlag::DisplayFile);
+    NavigateToTag(std::move(tags), static_cast<intptr_t>(std::distance(tags.cbegin(), border)));
 }
 
 static void GotoFile(char const* fileName, std::string path)
@@ -2366,7 +2275,7 @@ static void GotoFile(char const* fileName, std::string path)
   if (tags.size() == 1)
     NavigateTo(&tags.back());
   else if (!tags.empty())
-    NavigateToTag(std::move(tags), tags.size(), FormatTagFlag::DisplayFile);
+    NavigateToTag(std::move(tags), tags.size());
 }
 
 static void FindSymbol(char const* fileName)
@@ -2393,8 +2302,8 @@ static void CompleteName(char const* fileName, EditorInfo const& ei)
   TagInfo tag = tags.back();
   if (tags.size() > 1)
   {
-    FilterMenuVisitor visitor(std::move(tags), !config.casesens, FormatTagFlag::DisplayOnlyName);
-    if (!LookupTagsMenu(visitor, tag))
+    FilterTagsVisitor visitor(std::move(tags), !config.casesens);
+    if (!LookupTagsMenu(visitor, tag, FormatTagFlag::DisplayOnlyName))
       return;
   }
 
@@ -2500,7 +2409,7 @@ HANDLE WINAPI OpenW(const struct OpenInfo *info)
         }
         auto options = GetSortOptions(config) & ~SortOptions::SortByName;
         options |= config.sort_class_members_by_name ? SortOptions::SortByName : 0;
-        SafeCall([&]{ NavigateToTag(FindClassMembers(ToStdString(fileName).c_str(), word.c_str(), options), FormatTagFlag::DisplayFile); });
+        SafeCall([&]{ NavigateToTag(FindClassMembers(ToStdString(fileName).c_str(), word.c_str(), options), FormatTagFlag::Default); });
       }break;
       case miLookupSymbol:
       {

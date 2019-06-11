@@ -1,4 +1,4 @@
-#include "tags_view.h"
+#include "tag_view.h"
 
 #include <array>
 #include <bitset>
@@ -53,13 +53,16 @@ namespace
     return std::move(result);
   }
 
-  std::string Shrink(const std::string& text, size_t maxLength, bool cutMiddle)
+  std::string Shrink(const std::string& text, size_t maxLength, bool shrinkToLeft)
   {
+    if (shrinkToLeft)
+      return text.substr(0, maxLength);
+
     size_t const prefixLen = 3;
     std::string const junction = "...";
     size_t const beginingLen = prefixLen + junction.length();
-    return maxLength > beginingLen && cutMiddle ? text.substr(0, prefixLen) + junction + text.substr(text.length() - maxLength + beginingLen)
-                                                : text.substr(text.length() - maxLength);
+    return maxLength > beginingLen ? text.substr(0, prefixLen) + junction + text.substr(text.length() - maxLength + beginingLen)
+                                   : text.substr(text.length() - maxLength);
   }
 
   std::string AdjustToLength(std::string const& text, size_t colLength, bool cutMiddle)
@@ -130,6 +133,6 @@ namespace TagsInternal
 
   std::string TagView::GetColumn(size_t index, FormatTagFlag flag, size_t colLength) const
   {
-    return AdjustToLength(GetColumn(index, flag), colLength, index == GetColumnCallbacks.size() - 1);
+    return AdjustToLength(GetColumn(index, flag), colLength, index != GetColumnCallbacks.size() - 1);
   }
 }
