@@ -38,7 +38,7 @@
 #define _FAR_NO_NAMELESS_UNIONS
 #include <plugin_sdk/plugin.hpp>
 #include "tags.h"
-#include "tag_view.h"
+#include "tags_view.h"
 #include "text.h"
 #include "resource.h"
 
@@ -1210,62 +1210,11 @@ inline int GetSortOptions(Config const& config)
   return SortOptions::SortByName | (config.cur_file_first ? SortOptions::CurFileFirst : 0);
 }
 
-using TagsInternal::TagView;
-using TagsInternal::FormatTagFlag;
-
-class TagsView
+static std::vector<size_t> ShrinkColumnLengths(std::vector<size_t>&& colLengths, size_t menuWidth)
 {
-public:
-  TagsView()
-  {
-  }
-
-  TagsView(std::vector<TagInfo>&& tags)
-    : Tags(std::move(tags))
-  {
-  }
-
-  size_t Size() const
-  {
-    return Tags.empty() ? Views.size() : Tags.size();
-  }
-
-  TagView operator[] (size_t index) const
-  {
-    return Tags.empty() ? Views[index] : TagView(&Tags[index]);
-  }
-
-  void PushBack(TagInfo const* tag)
-  {
-    Views.push_back(TagView(tag));
-  }
-
-private:
-  std::vector<TagInfo> Tags;
-  std::vector<TagView> Views;
-};
-
-static std::vector<size_t> GetMaxColumnsLengths(TagsView const& tagsView, FormatTagFlag formatFlag)
-{
-  std::vector<size_t> maxColLengths;
-  for (size_t i = 0; i < tagsView.Size(); ++i)
-  {
-    auto view = tagsView[i];
-    auto columns = view.ColumnCount(formatFlag);
-    maxColLengths = maxColLengths.empty() ? std::vector<size_t>(columns) : maxColLengths;
-    for (size_t col = 0; col < columns; ++col)
-      maxColLengths[col] = std::max(maxColLengths[col], view.GetColumnLen(col, formatFlag));
-  }
-
-  return std::move(maxColLengths);
-}
-
-static std::vector<size_t> GetColumnsLengths(TagsView const& tagsView, size_t menuWidth, FormatTagFlag formatFlag)
-{
-  auto colLengths = GetMaxColumnsLengths(tagsView, formatFlag);
   auto maxRawLen = std::accumulate(colLengths.begin(), colLengths.end(), size_t(0)) + colLengths.size() - 1;
   if (maxRawLen <= menuWidth)
-    return colLengths;
+    return std::move(colLengths);
 
   if (colLengths.size() <= 1)
     return {menuWidth};
@@ -1279,12 +1228,16 @@ static std::vector<size_t> GetColumnsLengths(TagsView const& tagsView, size_t me
 
   *smaller = std::min(*smaller, remains/2);
   *larger = remains - *smaller;
-  return colLengths;
+  return std::move(colLengths);
 }
+
+using TagsInternal::TagView;
+using TagsInternal::TagsView;
+using TagsInternal::FormatTagFlag;
 
 static std::vector<WideString> GetMenuStrings(TagsView const& tagsView, size_t menuWidth, FormatTagFlag formatFlag)
 {
-  auto colLengths = GetColumnsLengths(tagsView, menuWidth, formatFlag);
+  auto colLengths = ShrinkColumnLengths(tagsView.GetMaxColumnLengths(formatFlag), menuWidth);
   std::vector<WideString> result;
   for (size_t i = 0; i < tagsView.Size(); result.push_back(ToString(tagsView[i].GetRaw(" ", formatFlag, colLengths))), ++i);
   return std::move(result);
