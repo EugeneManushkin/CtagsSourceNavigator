@@ -66,9 +66,9 @@ namespace
                                    : text.substr(text.length() - maxLength);
   }
 
-  std::string AdjustToLength(std::string const& text, size_t colLength, bool cutMiddle)
+  std::string AdjustToLength(std::string const& text, size_t colLength, bool shrinkToLeft)
   {
-    return text.length() > colLength ? Shrink(text, colLength, cutMiddle) : text + std::string(colLength - text.length(), ' ');
+    return text.length() > colLength ? Shrink(text, colLength, shrinkToLeft) : text + std::string(colLength - text.length(), ' ');
   }
 
   std::string GetLeftColumn(TagInfo const& tag, FormatTagFlag flag)
@@ -134,7 +134,7 @@ namespace TagsInternal
 
   std::string TagView::GetColumn(size_t index, FormatTagFlag flag, size_t colLength) const
   {
-    return AdjustToLength(GetColumn(index, flag), colLength, index != GetColumnCallbacks.size() - 1);
+    return AdjustToLength(GetColumn(index, flag), colLength, index != GetColumnCallbacks.size() - 1 && !Tag->name.empty());
   }
 
   std::string TagView::GetRaw(std::string separator, FormatTagFlag formatFlag) const
