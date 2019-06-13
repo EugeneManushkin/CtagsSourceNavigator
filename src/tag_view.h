@@ -1,8 +1,8 @@
 #pragma once
 
-#include "tag_info.h"
-
 #include <vector>
+
+struct TagInfo;
 
 namespace TagsInternal
 {

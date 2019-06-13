@@ -1,3 +1,4 @@
+#include "tag_info.h"
 #include "tag_view.h"
 
 #include <array>
