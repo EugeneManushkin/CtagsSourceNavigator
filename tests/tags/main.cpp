@@ -433,15 +433,30 @@ namespace TESTS
       EXPECT_NO_FATAL_FAILURE(TestFindFile(tagsFile, "some/path/header.h", "some\\path\\header.h", 2));
       EXPECT_NO_FATAL_FAILURE(TestFindFile(tagsFile, "some/path/header.h:", "some\\path\\header.h", 2));
       EXPECT_NO_FATAL_FAILURE(TestFindFile(tagsFile, "some/path/header.h:asdf", "", 0));
+      EXPECT_NO_FATAL_FAILURE(TestFindFile(tagsFile, "some/path/header.h(asdf)", "", 0));
       EXPECT_NO_FATAL_FAILURE(TestFindFile(tagsFile, "some/path/header.h:7", "some\\path\\header.h", 2, 7));
+      EXPECT_NO_FATAL_FAILURE(TestFindFile(tagsFile, "some/path/header.h:7:", "some\\path\\header.h", 2, 7));
+      EXPECT_NO_FATAL_FAILURE(TestFindFile(tagsFile, "some/path/header.h(7)", "some\\path\\header.h", 2, 7));
+      EXPECT_NO_FATAL_FAILURE(TestFindFile(tagsFile, "some/path/header.h(7):", "some\\path\\header.h", 2, 7));
       EXPECT_NO_FATAL_FAILURE(TestFindFile(tagsFile, "some/path/header.h:12345", "some\\path\\header.h", 2, 12345));
+      EXPECT_NO_FATAL_FAILURE(TestFindFile(tagsFile, "some/path/header.h:12345:", "some\\path\\header.h", 2, 12345));
+      EXPECT_NO_FATAL_FAILURE(TestFindFile(tagsFile, "some/path/header.h(12345)", "some\\path\\header.h", 2, 12345));
+      EXPECT_NO_FATAL_FAILURE(TestFindFile(tagsFile, "some/path/header.h(12345):", "some\\path\\header.h", 2, 12345));
       EXPECT_NO_FATAL_FAILURE(TestFindFile(tagsFile, "some/path/header.h:123456", "", 0));
       EXPECT_NO_FATAL_FAILURE(TestFindFile(tagsFile, "some/path/header.h.extra.hpp", "some\\path\\header.h.extra.hpp", 2));
       EXPECT_NO_FATAL_FAILURE(TestFindFile(tagsFile, "some/path/header.h.extra.hpp:", "some\\path\\header.h.extra.hpp", 2));
       EXPECT_NO_FATAL_FAILURE(TestFindFile(tagsFile, "some/path/header.h.extra.hpp:asdf", "", 0));
+      EXPECT_NO_FATAL_FAILURE(TestFindFile(tagsFile, "some/path/header.h.extra.hpp(asdf)", "", 0));
       EXPECT_NO_FATAL_FAILURE(TestFindFile(tagsFile, "some/path/header.h.extra.hpp:7", "some\\path\\header.h.extra.hpp", 2, 7));
+      EXPECT_NO_FATAL_FAILURE(TestFindFile(tagsFile, "some/path/header.h.extra.hpp:7:", "some\\path\\header.h.extra.hpp", 2, 7));
+      EXPECT_NO_FATAL_FAILURE(TestFindFile(tagsFile, "some/path/header.h.extra.hpp(7)", "some\\path\\header.h.extra.hpp", 2, 7));
+      EXPECT_NO_FATAL_FAILURE(TestFindFile(tagsFile, "some/path/header.h.extra.hpp(7):", "some\\path\\header.h.extra.hpp", 2, 7));
       EXPECT_NO_FATAL_FAILURE(TestFindFile(tagsFile, "some/path/header.h.extra.hpp:12345", "some\\path\\header.h.extra.hpp", 2, 12345));
+      EXPECT_NO_FATAL_FAILURE(TestFindFile(tagsFile, "some/path/header.h.extra.hpp:12345:", "some\\path\\header.h.extra.hpp", 2, 12345));
+      EXPECT_NO_FATAL_FAILURE(TestFindFile(tagsFile, "some/path/header.h.extra.hpp(12345)", "some\\path\\header.h.extra.hpp", 2, 12345));
+      EXPECT_NO_FATAL_FAILURE(TestFindFile(tagsFile, "some/path/header.h.extra.hpp(12345):", "some\\path\\header.h.extra.hpp", 2, 12345));
       EXPECT_NO_FATAL_FAILURE(TestFindFile(tagsFile, "some/path/header.h.extra.hpp:123456", "", 0));
+      EXPECT_NO_FATAL_FAILURE(TestFindFile(tagsFile, "some/path/header.h.extra.hpp(123456)", "", 0));
     }
   };
 

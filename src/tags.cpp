@@ -1350,11 +1350,14 @@ static std::tuple<std::string, std::string, int> GetNamePathLine(char const* pat
   for (; *path && IsPathSeparator(*path); ++path);
   auto pathEnd = path;
   for (; *pathEnd; ++pathEnd);
+  pathEnd -= pathEnd != path && *(pathEnd - 1) == ':' ? 1 : 0;
+  char separator = pathEnd != path && *(pathEnd - 1) == ')' ? '(' : ':';
+  pathEnd -= pathEnd != path && *(pathEnd - 1) == ')' ? 1 : 0;
   auto linenumBegin = pathEnd;
   auto linenumEnd = pathEnd;
   size_t const linenumLimit = 5;
   for (; linenumEnd - linenumBegin < linenumLimit && linenumBegin != path && linenumBegin - 1 != path && isdigit(*(linenumBegin - 1)); --linenumBegin);
-  pathEnd = linenumBegin != path && *(linenumBegin - 1) == ':' ? linenumBegin - 1 : pathEnd;
+  pathEnd = linenumBegin != path && *(linenumBegin - 1) == separator ? linenumBegin - 1 : pathEnd;
   linenumBegin = pathEnd != linenumBegin - 1 ? linenumEnd : linenumBegin;
   for (; pathEnd != path && pathEnd - 1 != path && IsPathSeparator(*(pathEnd - 1)); --pathEnd);
   auto nameBegin = pathEnd - 1;
