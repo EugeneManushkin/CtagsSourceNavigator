@@ -1245,16 +1245,6 @@ private:
   std::vector<TagView> Views;
 };
 
-static std::string GetRaw(TagView const& view, FormatTagFlag formatFlag, std::vector<size_t> const& colLengths)
-{
-  std::string result;
-  auto colCount = view.ColumnCount(formatFlag);
-  for (size_t i = 0; i < colCount; ++i)
-    result += (colLengths.empty() ? view.GetColumn(i, formatFlag) : view.GetColumn(i, formatFlag, colLengths[i])) + " ";
-
-  return std::move(result);
-}
-
 static std::vector<size_t> GetMaxColumnsLengths(TagsView const& tagsView, FormatTagFlag formatFlag)
 {
   std::vector<size_t> maxColLengths;
@@ -1296,7 +1286,7 @@ static std::vector<WideString> GetMenuStrings(TagsView const& tagsView, size_t m
 {
   auto colLengths = GetColumnsLengths(tagsView, menuWidth, formatFlag);
   std::vector<WideString> result;
-  for (size_t i = 0; i < tagsView.Size(); result.push_back(ToString(GetRaw(tagsView[i], formatFlag, colLengths))), ++i);
+  for (size_t i = 0; i < tagsView.Size(); result.push_back(ToString(tagsView[i].GetRaw(" ", formatFlag, colLengths))), ++i);
   return std::move(result);
 }
 
@@ -1352,7 +1342,7 @@ public:
     for (auto const& tag : Tags)
     {
       std::smatch matchResult;
-      auto str = GetRaw(TagView(&tag), formatFlag, {});
+      auto str = TagView(&tag).GetRaw(" ", formatFlag);
       if (std::regex_search(str, matchResult, regexFilter) && !matchResult.empty())
         idx.insert(std::make_pair(matchResult.position(), &tag));
     }

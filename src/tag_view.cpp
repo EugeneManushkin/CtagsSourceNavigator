@@ -135,4 +135,19 @@ namespace TagsInternal
   {
     return AdjustToLength(GetColumn(index, flag), colLength, index != GetColumnCallbacks.size() - 1);
   }
+
+  std::string TagView::GetRaw(std::string separator, FormatTagFlag formatFlag) const
+  {
+    return GetRaw(separator, formatFlag, {});
+  }
+
+  std::string TagView::GetRaw(std::string separator, FormatTagFlag formatFlag, std::vector<size_t> const& colLengths) const
+  {
+    std::string result;
+    auto colCount = ColumnCount(formatFlag);
+    for (size_t i = 0; i < colCount; ++i)
+      result += (colLengths.empty() ? GetColumn(i, formatFlag) : GetColumn(i, formatFlag, colLengths[i])) + separator;
+  
+    return std::move(result);
+  }
 }
