@@ -36,9 +36,10 @@ namespace TagsInternal
 
     TEST(TagView, ReturnsOneColumnForFileTag)
     {
-      EXPECT_EQ(1, TagView(&GetFileTag()).ColumnCount(FormatTagFlag::Default));
-      EXPECT_EQ(1, TagView(&GetFileTag()).ColumnCount(FormatTagFlag::NotDisplayFile));
-      EXPECT_EQ(1, TagView(&GetFileTag()).ColumnCount(FormatTagFlag::DisplayOnlyName));
+      auto const fileTag = GetFileTag();
+      EXPECT_EQ(1, TagView(&fileTag).ColumnCount(FormatTagFlag::Default));
+      EXPECT_EQ(1, TagView(&fileTag).ColumnCount(FormatTagFlag::NotDisplayFile));
+      EXPECT_EQ(1, TagView(&fileTag).ColumnCount(FormatTagFlag::DisplayOnlyName));
     }
 
     TEST(TagView, ShrinksColumn)
