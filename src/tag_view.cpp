@@ -5,7 +5,17 @@
 #include <bitset>
 
 //TODO: remove dependency
-std::bitset<256> GetCharsMap(std::string const& str);
+std::bitset<256> GetCharsMap(std::string const& str)
+{
+  std::bitset<256> result;
+  result.reset();
+  for (auto c : str)
+  {
+    result.set(static_cast<unsigned char>(c), true);
+  }
+
+  return std::move(result);
+}
 
 namespace
 {
