@@ -3,6 +3,7 @@
 
 #include <array>
 #include <bitset>
+#include <numeric>
 
 //TODO: remove dependency
 std::bitset<256> GetCharsMap(std::string const& str)
@@ -160,5 +161,26 @@ namespace TagsInternal
       result += (colLengths.empty() ? GetColumn(i, formatFlag) : GetColumn(i, formatFlag, colLengths[i])) + (i != colCount - 1 ? separator : "");
   
     return std::move(result);
+  }
+
+  std::vector<size_t> ShrinkColumnLengths(std::vector<size_t>&& colLengths, size_t width)
+  {
+    auto maxRawLen = std::accumulate(colLengths.begin(), colLengths.end(), size_t(0)) + colLengths.size() - 1;
+    if (maxRawLen <= width)
+      return std::move(colLengths);
+
+    if (colLengths.size() <= 1)
+      return {width};
+
+    auto fixedSize = maxRawLen - *(colLengths.end() - 1) - *(colLengths.end() - 2) - 1;
+    auto remains = (width <= fixedSize ? 0 : width - fixedSize) + 2;
+    auto smaller = colLengths.end() - 1;
+    auto larger = colLengths.end() - 2;
+    if (*smaller > *larger)
+      std::swap(smaller, larger);
+
+    *smaller = std::min(*smaller, remains/2);
+    *larger = remains - *smaller;
+    return std::move(colLengths);
   }
 }

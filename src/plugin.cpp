@@ -47,7 +47,6 @@
 #include <deque>
 #include <functional>
 #include <iterator>
-#include <numeric>
 #include <regex>
 #include <sstream> 
 #include <stack>
@@ -1184,32 +1183,11 @@ inline int GetSortOptions(Config const& config)
   return SortOptions::SortByName | (config.cur_file_first ? SortOptions::CurFileFirst : 0);
 }
 
-static std::vector<size_t> ShrinkColumnLengths(std::vector<size_t>&& colLengths, size_t menuWidth)
-{
-  auto maxRawLen = std::accumulate(colLengths.begin(), colLengths.end(), size_t(0)) + colLengths.size() - 1;
-  if (maxRawLen <= menuWidth)
-    return std::move(colLengths);
-
-  if (colLengths.size() <= 1)
-    return {menuWidth};
-
-  auto fixedSize = maxRawLen - *(colLengths.end() - 1) - *(colLengths.end() - 2) - 1;
-  auto remains = (menuWidth <= fixedSize ? 0 : menuWidth - fixedSize) + 2;
-  auto smaller = colLengths.end() - 1;
-  auto larger = colLengths.end() - 2;
-  if (*smaller > *larger)
-    std::swap(smaller, larger);
-
-  *smaller = std::min(*smaller, remains/2);
-  *larger = remains - *smaller;
-  return std::move(colLengths);
-}
-
 using TagsInternal::FormatTagFlag;
 
 static std::vector<WideString> GetMenuStrings(TagsInternal::TagsView const& tagsView, size_t menuWidth, FormatTagFlag formatFlag)
 {
-  auto colLengths = ShrinkColumnLengths(tagsView.GetMaxColumnLengths(formatFlag), menuWidth);
+  auto colLengths = TagsInternal::ShrinkColumnLengths(tagsView.GetMaxColumnLengths(formatFlag), menuWidth);
   std::vector<WideString> result;
   for (size_t i = 0; i < tagsView.Size(); result.push_back(ToString(tagsView[i].GetRaw(" ", formatFlag, colLengths))), ++i);
   return std::move(result);
