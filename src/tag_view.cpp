@@ -173,14 +173,14 @@ namespace TagsInternal
       return {width};
 
     auto fixedSize = maxRawLen - *(colLengths.end() - 1) - *(colLengths.end() - 2) - 1;
-    auto remains = (width <= fixedSize ? 0 : width - fixedSize) + 2;
+    auto remains = width <= fixedSize ? 3 : width - fixedSize;
     auto smaller = colLengths.end() - 1;
     auto larger = colLengths.end() - 2;
     if (*smaller > *larger)
       std::swap(smaller, larger);
 
     *smaller = std::min(*smaller, remains/2);
-    *larger = remains - *smaller;
+    *larger = remains - *smaller - 1;
     return std::move(colLengths);
   }
 }
