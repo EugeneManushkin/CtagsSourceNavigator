@@ -2,6 +2,8 @@
 #include <tag_info.h>
 #include <tag_view.h>
 
+#include <numeric>
+
 namespace TagsInternal
 {
   namespace Tests
@@ -9,10 +11,14 @@ namespace TagsInternal
     std::string const DefaultName = "DefaultName";
     std::string const DefaultFilename = "default.cpp";
     std::string const LongFilename = "C:\\long\\file\\name.cpp";
+    std::string const Separator = "  ";
+    size_t const DefaultLine = 10;
     size_t const MinColLength = 6;
+    size_t const DefaultColumnCount = 3;
     size_t const FileColumn = 2;
+    size_t const LongColumnLength = 1000;
 
-    TagInfo GetTag(std::string const& name = DefaultName, std::string const& filename = DefaultFilename, int line = 0, std::string const& regex = "", char type = 'd', std::string const& info = "")
+    TagInfo GetTag(std::string const& name = DefaultName, std::string const& filename = DefaultFilename, int line = DefaultLine, std::string const& regex = "", char type = 'd', std::string const& info = "")
     {
       TagInfo result;
       result.name = name;
@@ -24,9 +30,9 @@ namespace TagsInternal
       return std::move(result);
     }
 
-    TagInfo GetFileTag(std::string const& filename = DefaultFilename, int lineno = 0)
+    TagInfo GetFileTag(std::string const& filename = DefaultFilename, int line = DefaultLine)
     {
-      return GetTag("", filename, lineno);
+      return GetTag("", filename, line);
     }
 
     std::string GetColumn(TagInfo const& tag, size_t index, size_t size, FormatTagFlag formatFlag = FormatTagFlag::Default)
@@ -62,9 +68,8 @@ namespace TagsInternal
 
     TEST(TagView, ShrinksFileColumnInMiddle)
     {
-      int const line = 10;
-      std::string const expectedColumn = LongFilename.substr(0, 3) + "..." + LongFilename.substr(LongFilename.length() - 8) + ":" + std::to_string(line);
-      EXPECT_EQ(expectedColumn, GetColumn(GetTag(DefaultName, LongFilename, line), FileColumn, expectedColumn.length()));
+      std::string const expectedColumn = LongFilename.substr(0, 3) + "..." + LongFilename.substr(LongFilename.length() - 8) + ":" + std::to_string(DefaultLine);
+      EXPECT_EQ(expectedColumn, GetColumn(GetTag(DefaultName, LongFilename), FileColumn, expectedColumn.length()));
     }
 
     TEST(TagView, TrimsLeftFirstColumn)
@@ -75,10 +80,25 @@ namespace TagsInternal
 
     TEST(TagView, TrimsLeftFileColumn)
     {
-      int const line = 10;
-      std::string expectedColumn = LongFilename + ":" + std::to_string(line);
+      std::string expectedColumn = LongFilename + ":" + std::to_string(DefaultLine);
       expectedColumn = expectedColumn.substr(expectedColumn.length() - MinColLength);
-      EXPECT_EQ(expectedColumn, GetColumn(GetTag(DefaultName, LongFilename, line), FileColumn, expectedColumn.length()));
+      EXPECT_EQ(expectedColumn, GetColumn(GetTag(DefaultName, LongFilename), FileColumn, expectedColumn.length()));
+    }
+
+    TEST(TagView, ReturnsWiderRaw)
+    {
+      auto const colLengths = std::vector<size_t>(DefaultColumnCount, LongColumnLength);
+      auto const expectedRawLength = std::accumulate(colLengths.begin(), colLengths.end(), size_t(0)) + (colLengths.size() - 1) * Separator.length();
+      auto const tag = GetTag();
+      EXPECT_EQ(expectedRawLength, TagView(&tag).GetRaw(Separator, FormatTagFlag::Default, colLengths).length());
+    }
+
+    TEST(TagView, ReturnsShorterRaw)
+    {
+      auto const colLengths = std::vector<size_t>(DefaultColumnCount, 1);
+      auto const expectedRawLength = DefaultColumnCount + (colLengths.size() - 1) * Separator.length();
+      auto const tag = GetTag();
+      EXPECT_EQ(expectedRawLength, TagView(&tag).GetRaw(Separator, FormatTagFlag::Default, colLengths).length());
     }
   }
 }
