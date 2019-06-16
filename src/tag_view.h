@@ -29,5 +29,5 @@ namespace TagsInternal
     TagInfo const* Tag;
   };
 
-  std::vector<size_t> ShrinkColumnLengths(std::vector<size_t>&& colLengths, size_t width);
+  std::vector<size_t> ShrinkColumnLengths(std::vector<size_t>&& colLengths, size_t separatorLength, size_t width);
 }

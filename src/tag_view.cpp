@@ -163,24 +163,24 @@ namespace TagsInternal
     return std::move(result);
   }
 
-  std::vector<size_t> ShrinkColumnLengths(std::vector<size_t>&& colLengths, size_t width)
+  std::vector<size_t> ShrinkColumnLengths(std::vector<size_t>&& colLengths, size_t separatorLength, size_t width)
   {
-    auto maxRawLen = std::accumulate(colLengths.begin(), colLengths.end(), size_t(0)) + colLengths.size() - 1;
+    auto maxRawLen = std::accumulate(colLengths.begin(), colLengths.end(), size_t(0)) + (colLengths.size() - 1) * separatorLength;
     if (maxRawLen <= width)
       return std::move(colLengths);
 
     if (colLengths.size() <= 1)
       return {width};
 
-    auto fixedSize = maxRawLen - *(colLengths.end() - 1) - *(colLengths.end() - 2) - 1;
-    auto remains = width <= fixedSize ? 3 : width - fixedSize;
     auto smaller = colLengths.end() - 1;
     auto larger = colLengths.end() - 2;
     if (*smaller > *larger)
       std::swap(smaller, larger);
 
+    auto fixedSize = maxRawLen - *smaller - *larger - separatorLength;
+    auto remains = width <= fixedSize ? separatorLength + 2 : width - fixedSize;
     *smaller = std::min(*smaller, remains/2);
-    *larger = remains - *smaller - 1;
+    *larger = remains - *smaller - separatorLength;
     return std::move(colLengths);
   }
 }

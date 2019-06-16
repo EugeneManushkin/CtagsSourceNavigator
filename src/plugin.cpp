@@ -1187,9 +1187,10 @@ using TagsInternal::FormatTagFlag;
 
 static std::vector<WideString> GetMenuStrings(TagsInternal::TagsView const& tagsView, size_t menuWidth, FormatTagFlag formatFlag)
 {
-  auto colLengths = TagsInternal::ShrinkColumnLengths(tagsView.GetMaxColumnLengths(formatFlag), menuWidth);
+  std::string const separator = " ";
+  auto colLengths = TagsInternal::ShrinkColumnLengths(tagsView.GetMaxColumnLengths(formatFlag), separator.length(), menuWidth);
   std::vector<WideString> result;
-  for (size_t i = 0; i < tagsView.Size(); result.push_back(ToString(tagsView[i].GetRaw(" ", formatFlag, colLengths))), ++i);
+  for (size_t i = 0; i < tagsView.Size(); result.push_back(ToString(tagsView[i].GetRaw(separator, formatFlag, colLengths))), ++i);
   return std::move(result);
 }
 

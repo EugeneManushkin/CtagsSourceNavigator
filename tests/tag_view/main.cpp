@@ -104,16 +104,16 @@ namespace TagsInternal
     TEST(ShrinkColumnLengths, ShrinksSingleColumn)
     {
       size_t expectedLength = LongColumnLength / 2;
-      EXPECT_EQ(expectedLength, ShrinkColumnLengths({LongColumnLength}, expectedLength).back());
+      EXPECT_EQ(expectedLength, ShrinkColumnLengths({LongColumnLength}, Separator.length(), expectedLength).back());
     }
 
     TEST(ShrinkColumnLengths, ShrinksLastTwoColumns)
     {
-      size_t const separatorLength = 1;
+      size_t const separatorLength = Separator.length();
       size_t const fixedSize = (DefaultColumnCount - 2) * (LongColumnLength + separatorLength);
       size_t const expectedLength = fixedSize + LongColumnLength;
       auto colLengths = std::vector<size_t>(DefaultColumnCount, LongColumnLength);
-      auto shrinkedLengths = ShrinkColumnLengths(std::move(colLengths), expectedLength);
+      auto shrinkedLengths = ShrinkColumnLengths(std::move(colLengths), separatorLength, expectedLength);
       EXPECT_EQ(expectedLength, std::accumulate(shrinkedLengths.begin(), shrinkedLengths.end(), size_t(0)) + (shrinkedLengths.size() - 1) * separatorLength);
     }
   }
