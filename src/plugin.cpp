@@ -503,7 +503,7 @@ static size_t GetFarWidth()
 
 static size_t GetMenuWidth()
 {
-  size_t const borderLen = 8 + 1 + 1 + 1 + 1;
+  size_t const borderLen = 8;
   size_t const width = std::min(GetFarWidth(), MaxMenuWidth);
   return borderLen > width ? 0 : width - borderLen;
 }
