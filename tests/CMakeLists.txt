@@ -21,6 +21,15 @@ file(GLOB TAGS_CACHE_SOURCES
 add_executable(tags_cache_tests ${TAGS_CACHE_SOURCES})
 target_link_libraries(tags_cache_tests gtest)
 
+
+file(GLOB TAGS_CACHE_SOURCES
+    "tag_view/*.cpp"
+    "../src/tag_view.cpp"
+)
+
+add_executable(tag_view_tests ${TAGS_CACHE_SOURCES})
+target_link_libraries(tag_view_tests gtest)
+
 #NOTE: this option is in fact disables overriding CMAKE_CXX_ flags inside googletest cmake scripts and allow to control runtime by global flags
 option(gtest_force_shared_crt "Use shared (DLL) run-time lib even when Google Test is built as static lib." ON)
 add_subdirectory(googletest)
