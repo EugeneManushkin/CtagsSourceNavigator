@@ -4,3 +4,4 @@ for %%G in ("%APPVEYOR_BUILD_FOLDER%"\tests\tags\*.zip) do ( cmake -E tar xzvf "
 tags_tests.exe
 tags_tests.exe --CheckIdxFiles
 tags_cache_tests.exe
+tag_view_tests.exe
