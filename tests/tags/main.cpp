@@ -18,7 +18,7 @@ namespace
 
   std::string GetFilePath(std::string const& file)
   {
-    auto pos = file.rfind('\\');
+    auto pos = file.find_last_of("\\/");
     return pos == std::string::npos ? std::string() : file.substr(0, pos);
   }
 
@@ -124,7 +124,7 @@ namespace
     int Line;
   };
 
-  std::regex const MetaTag::Regex("^([a-zA-Z0-9_~]+):(.+):line:([0-9]+)$");
+  std::regex const MetaTag::Regex("^([a-zA-Z0-9_~]+):(.+):line:([0-9]+)\\r*$");
 
   using MetaTagCont = std::vector<MetaTag>;
   using MetaClassCont = std::vector<std::pair<std::string, MetaTagCont> >;
@@ -457,130 +457,130 @@ namespace TESTS
 
   TEST_F(Tags, LoadsEmptyRepos)
   {
-    LoadTagsFile("empty_repos\\tags", MultipleFileRepos, 0);
+    LoadTagsFile("empty_repos/tags", MultipleFileRepos, 0);
   }
 
   TEST_F(Tags, AllNamesFoundInUniversalSingleFileRepos)
   {
-    LoadAndLookupNames("single_file_repos\\tags.universal", "single_file_repos\\tags.universal.meta");
+    LoadAndLookupNames("single_file_repos/tags.universal", "single_file_repos/tags.universal.meta");
   }
 
   TEST_F(Tags, AllNamesFoundInExuberantWinSingleFileRepos)
   {
-    LoadAndLookupNames("single_file_repos\\tags.exuberant.w", "single_file_repos\\tags.exuberant.w.meta");
+    LoadAndLookupNames("single_file_repos/tags.exuberant.w", "single_file_repos/tags.exuberant.w.meta");
   }
 
   TEST_F(Tags, AllNamesFoundInExuberantPlatformCharPathsRepos)
   {
-    LoadAndLookupNames("platform_char_paths_repos\\tags.exuberant.w", "platform_char_paths_repos\\tags.meta");
+    LoadAndLookupNames("platform_char_paths_repos/tags.exuberant.w", "platform_char_paths_repos/tags.meta");
   }
 
   TEST_F(Tags, AllNamesFoundInUniversalPlatformCharPathsRepos)
   {
-    LoadAndLookupNames("platform_char_paths_repos\\tags.universal", "platform_char_paths_repos\\tags.meta");
+    LoadAndLookupNames("platform_char_paths_repos/tags.universal", "platform_char_paths_repos/tags.meta");
   }
 
   TEST_F(Tags, AllNamesFoundInCygwinMixedCaseRepos)
   {
-    LoadAndLookupNames("Mixed Case Repos\\tags.exuberant", "Mixed Case Repos\\tags.meta");
+    LoadAndLookupNames("Mixed Case Repos/tags.exuberant", "Mixed Case Repos/tags.meta");
   }
 
   TEST_F(Tags, AllNamesFoundInExuberantMixedCaseRepos)
   {
-    LoadAndLookupNames("Mixed Case Repos\\tags.exuberant.w", "Mixed Case Repos\\tags.meta");
+    LoadAndLookupNames("Mixed Case Repos/tags.exuberant.w", "Mixed Case Repos/tags.meta");
   }
 
   TEST_F(Tags, AllNamesFoundInUniversalMixedCaseRepos)
   {
-    LoadAndLookupNames("Mixed Case Repos\\tags.universal", "Mixed Case Repos\\tags.meta");
+    LoadAndLookupNames("Mixed Case Repos/tags.universal", "Mixed Case Repos/tags.meta");
   }
 
   TEST_F(Tags, AllNamesFoundInCygwinFullPathRepos)
   {
-    LoadAndLookupNames("full_path_repos\\tags.exuberant", "full_path_repos\\tags.meta");
+    LoadAndLookupNames("full_path_repos/tags.exuberant", "full_path_repos/tags.meta");
     TestTagsLoadedForFile();
   }
 
   TEST_F(Tags, AllNamesFoundInCygwinMixedSlashFullPathRepos)
   {
-    LoadAndLookupNames("full_path_repos\\tags.exuberant.mixed.slashes", "full_path_repos\\tags.meta");
+    LoadAndLookupNames("full_path_repos/tags.exuberant.mixed.slashes", "full_path_repos/tags.meta");
     TestTagsLoadedForFile();
   }
 
   TEST_F(Tags, AllNamesFoundInExuberantFullPathRepos)
   {
-    LoadAndLookupNames("full_path_repos\\tags.exuberant.w", "full_path_repos\\tags.meta");
+    LoadAndLookupNames("full_path_repos/tags.exuberant.w", "full_path_repos/tags.meta");
     TestTagsLoadedForFile();
   }
 
   TEST_F(Tags, AllNamesFoundInUniversalFullPathRepos)
   {
-    LoadAndLookupNames("full_path_repos\\tags.universal", "full_path_repos\\tags.meta");
+    LoadAndLookupNames("full_path_repos/tags.universal", "full_path_repos/tags.meta");
     TestTagsLoadedForFile();
   }
 
   TEST_F(Tags, AllNamesFoundInCygwinSingleFileFullPathRepos)
   {
-    LoadAndLookupNames("full_path_single_file_repo\\tags.exuberant", "full_path_single_file_repo\\tags.exuberant.meta", SingleFileRepos);
+    LoadAndLookupNames("full_path_single_file_repo/tags.exuberant", "full_path_single_file_repo/tags.exuberant.meta", SingleFileRepos);
     TestTagsLoadedForFile(SingleFileRepos);
   }
 
   TEST_F(Tags, AllNamesFoundInExuberantSingleFileFullPathRepos)
   {
-    LoadAndLookupNames("full_path_single_file_repo\\tags.exuberant.w", "full_path_single_file_repo\\tags.exuberant.meta", SingleFileRepos);
+    LoadAndLookupNames("full_path_single_file_repo/tags.exuberant.w", "full_path_single_file_repo/tags.exuberant.meta", SingleFileRepos);
     TestTagsLoadedForFile(SingleFileRepos);
   }
 
   TEST_F(Tags, AllNamesFoundInUniversalSingleFileFullPathRepos)
   {
-    LoadAndLookupNames("full_path_single_file_repo\\tags.universal", "full_path_single_file_repo\\tags.universal.meta", SingleFileRepos);
+    LoadAndLookupNames("full_path_single_file_repo/tags.universal", "full_path_single_file_repo/tags.universal.meta", SingleFileRepos);
     TestTagsLoadedForFile(SingleFileRepos);
   }
 
   TEST_F(Tags, FilePartsFoundInUniversalRepeatedFilesRepos)
   {
-    TestRepeatedFiles("repeated_files_repos\\tags.universal");
+    TestRepeatedFiles("repeated_files_repos/tags.universal");
   }
 
   TEST_F(Tags, FilePartsFoundInCygwinRepeatedFilesRepos)
   {
-    TestRepeatedFiles("repeated_files_repos\\tags.exuberant");
+    TestRepeatedFiles("repeated_files_repos/tags.exuberant");
   }
 
   TEST_F(Tags, FilePartsFoundInExuberantRepeatedFilesRepos)
   {
-    TestRepeatedFiles("repeated_files_repos\\tags.exuberant.w");
+    TestRepeatedFiles("repeated_files_repos/tags.exuberant.w");
   }
 
   TEST_F(Tags, AllClassMembersFoundInExuberantRepos)
   {
-    LookupAllClassMembers("classes_repos\\tags.exuberant.w", "classes_repos\\tags.exuberant.w.classmeta");
+    LookupAllClassMembers("classes_repos/tags.exuberant.w", "classes_repos/tags.exuberant.w.classmeta");
   }
 
   TEST_F(Tags, AllClassMembersFoundInUniversalRepos)
   {
-    LookupAllClassMembers("classes_repos\\tags.universal", "classes_repos\\tags.universal.classmeta");
+    LookupAllClassMembers("classes_repos/tags.universal", "classes_repos/tags.universal.classmeta");
   }
 
   TEST_F(Tags, AnyFileBelongsToMinimalSingleFileRepos)
   {
-    ASSERT_NO_FATAL_FAILURE(LoadTagsFile("minimal_single_file_repos\\tags", MultipleFileRepos, 1));
+    ASSERT_NO_FATAL_FAILURE(LoadTagsFile("minimal_single_file_repos/tags", MultipleFileRepos, 1));
     TestTagsLoadedForFile();
   }
 
   TEST_F(Tags, FindFileInCygwinIncludeFileRepos)
   {
-    TestFindFile("include_file_repos\\tags.exuberant");
+    TestFindFile("include_file_repos/tags.exuberant");
   }
 
   TEST_F(Tags, FindFileInExuberantIncludeFileRepos)
   {
-    TestFindFile("include_file_repos\\tags.exuberant.w");
+    TestFindFile("include_file_repos/tags.exuberant.w");
   }
 
   TEST_F(Tags, FindFileInUniversalIncludeFileRepos)
   {
-    TestFindFile("include_file_repos\\tags.universal");
+    TestFindFile("include_file_repos/tags.universal");
   }
 }
 
