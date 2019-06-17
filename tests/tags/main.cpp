@@ -1,9 +1,6 @@
 #include <gtest/gtest.h>
 #include <tags.h>
 
-#define NOMINMAX
-#include <windows.h>
-
 #include <fstream>
 #include <functional>
 #include <memory>
@@ -36,18 +33,16 @@ namespace
 
   std::string ToLower(std::string const& str)
   {
-    std::vector<char> result(str.begin(), str.end());
-    result.push_back(0);
-    ::CharLowerA(&result[0]);
-    return std::string(&result[0]);
+    auto result = str;
+    std::transform(result.begin(), result.end(), result.begin(), ::tolower);
+    return std::move(result);
   }
 
   std::string ToUpper(std::string const& str)
   {
-    std::vector<char> result(str.begin(), str.end());
-    result.push_back(0);
-    ::CharUpperA(&result[0]);
-    return std::string(&result[0]);
+    auto result = str;
+    std::transform(result.begin(), result.end(), result.begin(), ::toupper);
+    return std::move(result);
   }
 
   std::string MixCase(std::string const& str)

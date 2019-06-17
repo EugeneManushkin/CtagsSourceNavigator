@@ -19,28 +19,33 @@
 
 #include <algorithm>
 #include <functional>
-#include <io.h>
 #include <iterator>
 #include <regex>
 #include <set>
 #include <stdio.h>
 #include <sys/stat.h>
-#include <sys/utime.h>
 #include <string>
 #include <string.h>
 #include <tuple>
 #include <unordered_map>
 #include <vector>
 #include <memory>
-#define NOMINMAX
-#include <windows.h>
 #include "tags.h"
 #include "tags_cache.h"
 
-static bool FileExists(char const* filename)
+#if defined _WIN32
+#include <io.h>
+static void Truncate(FILE* f, long size)
 {
-  return GetFileAttributesA(filename) != INVALID_FILE_ATTRIBUTES;
+  _chsize(_fileno(f), size);
 }
+#else
+#include <unistd.h>
+static void Truncate(FILE* f, long size)
+{
+  ftruncate(fileno(f), size);
+}
+#endif
 
 static bool IsEndOfFile(FILE* f)
 {
@@ -740,7 +745,7 @@ std::shared_ptr<FILE> TagFileInfo::OpenTags(OffsetCont& offsets, IndexType index
   if (index == IndexType::Names)
     offsets = NamesOffsets;
   else
-    std::swap(offsets, GetOffsets(&*f, index));
+    GetOffsets(&*f, index).swap(offsets);
 
   return FOpen(filename.c_str(), "rb");
 }
@@ -774,7 +779,7 @@ void TagFileInfo::FlushCachedTags()
   
   WriteTagsStat(&*f, NamesCache->GetStat());
   WriteTagsStat(&*f, FilesCache->GetStat());
-  _chsize(_fileno(&*f), ftell(&*f));
+  Truncate(&*f, ftell(&*f));
   CloseIndexFile(std::move(f));
 }
 
@@ -950,7 +955,7 @@ bool TagFileInfo::LoadCache()
     {
       NamesCache = TagsInternal::CreateTagsCache(0);
       FilesCache = TagsInternal::CreateTagsCache(0);
-      _chsize(_fileno(&*f), tagsCacheBegins);
+      Truncate(&*f, tagsCacheBegins);
     }
     else
     {
