@@ -46,7 +46,7 @@ namespace Facade
     }
   };
 
-  std::unique_ptr<Plugin> CreatePlugin(char const* pluginFolder)
+  std::unique_ptr<Plugin> Plugin::Create(char const* pluginFolder)
   {
     return std::unique_ptr<Plugin>(new PluginImpl);
   }

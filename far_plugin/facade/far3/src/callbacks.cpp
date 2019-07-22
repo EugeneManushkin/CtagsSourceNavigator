@@ -134,7 +134,7 @@ namespace Facade
       I = *info;
       FSF = *info->FSF;
       I.FSF = &FSF;
-      PluginInstance = CreatePlugin(GetDirOfFile(ToStdString(I.ModuleName)).c_str());
+      PluginInstance = Plugin::Create(GetDirOfFile(ToStdString(I.ModuleName)).c_str());
     }
     
     void* OpenW(OpenInfo const* info)
