@@ -5,18 +5,20 @@
 #include <facade/message.h>
 #include <plugin_sdk/plugin.hpp>
 
-using namespace FacadeInternal;
+using Facade::Internal::WideString;
+using Facade::Internal::FarAPI;
+using Facade::Internal::ToString;
 
 namespace
 {
   GUID StrToGuid(char const* str)
   {
     GUID result;
-    StringToGuid(str, result);
+    Facade::Internal::StringToGuid(str, result);
     return result;
   }
 
-  GUID const PluginGuid = StrToGuid(GetPluginGuid());
+  GUID const PluginGuid = StrToGuid(Facade::Internal::GetPluginGuid());
   GUID const ErrorMessageGuid = StrToGuid("{03cceb3e-20ba-438a-9972-85a48b0d28e4}");
 
   void Message(wchar_t const* text, int numButtons, FARMESSAGEFLAGS flags)

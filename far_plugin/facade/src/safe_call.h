@@ -1,25 +1,28 @@
 #include <facade/message.h>
 
-namespace FacadeInternal
+namespace Facade
 {
-  template <typename Callable>
-  auto SafeCall(Callable call, decltype(call()) errorResult) -> decltype(call())
+  namespace Internal
   {
-    try
+    template <typename Callable>
+    auto SafeCall(Callable call, decltype(call()) errorResult) -> decltype(call())
     {
-      return call();
+      try
+      {
+        return call();
+      }
+      catch (std::exception const& e)
+      {
+        Facade::ErrorMessage(e.what());
+      }
+    
+      return errorResult;
     }
-    catch (std::exception const& e)
+    
+    template <typename CallType>
+    void SafeCall(CallType call)
     {
-      Facade::ErrorMessage(e.what());
+      SafeCall([call]() { call(); return 0; }, 0);
     }
-  
-    return errorResult;
-  }
-  
-  template <typename CallType>
-  void SafeCall(CallType call)
-  {
-    SafeCall([call]() { call(); return 0; }, 0);
   }
 }

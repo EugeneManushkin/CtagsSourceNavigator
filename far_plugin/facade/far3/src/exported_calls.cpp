@@ -5,44 +5,44 @@
 
 #include <functional>
 
-using FacadeInternal::SafeCall;
+using Facade::Internal::SafeCall;
 
 void WINAPI GetGlobalInfoW(struct GlobalInfo *info)
 {
-  SafeCall(std::bind(FacadeInternal::GetGlobalInfoW, info));
+  SafeCall(std::bind(Facade::Internal::GetGlobalInfoW, info));
 }
 
 void WINAPI GetPluginInfoW(struct PluginInfo *info)
 {
-  SafeCall(std::bind(FacadeInternal::GetPluginInfoW, info));
+  SafeCall(std::bind(Facade::Internal::GetPluginInfoW, info));
 }
 
 void WINAPI SetStartupInfoW(const struct PluginStartupInfo *info)
 {
-  SafeCall(std::bind(FacadeInternal::SetStartupInfoW, info));
+  SafeCall(std::bind(Facade::Internal::SetStartupInfoW, info));
 }
 
 HANDLE WINAPI OpenW(const struct OpenInfo *info)
 {
-  return SafeCall(std::bind(FacadeInternal::OpenW, info), nullptr);
+  return SafeCall(std::bind(Facade::Internal::OpenW, info), nullptr);
 }
 
 HANDLE WINAPI AnalyseW(const AnalyseInfo* info)
 {
-  return SafeCall(std::bind(FacadeInternal::AnalyseW, info), nullptr);
+  return SafeCall(std::bind(Facade::Internal::AnalyseW, info), nullptr);
 }
 
 intptr_t WINAPI ConfigureW(const struct ConfigureInfo *info)
 {
-  return SafeCall(std::bind(FacadeInternal::ConfigureW, info), FALSE);
+  return SafeCall(std::bind(Facade::Internal::ConfigureW, info), FALSE);
 }
 
 intptr_t WINAPI ProcessEditorEventW(const struct ProcessEditorEventInfo *info)
 {
-  return SafeCall(std::bind(FacadeInternal::ProcessEditorEventW, info), 0);
+  return SafeCall(std::bind(Facade::Internal::ProcessEditorEventW, info), 0);
 }
 
 void WINAPI ExitFARW(const struct ExitInfo *info)
 {
-  SafeCall(std::bind(FacadeInternal::ExitFARW, info));
+  SafeCall(std::bind(Facade::Internal::ExitFARW, info));
 }

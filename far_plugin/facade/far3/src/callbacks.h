@@ -11,16 +11,19 @@ struct ConfigureInfo;
 struct ProcessEditorEventInfo;
 struct ExitInfo;
 
-namespace FacadeInternal
+namespace Facade
 {
-  char const* GetPluginGuid();
-  PluginStartupInfo const& FarAPI();
-  void GetGlobalInfoW(GlobalInfo *info);
-  void GetPluginInfoW(PluginInfo *info);
-  void SetStartupInfoW(PluginStartupInfo const* info);
-  void* OpenW(OpenInfo const* info);
-  void* AnalyseW(AnalyseInfo const* info);
-  intptr_t ConfigureW(ConfigureInfo const* info);
-  intptr_t ProcessEditorEventW(ProcessEditorEventInfo const* info);
-  void ExitFARW(ExitInfo const* info);
+  namespace Internal
+  {
+    char const* GetPluginGuid();
+    PluginStartupInfo const& FarAPI();
+    void GetGlobalInfoW(GlobalInfo *info);
+    void GetPluginInfoW(PluginInfo *info);
+    void SetStartupInfoW(PluginStartupInfo const* info);
+    void* OpenW(OpenInfo const* info);
+    void* AnalyseW(AnalyseInfo const* info);
+    intptr_t ConfigureW(ConfigureInfo const* info);
+    intptr_t ProcessEditorEventW(ProcessEditorEventInfo const* info);
+    void ExitFARW(ExitInfo const* info);
+  }
 }
