@@ -1,5 +1,6 @@
 #pragma once
 
+#include <memory>
 #include <string>
 
 struct _GUID;
@@ -12,6 +13,6 @@ namespace Facade
   
     WideString ToString(std::string const& str);
     std::string ToStdString(WideString const& str);
-    void StringToGuid(std::string const& str, _GUID& result);
+    std::unique_ptr<_GUID> StringToGuid(std::string const& str);
   }
 }

@@ -2,6 +2,7 @@
 
 #include <cstdint>
 
+struct _GUID;
 struct GlobalInfo;
 struct PluginInfo;
 struct PluginStartupInfo;
@@ -15,8 +16,9 @@ namespace Facade
 {
   namespace Internal
   {
-    char const* GetPluginGuid();
+    _GUID const* GetPluginGuid();
     PluginStartupInfo const& FarAPI();
+    wchar_t const* GetMsg(int textID);
     void GetGlobalInfoW(GlobalInfo *info);
     void GetPluginInfoW(PluginInfo *info);
     void SetStartupInfoW(PluginStartupInfo const* info);

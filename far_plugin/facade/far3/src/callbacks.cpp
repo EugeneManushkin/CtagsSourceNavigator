@@ -7,19 +7,13 @@
 
 #include <vector>
 
+using Facade::Internal::StringToGuid;
 using Facade::Internal::WideString;
 
 namespace
 {
-  GUID StrToGuid(char const* str)
-  {
-    GUID result;
-    Facade::Internal::StringToGuid(str, result);
-    return result;
-  }
-
-  char const* const PluginGuid = "{2e34b611-3df1-463f-8711-74b0f21558a5}";
-  GUID const MenuGuid = StrToGuid("{a5b1037e-2f54-4609-b6dd-70cd47bd222b}");
+  auto const PluginGuid = StringToGuid("{2e34b611-3df1-463f-8711-74b0f21558a5}");
+  auto const MenuGuid = StringToGuid("{a5b1037e-2f54-4609-b6dd-70cd47bd222b}");
 
   PluginStartupInfo I;
   FarStandardFunctions FSF;
@@ -96,14 +90,19 @@ namespace Facade
 {
   namespace Internal
   {
-    char const* GetPluginGuid()
+    _GUID const* GetPluginGuid()
     {
-      return PluginGuid;
+      return PluginGuid.get();
     }
   
     PluginStartupInfo const& FarAPI()
     {
       return I;
+    }
+
+    wchar_t const* GetMsg(int textID)
+    {
+      return FarAPI().GetMsg(GetPluginGuid(), textID);
     }
   
     void GetGlobalInfoW(GlobalInfo *info)
@@ -111,7 +110,7 @@ namespace Facade
       info->StructSize = sizeof(*info);
       info->MinFarVersion = MAKEFARVERSION(3, 0, 0, 0, VS_RELEASE);
       info->Version = MAKEFARVERSION(CTAGS_VERSION_MAJOR, CTAGS_VERSION_MINOR, 0, CTAGS_BUILD, VS_RELEASE);
-      info->Guid = StrToGuid(PluginGuid);
+      info->Guid = *GetPluginGuid();
       info->Title = CTAGS_PRODUCT_NAME;
       info->Description = CTAGS_FILE_DESCR;
       info->Author = L"Eugene Manushkin";
@@ -123,7 +122,7 @@ namespace Facade
       PluginMenuStrings[0] = CTAGS_PRODUCT_NAME;
       info->StructSize = sizeof(*info);
       info->Flags = PF_EDITOR;
-      info->PluginMenu.Guids = info->PluginConfig.Guids = &MenuGuid;
+      info->PluginMenu.Guids = info->PluginConfig.Guids = &*MenuGuid;
       info->PluginMenu.Strings = info->PluginConfig.Strings = PluginMenuStrings;
       info->PluginMenu.Count = info->PluginConfig.Count = sizeof(PluginMenuStrings) / sizeof(PluginMenuStrings[0]);
       info->CommandPrefix = L"tag";

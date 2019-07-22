@@ -10,8 +10,9 @@ namespace Facade
 {
   namespace Internal
   {
-    void StringToGuid(const std::string& str, _GUID& guid)
+    std::unique_ptr<_GUID> StringToGuid(const std::string& str)
     {
+      _GUID guid = {};
       std::string lowercased(str);
       std::transform(lowercased.begin(), lowercased.end(), lowercased.begin(), ::tolower);
       auto sannedItems = sscanf(lowercased.c_str(),
@@ -22,6 +23,8 @@ namespace Facade
     
       if (sannedItems != 11)
         throw std::invalid_argument("Invalid guid string specified");
+
+      return std::unique_ptr<_GUID>(new _GUID(guid));
     }
     
     WideString ToString(std::string const& str)

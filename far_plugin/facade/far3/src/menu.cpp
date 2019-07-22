@@ -7,28 +7,16 @@
 #include <vector>
 #include <utility>
 
-using Facade::Internal::WideString;
 using Facade::Internal::FarAPI;
+using Facade::Internal::GetMsg;
+using Facade::Internal::GetPluginGuid;
+using Facade::Internal::StringToGuid;
 using Facade::Internal::ToString;
+using Facade::Internal::WideString;
 
 namespace
 {
-  // TODO: refactor duplicated code
-  GUID StrToGuid(char const* str)
-  {
-    GUID result;
-    Facade::Internal::StringToGuid(str, result);
-    return result;
-  }
-
-  GUID const PluginGuid = StrToGuid(Facade::Internal::GetPluginGuid());
-  GUID const CtagsMenuGuid = StrToGuid("{7f125c0d-5e18-4b7f-a6df-1caae013c48f}");
-
-  // TODO: refactor duplicated code
-  wchar_t const* GetMsg(int textID)
-  {
-    return FarAPI().GetMsg(&PluginGuid, textID);
-  }
+  auto const CtagsMenuGuid = StringToGuid("{7f125c0d-5e18-4b7f-a6df-1caae013c48f}");
 
   WideString MakeLabeledText(WideString const& text, WideString::value_type label)
   {
@@ -76,7 +64,7 @@ namespace
         counter += !(i.second & MIF_SEPARATOR) ? 1 : 0;
       }
 
-      auto res = Facade::Internal::FarAPI().Menu(&PluginGuid, &CtagsMenuGuid, -1, -1, 0, FMENU_WRAPMODE, title, L"", L"", nullptr, nullptr, &farItems[0], farItems.size());
+      auto res = FarAPI().Menu(GetPluginGuid(), &*CtagsMenuGuid, -1, -1, 0, FMENU_WRAPMODE, title, L"", L"", nullptr, nullptr, &farItems[0], farItems.size());
       return res == -1 ? -1 : static_cast<int>(farItems.at(res).UserData);
     }
 
