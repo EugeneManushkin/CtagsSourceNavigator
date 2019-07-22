@@ -15,14 +15,14 @@ namespace Facade
       ErrorMessage(MPlugin);
     }
 
-    void OnPanelMenu() override
+    void OnPanelMenu(char const* currentFile) override
     {
-      ErrorMessage("OnPanelMenu");
+      ErrorMessage((std::string("OnPanelMenu: ") + currentFile).c_str());
     }
 
-    void OnEditorMenu() override
+    void OnEditorMenu(char const* currentFile) override
     {
-      ErrorMessage("OnEditorMenu");
+      ErrorMessage((std::string("OnEditorMenu: ") + currentFile).c_str());
     }
 
     void OnCmd(char const* cmd) override
