@@ -6,6 +6,7 @@ add_library(far_plugin STATIC ${SOURCES})
 add_dependencies(far_plugin platform)
 target_include_directories(far_plugin PUBLIC
     facade/include
+    platform/include
 )
 
 add_subdirectory(platform)

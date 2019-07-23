@@ -23,5 +23,5 @@ namespace FarPlugin
     std::string WordChars;
   };
 
-  Config LoadConfig();
+  Config LoadConfig(std::string const& fileName);
 }

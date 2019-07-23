@@ -31,6 +31,6 @@ namespace Platform
 
   std::string JoinPath(std::string const& dirPath, std::string const& name)
   {
-    return dirPath.empty() || IsPathSeparator(dirPath.back()) ? dirPath + name : dirPath + std::string(0, DefaultPathSeparator) + name;
+    return dirPath.empty() || IsPathSeparator(dirPath.back()) ? dirPath + name : dirPath + std::string(1, DefaultPathSeparator) + name;
   }
 }

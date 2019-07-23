@@ -1,14 +1,17 @@
 #include "action_menu.h"
+#include "config.h"
 #include "text.h"
 
 #include <facade/menu.h>
 #include <facade/message.h>
 #include <facade/plugin.h>
+#include <platform/path.h>
 
 #include <string>
 
 using Facade::ErrorMessage;
 using FarPlugin::ActionMenu;
+using Platform::JoinPath;
 
 namespace
 {
@@ -17,13 +20,14 @@ namespace
   public:
     PluginImpl(std::string&& pluginFolder)
       : PluginFolder(std::move(pluginFolder))
+      , ConfigPath(JoinPath(PluginFolder, "config"))
     {
     }
 
     void OnPanelMenu(char const* currentFile) override
     {
       ActionMenu::Callback dummy = [currentFile]{ ErrorMessage((std::string("OnPanelMenu: ") + currentFile).c_str()); };
-      ActionMenu()
+      ActionMenu([this]{Config = FarPlugin::LoadConfig(ConfigPath);})
      .Add('1', MLookupSymbol, ActionMenu::Callback(dummy))
      .Add('2', MSearchFile, ActionMenu::Callback(dummy))
      .Add('H', MNavigationHistory, ActionMenu::Callback(dummy), true)
@@ -42,7 +46,7 @@ namespace
     void OnEditorMenu(char const* currentFile) override
     {
       ActionMenu::Callback dummy = [currentFile]{ ErrorMessage((std::string("OnEditorMenu: ") + currentFile).c_str()); };
-      ActionMenu()
+      ActionMenu([this]{Config = FarPlugin::LoadConfig(ConfigPath);})
      .Add('1', MFindSymbol, ActionMenu::Callback(dummy))
      .Add('2', MCompleteSymbol, ActionMenu::Callback(dummy))
      .Add('3', MUndoNavigation, ActionMenu::Callback(dummy), true)
@@ -81,7 +85,9 @@ namespace
     }
 
   private:
-    std::string PluginFolder;
+    std::string const PluginFolder;
+    std::string const ConfigPath;
+    FarPlugin::Config Config;
   };
 }
 

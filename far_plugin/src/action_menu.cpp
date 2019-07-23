@@ -4,8 +4,9 @@
 
 namespace FarPlugin
 {
-  ActionMenu::ActionMenu()
+  ActionMenu::ActionMenu(Callback&& cb)
     : Menu(Facade::Menu::Create())
+    , DefaultCallback(std::move(cb))
   {
   }
 
@@ -25,7 +26,13 @@ namespace FarPlugin
   void ActionMenu::Run(int titleID, int selected)
   {
     auto res = Menu->Run(titleID, selected);
-    if (res >= 0)
+    if (res < 0)
+      return;
+
+    if (DefaultCallback)
+      DefaultCallback();
+
+    if (Callbacks.at(res))
       Callbacks.at(res)();
   }
 }
