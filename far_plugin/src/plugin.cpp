@@ -8,6 +8,8 @@
 #include <string>
 #include <vector>
 
+using Facade::ErrorMessage;
+
 namespace
 {
   class ActionMenu
@@ -49,16 +51,13 @@ namespace
     if (res >= 0)
       Callbacks.at(res)();
   }
-}
 
-namespace Facade
-{
-  class PluginImpl : public Plugin
+  class PluginImpl : public Facade::Plugin
   {
   public:
-    PluginImpl()
+    PluginImpl(std::string&& pluginFolder)
+      : PluginFolder(std::move(pluginFolder))
     {
-      ErrorMessage(MPlugin);
     }
 
     void OnPanelMenu(char const* currentFile) override
@@ -95,7 +94,7 @@ namespace Facade
      .Add('6', MLookupSymbol, ActionMenu::Callback(dummy))
      .Add('7', MSearchFile, ActionMenu::Callback(dummy))
      .Separator()
-     .Add(' ', MReindexRepo, ActionMenu::Callback(dummy))
+     .Add('8', MReindexRepo, ActionMenu::Callback(dummy))
      .Separator()
      .Add('C', MPluginConfiguration, ActionMenu::Callback(dummy))
      .Run(MPlugin, -1);
@@ -120,10 +119,16 @@ namespace Facade
     {
       ErrorMessage("Cleanup");
     }
-  };
 
+  private:
+    std::string PluginFolder;
+  };
+}
+
+namespace Facade
+{
   std::unique_ptr<Plugin> Plugin::Create(char const* pluginFolder)
   {
-    return std::unique_ptr<Plugin>(new PluginImpl);
+    return std::unique_ptr<Plugin>(new PluginImpl(pluginFolder));
   }
 }
