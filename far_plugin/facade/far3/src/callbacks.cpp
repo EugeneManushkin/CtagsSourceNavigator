@@ -3,12 +3,15 @@
 #include "string.h"
 
 #include <facade/plugin.h>
+#include <platform/path.h>
 #include <plugin_sdk/plugin.hpp>
 
 #include <vector>
 
 using Facade::Internal::StringToGuid;
 using Facade::Internal::WideString;
+using Platform::GetDirOfFile;
+using Platform::JoinPath;
 
 namespace
 {
@@ -18,22 +21,6 @@ namespace
   PluginStartupInfo I;
   FarStandardFunctions FSF;
   std::unique_ptr<Facade::Plugin> PluginInstance;
-  //TODO: move to platform library
-  std::string GetDirOfFile(std::string const& fileName)
-  {
-    auto pos = fileName.find_last_of("\\/");
-    return pos == std::string::npos ? std::string() : fileName.substr(0, pos);
-  }
-  //TODO: move to platform library
-  bool IsPathSeparator(char c)
-  {
-    return c == '/' || c == '\\';
-  }
-  //TODO: move to platform library
-  std::string JoinPath(std::string const& dirPath, std::string const& name)
-  {
-    return dirPath.empty() || IsPathSeparator(dirPath.back()) ? dirPath + name : dirPath + std::string("\\") + name;
-  }
 
   WideString GetPanelFile()
   {

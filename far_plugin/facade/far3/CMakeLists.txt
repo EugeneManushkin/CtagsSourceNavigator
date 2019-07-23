@@ -9,11 +9,12 @@ if (MSVC)
 endif (MSVC)
 
 add_library(ctags SHARED ${SOURCES})
-target_link_libraries(ctags tags far_plugin)
+target_link_libraries(ctags tags far_plugin platform)
 target_include_directories(ctags PUBLIC
     include
     ${CMAKE_SOURCE_DIR}/src
     ${CMAKE_SOURCE_DIR}/far_plugin/facade/src
+    ${CMAKE_SOURCE_DIR}/far_plugin/platform/include
 )
 
 target_compile_definitions(ctags PUBLIC CTAGS_VERSION_MAJOR=${CTAGS_VERSION_MAJOR}
