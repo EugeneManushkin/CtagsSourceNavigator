@@ -1,15 +1,20 @@
 #include "action_menu.h"
 #include "config.h"
+#include "tags_history.h"
 #include "text.h"
 
 #include <facade/menu.h>
 #include <facade/message.h>
 #include <facade/plugin.h>
 #include <platform/path.h>
+#include <tags.h>
 
 #include <string>
+#include <stdexcept>
 
 using Facade::ErrorMessage;
+using Facade::InfoMessage;
+using Facade::LongOperationMessage;
 using FarPlugin::ActionMenu;
 using Platform::JoinPath;
 
@@ -32,8 +37,8 @@ namespace
      .Add('2', MSearchFile, ActionMenu::Callback(dummy))
      .Add('H', MNavigationHistory, ActionMenu::Callback(dummy), true)
      .Separator()
-     .Add('3', MLoadTagsFile, ActionMenu::Callback(dummy))
-     .Add('4', MLoadFromHistory, ActionMenu::Callback(dummy))
+     .Add('3', MLoadTagsFile, std::bind(&PluginImpl::LoadTags, this, currentFile))
+     .Add('4', MLoadFromHistory, std::bind(&PluginImpl::LoadFromHistory, this))
      .Add('5', MUnloadTagsFile, ActionMenu::Callback(dummy))
      .Separator()
      .Add('7', MCreateTagsFile, ActionMenu::Callback(dummy))
@@ -79,12 +84,33 @@ namespace
       ErrorMessage((std::string("OpenFile: ") + file).c_str());
     }
 
-    void Cleanup()
+    void Cleanup() override
     {
       ErrorMessage("Cleanup");
     }
 
+    void LoadFromHistory()
+    {
+      auto tagsFile = FarPlugin::SelectFromTagsHistory(Config.HistoryFile.c_str(), Config.HistoryLen);
+      if (!tagsFile.empty())
+        LoadTags(tagsFile);
+    }
+
   private:
+    void LoadTags(std::string const& tagsFile)
+    {
+      auto message = LongOperationMessage(MPlugin, MLoadingTags);
+      size_t symbolsLoaded = 0;
+      bool const singleFileRepos = false;
+      if (auto err = Load(tagsFile.c_str(), singleFileRepos, symbolsLoaded))
+        // TODO: throw Error(err == ENOENT ? MEFailedToOpen : MFailedToWriteIndex, "Tags file", tagsFile);
+        throw std::runtime_error(std::string("Failed to load tags file, error: ") + std::to_string(err));
+
+      FarPlugin::AddToTagsHistory(tagsFile.c_str(), Config.HistoryFile.c_str(), Config.HistoryLen);
+      // TODO: rework
+      InfoMessage(MPlugin, (std::string("Tags file loaded: ") + std::to_string(symbolsLoaded)).c_str());
+    }
+
     std::string const PluginFolder;
     std::string const ConfigPath;
     FarPlugin::Config Config;
