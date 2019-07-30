@@ -2,6 +2,7 @@
 #include "resource.h"
 #include "string.h"
 
+#include <facade/message.h>
 #include <facade/plugin.h>
 #include <platform/path.h>
 #include <plugin_sdk/plugin.hpp>
@@ -89,7 +90,7 @@ namespace Facade
 
     wchar_t const* GetMsg(int textID)
     {
-      return FarAPI().GetMsg(GetPluginGuid(), textID);
+      return textID == DefaultTextID ? CTAGS_PRODUCT_NAME : FarAPI().GetMsg(GetPluginGuid(), textID);
     }
   
     void GetGlobalInfoW(GlobalInfo *info)

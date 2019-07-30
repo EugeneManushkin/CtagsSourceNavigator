@@ -1,13 +1,20 @@
 #pragma once
 
 #include <memory>
+#include <string>
 
 namespace Facade
 {
-  void ErrorMessage(char const* text);
-  void ErrorMessage(int textID);
-//TODO: allow combination of text and textID
-  void InfoMessage(int titleID, char const* text);
-  void InfoMessage(int titleID, int textID);
-  std::shared_ptr<void> LongOperationMessage(int titleID, int textID);
+  enum
+  {
+    DefaultTextID = -1,
+  };
+
+  std::string Format(int formatID, ...);
+  void ErrorMessage(std::string const& text, int titleID = DefaultTextID);
+  void ErrorMessage(int textID, int titleID = DefaultTextID);
+  void InfoMessage(std::string const& text, int titleID = DefaultTextID);
+  void InfoMessage(int textID, int titleID = DefaultTextID);
+  std::shared_ptr<void> LongOperationMessage(std::string const& text, int titleID = DefaultTextID);
+  std::shared_ptr<void> LongOperationMessage(int textID, int titleID = DefaultTextID);
 }

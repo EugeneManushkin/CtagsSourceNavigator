@@ -99,7 +99,7 @@ namespace
   private:
     void LoadTags(std::string const& tagsFile)
     {
-      auto message = LongOperationMessage(MPlugin, MLoadingTags);
+      auto message = LongOperationMessage(MLoadingTags, MPlugin);
       size_t symbolsLoaded = 0;
       bool const singleFileRepos = false;
       if (auto err = Load(tagsFile.c_str(), singleFileRepos, symbolsLoaded))
@@ -107,8 +107,7 @@ namespace
         throw std::runtime_error(std::string("Failed to load tags file, error: ") + std::to_string(err));
 
       FarPlugin::AddToTagsHistory(tagsFile.c_str(), Config.HistoryFile.c_str(), Config.HistoryLen);
-      // TODO: rework
-      InfoMessage(MPlugin, (std::string("Tags file loaded: ") + std::to_string(symbolsLoaded)).c_str());
+      InfoMessage(Facade::Format(MLoadOk, symbolsLoaded, tagsFile.c_str()), MPlugin);
     }
 
     std::string const PluginFolder;

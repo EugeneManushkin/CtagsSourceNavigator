@@ -18,7 +18,7 @@ namespace
 
   int EmptyMenuMessage(int textID)
   {
-    Facade::InfoMessage(MPlugin, textID);
+    Facade::InfoMessage(textID, MPlugin);
     return -1;
   }
 }

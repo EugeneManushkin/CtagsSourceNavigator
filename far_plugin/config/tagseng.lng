@@ -9,7 +9,7 @@
 "Begin type or Ctrl+V (Ctrl+C to copy)"
 "Go back"
 "Go forward"
-"Tags file loaded"
+"Loaded %d tags from '%s'"
 "Tags file not loaded"
 "Load tags file"
 "Unload tags"
