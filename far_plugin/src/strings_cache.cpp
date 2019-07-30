@@ -2,6 +2,7 @@
 
 #include <fstream>
 #include <iterator>
+#include <list>
 #include <unordered_map>
 
 namespace
