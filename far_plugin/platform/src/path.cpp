@@ -1,18 +1,11 @@
+#include <platform_internal.h>
 #include <platform/path.h>
-
-namespace
-{
-#if defined _WIN32
-  char const DefaultPathSeparator = '\\';
-  char const PathSeparators[] = "\\/";
-#else
-  char const DefaultPathSeparator = '/';
-  char const PathSeparators[] = "/";
-#endif
-}
 
 namespace Platform
 {
+  using Internal::DefaultPathSeparator;
+  using Internal::PathSeparators;
+
   char PathSeparator()
   {
     return DefaultPathSeparator;

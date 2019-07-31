@@ -20,6 +20,12 @@ using Platform::JoinPath;
 
 namespace
 {
+  std::string GetFullPath(std::string const& path, std::string const& pluginFolder)
+  {
+    auto expandedPath = Platform::ExpandEnvString(path);
+    return Platform::IsAbsolutePath(expandedPath.c_str()) ? std::move(expandedPath) : JoinPath(pluginFolder, expandedPath);
+  }
+
   class PluginImpl : public Facade::Plugin
   {
   public:
@@ -89,31 +95,41 @@ namespace
       ErrorMessage("Cleanup");
     }
 
-    void LoadFromHistory()
-    {
-      auto tagsFile = FarPlugin::SelectFromTagsHistory(Config.HistoryFile.c_str(), Config.HistoryLen);
-      if (!tagsFile.empty())
-        LoadTags(tagsFile);
-    }
+    void LoadFromHistory();
 
   private:
-    void LoadTags(std::string const& tagsFile)
-    {
-      auto message = LongOperationMessage(MLoadingTags, MPlugin);
-      size_t symbolsLoaded = 0;
-      bool const singleFileRepos = false;
-      if (auto err = Load(tagsFile.c_str(), singleFileRepos, symbolsLoaded))
-        // TODO: throw Error(err == ENOENT ? MEFailedToOpen : MFailedToWriteIndex, "Tags file", tagsFile);
-        throw std::runtime_error(std::string("Failed to load tags file, error: ") + std::to_string(err));
-
-      FarPlugin::AddToTagsHistory(tagsFile.c_str(), Config.HistoryFile.c_str(), Config.HistoryLen);
-      InfoMessage(Facade::Format(MLoadOk, symbolsLoaded, tagsFile.c_str()), MPlugin);
-    }
+    std::string HistoryFileFullPath() const;
+    void LoadTags(std::string const& tagsFile);
 
     std::string const PluginFolder;
     std::string const ConfigPath;
     FarPlugin::Config Config;
   };
+
+  void PluginImpl::LoadFromHistory()
+  {
+    auto tagsFile = FarPlugin::SelectFromTagsHistory(HistoryFileFullPath().c_str(), Config.HistoryLen);
+    if (!tagsFile.empty())
+      LoadTags(tagsFile);
+  }
+
+  std::string PluginImpl::HistoryFileFullPath() const
+  {
+    return GetFullPath(Config.HistoryFile, PluginFolder);
+  }
+
+  void PluginImpl::LoadTags(std::string const& tagsFile)
+  {
+    auto message = LongOperationMessage(MLoadingTags, MPlugin);
+    size_t symbolsLoaded = 0;
+    bool const singleFileRepos = false;
+    if (auto err = Load(tagsFile.c_str(), singleFileRepos, symbolsLoaded))
+      // TODO: throw Error(err == ENOENT ? MEFailedToOpen : MFailedToWriteIndex, "Tags file", tagsFile);
+      throw std::runtime_error(std::string("Failed to load tags file, error: ") + std::to_string(err));
+
+    FarPlugin::AddToTagsHistory(tagsFile.c_str(), HistoryFileFullPath().c_str(), Config.HistoryLen);
+    InfoMessage(Facade::Format(MLoadOk, symbolsLoaded, tagsFile.c_str()), MPlugin);
+  }
 }
 
 namespace Facade
