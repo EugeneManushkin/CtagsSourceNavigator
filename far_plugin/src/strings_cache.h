@@ -10,6 +10,7 @@ namespace FarPlugin
   {
   public:
     static std::unique_ptr<StringsCache> Create(size_t capacity);
+    virtual ~StringsCache() = default;
     virtual void Insert(std::string const&) = 0;
     virtual std::vector<std::string> Get() const = 0;
   };
