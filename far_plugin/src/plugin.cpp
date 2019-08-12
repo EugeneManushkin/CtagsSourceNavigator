@@ -45,7 +45,7 @@ namespace
      .Separator()
      .Add('3', MLoadTagsFile, std::bind(&PluginImpl::LoadTags, this, currentFile))
      .Add('4', MLoadFromHistory, std::bind(&PluginImpl::LoadFromHistory, this))
-     .Add('5', MUnloadTagsFile, ActionMenu::Callback(dummy))
+     .Add('5', MUnloadTagsFile, std::bind(&PluginImpl::UnloadTagsFiles, this))
      .Separator()
      .Add('7', MCreateTagsFile, ActionMenu::Callback(dummy))
      .Add('8', MReindexRepo, ActionMenu::Callback(dummy))
@@ -100,6 +100,7 @@ namespace
   private:
     std::string HistoryFileFullPath() const;
     void LoadTags(std::string const& tagsFile);
+    void UnloadTagsFiles();
 
     std::string const PluginFolder;
     std::string const ConfigPath;
@@ -128,6 +129,21 @@ namespace
 
     FarPlugin::AddToTagsHistory(tagsFile.c_str(), HistoryFileFullPath().c_str(), Config.HistoryLen);
     InfoMessage(Facade::Format(MLoadOk, symbolsLoaded, tagsFile.c_str()), MPlugin);
+  }
+
+  void PluginImpl::UnloadTagsFiles()
+  {
+    auto loadedTags = GetFiles();
+    auto menu = Facade::Menu::Create();
+    menu->Add(MUnloadAll, 0, false);
+    for (auto const& file : loadedTags)
+      menu->Add(file, 0, false);
+
+    auto selected = menu->Run(MUnloadTagsFile, -1);
+    if (selected == 0)
+      UnloadAllTags();
+    else if (selected > 0)
+      UnloadTags(loadedTags.at(selected - 1).c_str());
   }
 }
 

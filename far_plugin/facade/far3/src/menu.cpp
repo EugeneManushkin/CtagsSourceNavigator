@@ -26,7 +26,7 @@ namespace
   class MenuImpl : public Facade::Menu
   {
   public:
-    void Add(char const* text, char label, bool disabled) override
+    void Add(std::string const& text, char label, bool disabled) override
     {
       Add(ToString(text), label, disabled);
     }
@@ -41,7 +41,7 @@ namespace
       Items.push_back(std::make_pair(WideString(), MIF_SEPARATOR));
     }
 
-    int Run(char const* title, int selected) override
+    int Run(std::string const& title, int selected) override
     {
       return Run(ToString(title).c_str(), selected);
     }

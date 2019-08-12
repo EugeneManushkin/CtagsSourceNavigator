@@ -19,7 +19,7 @@ enum{
   MUnableToUpdate,
   MCompleteSymbol,
   MNothingFound,
-  MAll,
+  MUnloadAll,
   MFailedToWriteIndex,
   MBrowseSymbolsInFile,
   MBrowseClass,

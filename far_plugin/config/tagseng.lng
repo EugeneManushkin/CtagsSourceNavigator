@@ -18,7 +18,7 @@
 "Unable to update tags file"
 "Complete name"
 "Nothing found"
-"All"
+"<Unload all>"
 "Failed to write index file for '%s'"
 "Search name in opened file"
 "Class members"
