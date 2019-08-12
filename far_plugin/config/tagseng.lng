@@ -2,7 +2,7 @@
 
 "Ctags Source Navigator"
 "RegExp Compilation error"
-"Failed to open file"
+"Failed to open '%s'"
 "Go to"
 "Reload tags file"
 "Name not found"
@@ -19,7 +19,7 @@
 "Complete name"
 "Nothing found"
 "All"
-"Failed to write index file"
+"Failed to write index file for '%s'"
 "Search name in opened file"
 "Class members"
 "Items count:"

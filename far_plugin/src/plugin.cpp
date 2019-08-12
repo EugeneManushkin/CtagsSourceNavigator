@@ -77,17 +77,17 @@ namespace
 
     void OnCmd(char const* cmd) override
     {
-      ErrorMessage((std::string("OnCmd: ") + cmd).c_str());
+      LoadTags(cmd);
     }
 
     bool CanOpenFile(char const* file) override
     {
-      return true;
+      return IsTagFile(file);
     }
 
     void OpenFile(char const* file) override
     {
-      ErrorMessage((std::string("OpenFile: ") + file).c_str());
+      LoadTags(file);
     }
 
     void Cleanup() override
@@ -124,8 +124,7 @@ namespace
     size_t symbolsLoaded = 0;
     bool const singleFileRepos = false;
     if (auto err = Load(tagsFile.c_str(), singleFileRepos, symbolsLoaded))
-      // TODO: throw Error(err == ENOENT ? MEFailedToOpen : MFailedToWriteIndex, "Tags file", tagsFile);
-      throw std::runtime_error(std::string("Failed to load tags file, error: ") + std::to_string(err));
+      throw std::runtime_error(Facade::Format(err == ENOENT ? MEFailedToOpen : MFailedToWriteIndex, tagsFile.c_str()));
 
     FarPlugin::AddToTagsHistory(tagsFile.c_str(), HistoryFileFullPath().c_str(), Config.HistoryLen);
     InfoMessage(Facade::Format(MLoadOk, symbolsLoaded, tagsFile.c_str()), MPlugin);
