@@ -564,6 +564,13 @@ static bool CaseSensitive = !CaseInsensitive;
 static bool PartialCompare = true;
 static bool FullCompare = !PartialCompare;
 
+std::string ToLower(std::string const& str)
+{
+  auto result = str;
+  std::transform(result.begin(), result.end(), result.begin(), ::tolower);
+  return std::move(result);
+}
+
 inline int CharCmp(int left, int right, bool caseInsensitive)
 {
   return caseInsensitive ? tolower(left) - tolower(right) : left - right;
@@ -1027,7 +1034,8 @@ std::string TagFileInfo::GetFullPath(std::string const& relativePath) const
 
 int Load(const char* filename, bool singleFileRepos, size_t& symbolsLoaded)
 {
-  auto iter = Repositories.find(filename);
+  auto key = ToLower(filename);
+  auto iter = Repositories.find(key);
   auto repo = iter == Repositories.end() ? Tags::Repository::Create(filename, singleFileRepos) : std::move(iter->second);
   if (iter != Repositories.end())
     Repositories.erase(iter);
@@ -1035,7 +1043,7 @@ int Load(const char* filename, bool singleFileRepos, size_t& symbolsLoaded)
   if (auto err = repo->Load(symbolsLoaded))
     return err;
 
-  Repositories[filename] = std::move(repo);
+  Repositories[key] = std::move(repo);
   return 0;
 }
 
@@ -1413,7 +1421,7 @@ std::vector<std::string> GetLoadedTags(const char* file)
 
 void UnloadTags(const char* tagsFile)
 {
-  Repositories.erase(tagsFile);
+  Repositories.erase(ToLower(tagsFile));
 }
 
 void UnloadAllTags()
@@ -1486,14 +1494,14 @@ std::vector<TagInfo>::const_iterator Reorder(TagInfo const& context, std::vector
 
 void CacheTag(TagInfo const& tag, size_t cacheSize, bool flush)
 {
-  auto repos = Repositories.find(tag.Owner.TagsFile);
+  auto repos = Repositories.find(ToLower(tag.Owner.TagsFile));
   if (repos != Repositories.end())
     repos->second->CacheTag(tag, cacheSize, flush);
 }
 
 void EraseCachedTag(TagInfo const& tag, bool flush)
 {
-  auto repos = Repositories.find(tag.Owner.TagsFile);
+  auto repos = Repositories.find(ToLower(tag.Owner.TagsFile));
   if (repos != Repositories.end())
     repos->second->EraseCachedTag(tag, flush);
 }
