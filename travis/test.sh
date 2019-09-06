@@ -9,3 +9,4 @@ done
 ./tags_tests --CheckIdxFiles
 ./tag_view_tests
 ./tags_cache_tests
+./composite_task_tests

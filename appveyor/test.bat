@@ -5,3 +5,4 @@ tags_tests.exe
 tags_tests.exe --CheckIdxFiles
 tags_cache_tests.exe
 tag_view_tests.exe
+composite_task_tests.exe
