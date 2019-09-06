@@ -1,4 +1,4 @@
-#!/bin/bash -x
+#!/bin/bash -xe
 cd $TRAVIS_BUILD_DIR/$BUILD_DIR
 
 for arch in $TRAVIS_BUILD_DIR/tests/tags/*.zip; do
