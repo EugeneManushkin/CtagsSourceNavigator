@@ -38,7 +38,7 @@ namespace
     void OnPanelMenu(char const* currentFile) override
     {
       ActionMenu::Callback dummy = [currentFile]{ ErrorMessage((std::string("OnPanelMenu: ") + currentFile).c_str()); };
-      ActionMenu([this]{Config = FarPlugin::LoadConfig(ConfigPath);})
+      ActionMenu(std::bind(&PluginImpl::LoadConfig, this))
      .Add('1', MLookupSymbol, ActionMenu::Callback(dummy))
      .Add('2', MSearchFile, ActionMenu::Callback(dummy))
      .Add('H', MNavigationHistory, ActionMenu::Callback(dummy), true)
@@ -50,14 +50,14 @@ namespace
      .Add('7', MCreateTagsFile, ActionMenu::Callback(dummy))
      .Add('8', MReindexRepo, ActionMenu::Callback(dummy))
      .Separator()
-     .Add('C', MPluginConfiguration, ActionMenu::Callback(dummy))
+     .Add('C', MPluginConfiguration, std::bind(&FarPlugin::ModifyConfig, ConfigPath))
      .Run(MPlugin, -1);
     }
 
     void OnEditorMenu(char const* currentFile) override
     {
       ActionMenu::Callback dummy = [currentFile]{ ErrorMessage((std::string("OnEditorMenu: ") + currentFile).c_str()); };
-      ActionMenu([this]{Config = FarPlugin::LoadConfig(ConfigPath);})
+      ActionMenu(std::bind(&PluginImpl::LoadConfig, this))
      .Add('1', MFindSymbol, ActionMenu::Callback(dummy))
      .Add('2', MCompleteSymbol, ActionMenu::Callback(dummy))
      .Add('3', MUndoNavigation, ActionMenu::Callback(dummy), true)
@@ -71,12 +71,13 @@ namespace
      .Separator()
      .Add('8', MReindexRepo, ActionMenu::Callback(dummy))
      .Separator()
-     .Add('C', MPluginConfiguration, ActionMenu::Callback(dummy))
+     .Add('C', MPluginConfiguration, std::bind(&FarPlugin::ModifyConfig, ConfigPath))
      .Run(MPlugin, -1);
     }
 
     void OnCmd(char const* cmd) override
     {
+      LoadConfig();
       LoadTags(cmd);
     }
 
@@ -87,6 +88,7 @@ namespace
 
     void OpenFile(char const* file) override
     {
+      LoadConfig();
       LoadTags(file);
     }
 
@@ -98,6 +100,7 @@ namespace
     void LoadFromHistory();
 
   private:
+    void LoadConfig();
     std::string HistoryFileFullPath() const;
     void LoadTags(std::string const& tagsFile);
     void UnloadTagsFiles();
@@ -112,6 +115,11 @@ namespace
     auto tagsFile = FarPlugin::SelectFromTagsHistory(HistoryFileFullPath().c_str(), Config.HistoryLen);
     if (!tagsFile.empty())
       LoadTags(tagsFile);
+  }
+
+  void PluginImpl::LoadConfig()
+  {
+    Config = FarPlugin::LoadConfig(ConfigPath);
   }
 
   std::string PluginImpl::HistoryFileFullPath() const

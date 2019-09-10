@@ -2,6 +2,7 @@
 
 enum{
   MPlugin=0,
+  MVersionString,
   MECompileFail,
   MEFailedToOpen,
   MFindSymbol,
@@ -36,6 +37,7 @@ enum{
   MUpdatingTagsFile,
   MWordChars,
   MCaseSensFilt,
+  MCaseInsensitive,
   MNotFoundAsk,
   MAddTagsToAutoload,
   MFailedSaveAutoload,

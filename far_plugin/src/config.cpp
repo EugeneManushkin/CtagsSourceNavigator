@@ -1,8 +1,32 @@
 #include "config.h"
+#include "text.h"
+
+#include <facade/dialog.h>
+#include <facade/message.h>
 
 #include <algorithm>
 #include <fstream>
 #include <memory>
+
+namespace
+{
+  std::string PluginVersionString()
+  {
+    return Facade::Format(MVersionString, CTAGS_VERSION_MAJOR, CTAGS_VERSION_MINOR, 0, CTAGS_BUILD);
+  }
+
+  void SaveKeyValueMap(std::unordered_map<std::string, std::string> const& map, std::string const& fileName)
+  {
+    std::ofstream file;
+    file.exceptions(std::ifstream::failbit | std::ifstream::badbit);
+    file.open(fileName);
+    std::shared_ptr<void> fileCloser(0, [&](void*) { file.close(); });
+    for (auto const& i : map)
+    {
+      file << i.first << "=" << i.second << std::endl;
+    }
+  }
+}
 
 namespace FarPlugin
 {
@@ -100,5 +124,45 @@ namespace FarPlugin
 
     result.HistoryLen = result.HistoryFile.empty() ? 0 : result.HistoryLen;
     return std::move(result);
+  }
+
+  void ModifyConfig(std::string const& fileName)
+  {
+    int const dialogWidth = 68;
+    auto config = LoadConfig(fileName);
+    auto dialog = Facade::Dialog::Create(dialogWidth);
+    dialog->
+      SetTitle(PluginVersionString())
+     .AddCaption(MPathToExe)
+     .AddEditbox(config.CtagsPath, "pathtoexe", !config.UseBuiltinCtags)
+     .AddCheckbox(MUseBuiltInCtags, config.UseBuiltinCtags ? "true" : "false", "usebuiltinctags", true, [](Facade::DialogController const& c) {c.SetEnabled("pathtoexe", c.GetValue("usebuiltinctags") != "true");})
+     .AddCaption(MCmdLineOptions)
+     .AddEditbox(config.CtagsCmd, "commandline")
+     .AddSeparator()
+     .AddCaption(MMaxResults)
+     .AddEditbox(std::to_string(config.MaxResults), "maxresults")
+     .AddCheckbox(MCaseInsensitive, config.CaseseInsensitive ? "true" : "false", "caseinsensitive")
+     .AddCheckbox(MSortClassMembersByName, config.SortClassMembersByName ? "true" : "false", "sortclassmembersbyname")
+     .AddCheckbox(MCurFileFirst, config.CurFileFirst ? "true" : "false", "curfilefirst")
+     .AddCheckbox(MIndexEditedFile, config.IndexEditedFile ? "true" : "false", "indexeditedfile")
+     .AddCaption(MWordChars)
+     .AddEditbox(config.WordChars, "wordchars")
+     .AddSeparator()
+     .AddCaption(MTagsMask)
+     .AddEditbox(config.TagsMask, "tagsmask")
+     .AddCaption(MHistoryFile)
+     .AddEditbox(config.HistoryFile, "historyfile")
+     .AddCaption(MHistoryLength)
+     .AddEditbox(std::to_string(config.HistoryLen), "historylen")
+     .AddSeparator()
+     .AddButton(MOk, "ok", true)
+     .AddButton(MCancel)
+    ;
+    auto result = dialog->Run();
+    if (result["ok"] != "true")
+      return;
+
+    result.erase("ok");
+    SaveKeyValueMap(result, fileName);
   }
 }

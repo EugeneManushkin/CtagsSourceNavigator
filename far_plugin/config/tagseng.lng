@@ -1,6 +1,7 @@
 .Language=English,English
 
 "Ctags Source Navigator"
+"Ctags Source Navigator %d.%d.%d.%d"
 "RegExp Compilation error"
 "Failed to open '%s'"
 "Go to"
@@ -35,6 +36,7 @@
 "Updating tags file"
 "&Word chars"
 "Case &Sensitive filter"
+"Case &Insensitive"
 "Name not found. Goto last known position?"
 "Add tags file to autoload"
 "Failed to save autoload list to file: "

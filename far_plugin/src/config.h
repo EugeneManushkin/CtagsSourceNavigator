@@ -24,4 +24,5 @@ namespace FarPlugin
   };
 
   Config LoadConfig(std::string const& fileName);
+  void ModifyConfig(std::string const& fileName);
 }
