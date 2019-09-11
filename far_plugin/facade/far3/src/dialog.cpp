@@ -118,7 +118,7 @@ namespace
     Dialog& SetTitle(std::string const& text, std::string const& id) override;
     Dialog& AddCaption(int textID, std::string const& id, bool enabled) override;
     Dialog& AddEditbox(std::string const& value, std::string const& id, bool enabled, Callback cb) override;
-    Dialog& AddCheckbox(int textID, std::string const& value, std::string const& id, bool enabled, Callback cb) override;
+    Dialog& AddCheckbox(int textID, bool value, std::string const& id, bool enabled, Callback cb) override;
     Dialog& AddButton(int textID, std::string const& id, bool default, bool enabled, Callback cb) override;
     Dialog& AddSeparator() override;
     Dialog& SetOnIdle(Callback cb) override;
@@ -199,9 +199,9 @@ namespace
     return *this;
   }
 
-  Dialog& DialogImpl::AddCheckbox(int textID, std::string const& value, std::string const& id, bool enabled, Callback cb)
+  Dialog& DialogImpl::AddCheckbox(int textID, bool value, std::string const& id, bool enabled, Callback cb)
   {
-    Items.push_back({DI_CHECKBOX, id, GetMsg(textID), ToString(value), enabled ? 0 : DIF_DISABLE, cb});
+    Items.push_back({DI_CHECKBOX, id, GetMsg(textID), ToString(BoolToString(value)), enabled ? 0 : DIF_DISABLE, cb});
     return *this;
   }
 
