@@ -123,7 +123,7 @@ namespace
     Dialog& AddSeparator() override;
     Dialog& SetOnIdle(Callback cb) override;
     std::unordered_map<std::string, std::string> Run() override;
-    static intptr_t DlgProc(void* hDlg, intptr_t Msg, intptr_t Param1, void* Param2);
+    intptr_t DlgProc(void* hDlg, intptr_t Msg, intptr_t Param1, void* Param2);
 
   private:
     class DialogControllerImpl : public Facade::DialogController
@@ -225,24 +225,28 @@ namespace
 
   intptr_t DialogImpl::DlgProc(void* hDlg, intptr_t Msg, intptr_t Param1, void* Param2)
   {
-    DialogImpl* dialog = reinterpret_cast<DialogImpl*>(FarAPI().SendDlgMessage(hDlg, DM_GETDLGDATA, 0, nullptr));
-    if (Msg == DN_ENTERIDLE && dialog->OnIdle)
+    if (Msg == DN_ENTERIDLE && OnIdle)
     {
-      dialog->OnIdle(DialogControllerImpl(*dialog, hDlg));
+      OnIdle(DialogControllerImpl(*this, hDlg));
     }
 
-    if ((Msg == DN_BTNCLICK || Msg == DN_EDITCHANGE) && dialog->Items[Param1].OnChanged)
+    if ((Msg == DN_BTNCLICK || Msg == DN_EDITCHANGE) && Items[Param1].OnChanged)
     {
-      dialog->Items[Param1].OnChanged(DialogControllerImpl(*dialog, hDlg));
+      Items[Param1].OnChanged(DialogControllerImpl(*this, hDlg));
     }
 
     return FarAPI().DefDlgProc(hDlg, Msg, Param1, Param2);
   }
 
+  intptr_t WINAPI FarDlgProc(void* hDlg, intptr_t Msg, intptr_t Param1, void* Param2)
+  {
+    return reinterpret_cast<DialogImpl*>(FarAPI().SendDlgMessage(hDlg, DM_GETDLGDATA, 0, nullptr))->DlgProc(hDlg, Msg, Param1, Param2);
+  }
+
   std::unordered_map<std::string, std::string> DialogImpl::Run()
   {
     std::vector<FarDialogItem> farItems = GetFarItems(Items, Width);
-    auto handle = FarAPI().DialogInit(GetPluginGuid(), &*InteractiveDialogGuid, -1, -1, Width, farItems.front().Y2 + 2, L"", &farItems[0], farItems.size(), 0, FDLG_NONE, &DialogImpl::DlgProc, this);
+    auto handle = FarAPI().DialogInit(GetPluginGuid(), &*InteractiveDialogGuid, -1, -1, Width, farItems.front().Y2 + 2, L"", &farItems[0], farItems.size(), 0, FDLG_NONE, &FarDlgProc, this);
     std::shared_ptr<void> handleHolder(handle, [](void* h){FarAPI().DialogFree(h);});
     auto exitCode = FarAPI().DialogRun(handle);
     std::unordered_map<std::string, std::string> result;   
