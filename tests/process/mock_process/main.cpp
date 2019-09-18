@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <chrono>
 #include <string>
 #include <thread>
@@ -22,8 +23,17 @@ namespace
 
 int main(int argc, char* argv[])
 {
-  if (argc != 3)
+  if (argc != 3 && argc != 4)
     Segfault();
+
+  if (argc == 4)
+  {
+    std::string left = argv[1];
+    std::string right = argv[2];
+    int exitCode = ToInt(argv[3]);
+    std::replace(right.begin(), right.end(), '_', ' ');
+    return left == right ? exitCode : 0;
+  }
 
   int exitCode = ToInt(argv[1]);
   int timeout = ToInt(argv[2]);

@@ -23,6 +23,11 @@ namespace Platform
       return Process::Create(MockProcess, "", "");
     }
 
+    std::unique_ptr<Process> CreateTestProcess(std::string const& left, std::string const& right, int exitCode)
+    {
+      return Process::Create(MockProcess, left + " " + right + " " + std::to_string(exitCode), "");
+    }
+
     TEST(Process, RunsNormalProcess)
     {
       auto sut = CreateTestProcess(ExitCodeSuccess);
@@ -46,6 +51,18 @@ namespace Platform
     {
       auto sut = CreateCrashedProcess();
       ASSERT_NE(ExitCodeSuccess, sut->Join());
+    }
+
+    TEST(Process, PassArgumentInSingleQuotes)
+    {
+      auto sut = CreateTestProcess("' Argument With   Spaces'", "_Argument_With___Spaces", ExitCodeFail);
+      ASSERT_EQ(ExitCodeFail, sut->Join());
+    }
+
+    TEST(Process, PassArgumentInDoubleQuotes)
+    {
+      auto sut = CreateTestProcess("\" Argument With   Spaces\"", "_Argument_With___Spaces", ExitCodeFail);
+      ASSERT_EQ(ExitCodeFail, sut->Join());
     }
   }
 }
