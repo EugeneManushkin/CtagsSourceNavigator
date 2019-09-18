@@ -1,34 +1,22 @@
 cmake_minimum_required(VERSION 3.0)
 include_directories(googletest/googletest/include
                     ../src)
-file(GLOB TAGS_SOURCES
-    "tags/*.cpp"
-    "../src/tags.cpp"
-    "../src/tags.h"
-    "../src/tags_cache.cpp"
-    "../src/tags_cache.h"
-)
+function(add_test)
+  cmake_parse_arguments(ADDTEST "" "TARGET;SRC;LIB;INCLUDES" "" ${ARGN})
+  file(GLOB SOURCES ${ADDTEST_SRC})
+  add_executable(${ADDTEST_TARGET} ${SOURCES})
+  target_link_libraries(${ADDTEST_TARGET} ${ADDTEST_LIB} gtest)
+  add_dependencies(${ADDTEST_TARGET} ${ADDTEST_LIB})
+  target_include_directories(${ADDTEST_TARGET} PUBLIC ${ADDTEST_INCLUDES})
+endfunction(add_test)
 
-add_executable(tags_tests ${TAGS_SOURCES})
-target_link_libraries(tags_tests gtest)
+add_test(TARGET "tags_tests" SRC "tags/*.cpp" LIB "tags" INCLUDES "")
+add_test(TARGET "tags_cache_tests" SRC "tags_cache/*.cpp" LIB "tags" INCLUDES "")
+add_test(TARGET "tag_view_tests" SRC "tag_view/*.cpp" LIB "tags" INCLUDES "")
+add_test(TARGET "composite_task_tests" SRC "composite_task/*.cpp" LIB "far_plugin" INCLUDES "${CMAKE_SOURCE_DIR}/far_plugin/src")
+add_test(TARGET "process_tests" SRC "process/*.cpp" LIB "platform" INCLUDES "${CMAKE_SOURCE_DIR}/far_plugin/platform/include")
 
-file(GLOB TAGS_CACHE_SOURCES
-    "tags_cache/*.cpp"
-    "../src/tags_cache.cpp"
-    "../src/tags_cache.h"
-)
-
-add_executable(tags_cache_tests ${TAGS_CACHE_SOURCES})
-target_link_libraries(tags_cache_tests gtest)
-
-
-file(GLOB TAGS_CACHE_SOURCES
-    "tag_view/*.cpp"
-    "../src/tag_view.cpp"
-)
-
-add_executable(tag_view_tests ${TAGS_CACHE_SOURCES})
-target_link_libraries(tag_view_tests gtest)
+add_executable(mock_process process/mock_process/main.cpp)
 
 #NOTE: this option is in fact disables overriding CMAKE_CXX_ flags inside googletest cmake scripts and allow to control runtime by global flags
 option(gtest_force_shared_crt "Use shared (DLL) run-time lib even when Google Test is built as static lib." ON)
