@@ -5,8 +5,8 @@ for arch in $TRAVIS_BUILD_DIR/tests/tags/*.zip; do
   unzip "$arch"
 done
 
-./tags_tests
-./tags_tests --CheckIdxFiles
-./tag_view_tests
-./tags_cache_tests
-./composite_task_tests
+tests/tags_tests
+tests/tags_tests --CheckIdxFiles
+tests/tag_view_tests
+tests/tags_cache_tests
+tests/composite_task_tests

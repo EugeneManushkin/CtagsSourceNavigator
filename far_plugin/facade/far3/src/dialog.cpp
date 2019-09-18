@@ -119,7 +119,7 @@ namespace
     Dialog& AddCaption(int textID, std::string const& id, bool enabled) override;
     Dialog& AddEditbox(std::string const& value, std::string const& id, bool enabled, Callback cb) override;
     Dialog& AddCheckbox(int textID, bool value, std::string const& id, bool enabled, Callback cb) override;
-    Dialog& AddButton(int textID, std::string const& id, bool default, bool enabled, Callback cb) override;
+    Dialog& AddButton(int textID, std::string const& id, bool defaultButton, bool enabled, Callback cb) override;
     Dialog& AddSeparator() override;
     Dialog& SetOnIdle(Callback cb) override;
     std::unordered_map<std::string, std::string> Run() override;
@@ -205,9 +205,9 @@ namespace
     return *this;
   }
 
-  Dialog& DialogImpl::AddButton(int textID, std::string const& id, bool default, bool enabled, Callback cb)
+  Dialog& DialogImpl::AddButton(int textID, std::string const& id, bool defaultButton, bool enabled, Callback cb)
   {
-    Items.push_back({DI_BUTTON, id, GetMsg(textID), WideString(), DIF_CENTERGROUP | (default ? DIF_DEFAULTBUTTON : 0) | (enabled ? 0 : DIF_DISABLE), cb});
+    Items.push_back({DI_BUTTON, id, GetMsg(textID), WideString(), DIF_CENTERGROUP | (defaultButton ? DIF_DEFAULTBUTTON : 0) | (enabled ? 0 : DIF_DISABLE), cb});
     return *this;
   }
 
