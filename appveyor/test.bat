@@ -6,4 +6,4 @@ tags_tests.exe --CheckIdxFiles || exit /b 1
 tags_cache_tests.exe || exit /b 1
 tag_view_tests.exe || exit /b 1
 composite_task_tests.exe || exit /b 1
-process_tests.exe mock_process.exe || exit /b 1
+process_tests.exe mock_process.exe --gtest_filter=-Process.PassArgumentInSingleQuotes || exit /b 1
