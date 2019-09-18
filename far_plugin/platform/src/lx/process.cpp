@@ -1,5 +1,6 @@
 #include <platform/process.h>
 
+#include <fcntl.h>
 #include <signal.h>
 #include <sys/wait.h>
 #include <unistd.h>
@@ -14,6 +15,14 @@ namespace
     return std::strerror(error);
   }
 
+  void SuppressOutput()
+  {
+    int fd = open("/dev/null", O_WRONLY);
+    dup2(fd, 1);
+    dup2(fd, 2);
+    close(fd);
+  }
+
   pid_t StartProcess(std::string const& file, std::string const& args, std::string const& workingDirectory)
   {
     auto pid = ::fork();
@@ -24,6 +33,7 @@ namespace
 
     if (pid == 0)
     {
+      SuppressOutput();
       if (!::chdir(workingDirectory.c_str()))
         ::exit(errno);
 
