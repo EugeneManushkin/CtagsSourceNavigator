@@ -39,6 +39,14 @@ add_executable(composite_task_tests ${COMPOSITE_TASK_SOURCES})
 target_link_libraries(composite_task_tests gtest)
 target_include_directories(composite_task_tests PUBLIC ../far_plugin/src)
 
+add_executable(mock_process process/mock_process/main.cpp)
+file(GLOB PROCESS_SOURCES
+    "process/*.cpp"
+)
+add_executable(process_tests ${PROCESS_SOURCES})
+target_link_libraries(process_tests platform gtest)
+target_include_directories(process_tests PUBLIC ../far_plugin/platform/include)
+
 #NOTE: this option is in fact disables overriding CMAKE_CXX_ flags inside googletest cmake scripts and allow to control runtime by global flags
 option(gtest_force_shared_crt "Use shared (DLL) run-time lib even when Google Test is built as static lib." ON)
 add_subdirectory(googletest)

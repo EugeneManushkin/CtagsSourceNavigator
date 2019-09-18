@@ -1,7 +1,8 @@
 #pragma once
 
+#include <platform/string.h>
+
 #include <memory>
-#include <string>
 
 struct _GUID;
 
@@ -9,7 +10,7 @@ namespace Facade
 {
   namespace Internal
   {
-    using WideString = std::basic_string<wchar_t>;
+    using WideString = Platform::WideString;
   
     WideString ToString(std::string const& str);
     std::string ToStdString(WideString const& str);
