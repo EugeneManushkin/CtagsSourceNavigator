@@ -10,7 +10,7 @@ namespace Platform
   namespace Tests
   {
     int const ExitCodeSuccess = 0;
-    int const ExitCodeFail = 0xBEEF;
+    int const ExitCodeFail = 0xEE; // In Linux only 0-255 exit codes are available
     int const LargeTimeout = 10;
 
     std::unique_ptr<Process> CreateTestProcess(int exitCode, int timeout = 0)
