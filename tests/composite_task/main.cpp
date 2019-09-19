@@ -1,5 +1,5 @@
 #include <gtest/gtest.h>
-#include <task.h>
+#include <composite_task.h>
 
 #include <chrono>
 #include <future>
@@ -8,9 +8,9 @@
 namespace
 {
   int const DefaultTimeout = 5;
-  FarPlugin::Task::Status const InvalidStatus{-1};
-  FarPlugin::Task::Status const FirstTaskStatus{1};
-  FarPlugin::Task::Status const SecondTaskStatus{2};
+  FarPlugin::Task::Status const InvalidStatus;
+  FarPlugin::Task::Status const FirstTaskStatus{"First task"};
+  FarPlugin::Task::Status const SecondTaskStatus{"Second task"};
 
   class MockTask
   {
@@ -106,7 +106,7 @@ namespace FarPlugin
 {
   bool operator == (Task::Status const& left, Task::Status const& right)
   {
-    return left.TextID == right.TextID;
+    return left.Text == right.Text;
   }
 
   namespace Tests

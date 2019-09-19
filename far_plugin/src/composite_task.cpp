@@ -1,8 +1,7 @@
-#include "task.h"
+#include "composite_task.h"
 
 #include <deque>
 #include <mutex>
-#include <thread>
 
 namespace
 {
@@ -46,7 +45,7 @@ namespace
   Task::Status CompositeTask::GetStatus() const
   {
     auto current = Current;
-    return current ? current->GetStatus() : Task::Status{-1};
+    return current ? current->GetStatus() : Task::Status{};
   }
 
   bool CompositeTask::NextTask()

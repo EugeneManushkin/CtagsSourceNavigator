@@ -1,6 +1,6 @@
 #pragma once
 
-#include <memory>
+#include <string>
 
 namespace FarPlugin
 {
@@ -9,7 +9,7 @@ namespace FarPlugin
   public:
     struct Status
     {
-      int TextID;
+      std::string Text;
     };
 
     virtual ~Task() = default;
@@ -17,6 +17,4 @@ namespace FarPlugin
     virtual void Cancel() = 0;
     virtual Status GetStatus() const = 0;
   };
-
-  std::unique_ptr<Task> CreateCompositeTask(std::initializer_list<std::shared_ptr<Task>>);
 }
