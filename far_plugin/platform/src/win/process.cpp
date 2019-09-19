@@ -4,6 +4,8 @@
 #define NOMINMAX
 #include <windows.h>
 
+#include <algorithm>
+
 using Platform::ToString;
 using Platform::WideString;
 
@@ -16,6 +18,7 @@ namespace
                                MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), reinterpret_cast<char*>(&buffer), 0, nullptr);
     std::string result(buffer, sz);
     LocalFree(buffer);
+    result.erase(std::remove(result.begin(), result.end(), '\r'));
     return std::move(result);
   }
 
