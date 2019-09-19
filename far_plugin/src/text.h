@@ -69,4 +69,7 @@ enum{
   MNavigationHistory,
   MNavigationHistoryMenuTitle,
   MUseBuiltInCtags,
+  MProcessExited,
+  MFailedStartProcess,
+  MExecuteProcessStatus,
 };

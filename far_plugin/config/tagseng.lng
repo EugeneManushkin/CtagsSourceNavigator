@@ -68,3 +68,6 @@
 "Navigation history"
 "Select item to navigate"
 "Use built in ctags utility"
+"Process %s terminated with code %d"
+"Failed to start process %s with error:\n\"%s\""
+"Running %s\nDirectory:%s\nArguments:%s"
