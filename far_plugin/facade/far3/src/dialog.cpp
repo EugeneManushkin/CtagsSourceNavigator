@@ -76,18 +76,11 @@ namespace
   {
     FARDIALOGITEMTYPES FarItemType;
     std::string ID;
-    WideString Text;
-    WideString Value;
+    WideString Data;
+    std::string Value;
     FARDIALOGITEMFLAGS Flags;
     Callback OnChanged;
   };
-
-  FarDialogItem DialogItemToFarItem(DialogItem const& item)
-  {
-    intptr_t checked = item.FarItemType == DI_CHECKBOX && StringToBool(ToStdString(item.Value)) ? 1 : 0;
-    wchar_t const* str = item.FarItemType == DI_EDIT ? item.Value.c_str() : item.Text.c_str();
-    return {item.FarItemType, 0, 0, 0, 0, checked, nullptr, nullptr, item.Flags, str};
-  }
 
   std::vector<FarDialogItem> GetFarItems(std::vector<DialogItem> const& items, intptr_t width)
   {
@@ -96,7 +89,7 @@ namespace
     intptr_t y = 0;
     for (auto const& item : items)
     {
-      farItems.push_back(DialogItemToFarItem(item));
+      farItems.push_back({item.FarItemType, 0, 0, 0, 0, 0, nullptr, nullptr, item.Flags, item.Data.c_str()});
       bool const onSameLine = farItems.back().Type == DI_BUTTON && farItems.size() > 1 && (farItems.rbegin() + 1)->Type == DI_BUTTON;
       farItems.back().X1 = 5;
       farItems.back().Y1 = onSameLine ? y : ++y;
@@ -108,6 +101,15 @@ namespace
     farItems.front().X2 = width - 4;
     farItems.front().Y2 = ++y;
     return std::move(farItems);
+  }
+
+  void SetFarItemsValues(std::vector<DialogItem> const& items, void* dialogHandle)
+  {
+    intptr_t i = 0;
+    for (auto const& item : items)
+    {
+      SetFarItemValue(dialogHandle, i++, item.FarItemType, item.Value);
+    }
   }
 
   class DialogImpl : public Dialog
@@ -177,43 +179,43 @@ namespace
 
   Dialog& DialogImpl::SetTitle(int textID, std::string const& id)
   {
-    Items.front() = {Items.front().FarItemType, id, GetMsg(textID), WideString(), 0, Callback()};
+    Items.front() = {Items.front().FarItemType, id, WideString(), ToStdString(GetMsg(textID)), 0, Callback()};
     return *this;
   }
 
   Dialog& DialogImpl::SetTitle(std::string const& text, std::string const& id)
   {
-    Items.front() = {Items.front().FarItemType, id, ToString(text), WideString(), 0, Callback()};
+    Items.front() = {Items.front().FarItemType, id, WideString(), text, 0, Callback()};
     return *this;
   }
 
   Dialog& DialogImpl::AddCaption(int textID, std::string const& id, bool enabled)
   {
-    Items.push_back({DI_TEXT, id, GetMsg(textID), WideString(), enabled ? 0 : DIF_DISABLE, Callback()});
+    Items.push_back({DI_TEXT, id, WideString(), ToStdString(GetMsg(textID)), enabled ? 0 : DIF_DISABLE, Callback()});
     return *this;
   }
 
   Dialog& DialogImpl::AddEditbox(std::string const& value, std::string const& id, bool enabled, Callback cb)
   {
-    Items.push_back({DI_EDIT, id, WideString(), ToString(value), enabled ? 0 : DIF_DISABLE, cb});
+    Items.push_back({DI_EDIT, id, WideString(), value, enabled ? 0 : DIF_DISABLE, cb});
     return *this;
   }
 
   Dialog& DialogImpl::AddCheckbox(int textID, bool value, std::string const& id, bool enabled, Callback cb)
   {
-    Items.push_back({DI_CHECKBOX, id, GetMsg(textID), ToString(BoolToString(value)), enabled ? 0 : DIF_DISABLE, cb});
+    Items.push_back({DI_CHECKBOX, id, GetMsg(textID), BoolToString(value), enabled ? 0 : DIF_DISABLE, cb});
     return *this;
   }
 
   Dialog& DialogImpl::AddButton(int textID, std::string const& id, bool defaultButton, bool enabled, Callback cb)
   {
-    Items.push_back({DI_BUTTON, id, GetMsg(textID), WideString(), DIF_CENTERGROUP | (defaultButton ? DIF_DEFAULTBUTTON : 0) | (enabled ? 0 : DIF_DISABLE), cb});
+    Items.push_back({DI_BUTTON, id, WideString(), ToStdString(GetMsg(textID)), DIF_CENTERGROUP | (defaultButton ? DIF_DEFAULTBUTTON : 0) | (enabled ? 0 : DIF_DISABLE), cb});
     return *this;
   }
 
   Dialog& DialogImpl::AddSeparator()
   {
-    Items.push_back({DI_TEXT, "", WideString(), WideString(), DIF_SEPARATOR | DIF_BOXCOLOR, Callback()});
+    Items.push_back({DI_TEXT, "", WideString(), "", DIF_SEPARATOR | DIF_BOXCOLOR, Callback()});
     return *this;
   }
 
@@ -248,6 +250,7 @@ namespace
     std::vector<FarDialogItem> farItems = GetFarItems(Items, Width);
     auto handle = FarAPI().DialogInit(GetPluginGuid(), &*InteractiveDialogGuid, -1, -1, Width, farItems.front().Y2 + 2, L"", &farItems[0], farItems.size(), 0, FDLG_NONE, &FarDlgProc, this);
     std::shared_ptr<void> handleHolder(handle, [](void* h){FarAPI().DialogFree(h);});
+    SetFarItemsValues(Items, handle);
     auto exitCode = FarAPI().DialogRun(handle);
     std::unordered_map<std::string, std::string> result;   
     intptr_t id = 0;
