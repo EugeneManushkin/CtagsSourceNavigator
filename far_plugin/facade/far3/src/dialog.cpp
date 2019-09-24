@@ -141,6 +141,7 @@ namespace
       void* DialogHandle;
     };
 
+    std::vector<DialogItem>::const_iterator GetItemByID(std::string const& id) const;
     std::string GetValue(void* dialogHandle, std::string const& id) const;
     void SetValue(void* dialogHandle, std::string const& id, std::string const& value);
     void SetEnabled(void* dialogHandle, std::string const& id, bool enabled);
@@ -263,24 +264,30 @@ namespace
     return std::move(result);
   }
 
+  std::vector<DialogItem>::const_iterator DialogImpl::GetItemByID(std::string const& id) const
+  {
+    auto res = std::find_if(Items.begin(), Items.end(), [&id](DialogItem const& i) {return i.ID == id;});
+    if (res == Items.end())
+      throw std::logic_error("Item not found: " + id);
+
+    return res;
+  }
+
   std::string DialogImpl::GetValue(void* dialogHandle, std::string const& id) const
   {
-    auto item = std::find_if(Items.cbegin(), Items.cend(), [&id](DialogItem const& i) {return i.ID == id;});
-    return item != Items.cend() ? GetFarItemValue(dialogHandle, std::distance(Items.cbegin(), item), item->FarItemType) : "";
+    auto item = GetItemByID(id);
+    return GetFarItemValue(dialogHandle, std::distance(Items.cbegin(), item), item->FarItemType);
   }
 
   void DialogImpl::SetValue(void* dialogHandle, std::string const& id, std::string const& value)
   {
-    auto item = std::find_if(Items.cbegin(), Items.cend(), [&id](DialogItem const& i) {return i.ID == id;});
-    if (item != Items.cend())
-      SetFarItemValue(dialogHandle, std::distance(Items.cbegin(), item), item->FarItemType, value);
+    auto item = GetItemByID(id);
+    SetFarItemValue(dialogHandle, std::distance(Items.cbegin(), item), item->FarItemType, value);
   }
 
   void DialogImpl::SetEnabled(void* dialogHandle, std::string const& id, bool enabled)
   {
-    auto item = std::find_if(Items.cbegin(), Items.cend(), [&id](DialogItem const& i) {return i.ID == id;});
-    if (item != Items.cend())
-      FarAPI().SendDlgMessage(dialogHandle, DM_ENABLE, std::distance(Items.cbegin(), item), reinterpret_cast<void*>(intptr_t(enabled ? 1 : 0)));
+    FarAPI().SendDlgMessage(dialogHandle, DM_ENABLE, std::distance(Items.cbegin(), GetItemByID(id)), reinterpret_cast<void*>(intptr_t(enabled ? 1 : 0)));
   }
 }
 
