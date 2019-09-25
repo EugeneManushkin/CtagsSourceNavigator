@@ -25,6 +25,7 @@ namespace Facade
     virtual Dialog& SetTitle(int textID, std::string const& id = "") = 0;
     virtual Dialog& SetTitle(std::string const& text, std::string const& id = "") = 0;
     virtual Dialog& AddCaption(int textID, std::string const& id = "", bool enabled = true) = 0;
+    virtual Dialog& AddCaption(std::string const& text, std::string const& id = "", bool enabled = true) = 0;
     virtual Dialog& AddEditbox(std::string const& value, std::string const& id = "", bool enabled = true, Callback cb = Callback()) = 0;
     virtual Dialog& AddCheckbox(int textID, bool value, std::string const& id = "", bool enabled = true, Callback cb = Callback()) = 0;
     virtual Dialog& AddButton(int textID, std::string const& id = "", bool defaultButton = false, bool enabled = true, Callback cb = Callback()) = 0;
