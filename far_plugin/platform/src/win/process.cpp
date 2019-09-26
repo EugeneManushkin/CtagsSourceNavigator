@@ -27,7 +27,7 @@ namespace
   {
     SHELLEXECUTEINFOW ShExecInfo = {};
     ShExecInfo.cbSize = sizeof(SHELLEXECUTEINFO);
-    ShExecInfo.fMask = SEE_MASK_NOCLOSEPROCESS;
+    ShExecInfo.fMask = SEE_MASK_NOCLOSEPROCESS | SEE_MASK_FLAG_NO_UI;
     ShExecInfo.hwnd = nullptr;
     ShExecInfo.lpVerb = nullptr;
     ShExecInfo.lpFile = file.c_str();
