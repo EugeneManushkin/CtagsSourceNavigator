@@ -7,6 +7,7 @@
 #include <plugin_sdk/plugin.hpp>
 
 #include <algorithm>
+#include <chrono>
 
 using Facade::Internal::FarAPI;
 using Facade::Internal::GetMsg;
@@ -20,6 +21,7 @@ namespace
 {
   using Facade::Dialog;
   using Callback = Dialog::Callback;
+  using TimePoint = std::chrono::time_point<std::chrono::system_clock>;
 
   auto const InteractiveDialogGuid = StringToGuid("{fcd1e1b9-4060-4696-9e40-11f055c2909e}");
   int const MinDialogWidth = 20;
@@ -27,6 +29,12 @@ namespace
   int const DialogVerBorder = 1;
   int const InnerIdent = 1;
   int const FrameThick = 1;
+  auto const PollTimeout = std::chrono::milliseconds(300);
+
+  std::chrono::milliseconds Since(TimePoint const& timePoint)
+  {
+    return std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now() - timePoint);
+  }
 
   WideString GetFarItemText(void* dialogHandle, intptr_t id)
   {
@@ -145,7 +153,7 @@ namespace
     Dialog& AddCheckbox(int textID, bool value, std::string const& id, bool enabled, Callback cb) override;
     Dialog& AddButton(int textID, std::string const& id, bool defaultButton, bool noclose, bool enabled, Callback cb) override;
     Dialog& AddSeparator() override;
-    Dialog& SetOnIdle(Callback cb) override;
+    Dialog& SetOnPoll(Callback cb) override;
     std::unordered_map<std::string, std::string> Run() override;
     intptr_t DlgProc(void* hDlg, intptr_t Msg, intptr_t Param1, void* Param2);
 
@@ -178,7 +186,8 @@ namespace
     std::vector<DialogItem> Items;
     int Width;
     int Height;
-    Callback OnIdle;
+    Callback OnPoll;
+    TimePoint LastPoll;
   };
 
   DialogImpl::DialogControllerImpl::DialogControllerImpl(DialogImpl& dialog, void* dialogHandle)
@@ -210,6 +219,7 @@ namespace
   DialogImpl::DialogImpl(int width)
     : Items(1, {DI_DOUBLEBOX})
     , Width(std::max(width, MinDialogWidth))
+    , LastPoll(std::chrono::system_clock::now())
   {
     Align();
   }
@@ -258,22 +268,22 @@ namespace
     return AddItem(DI_TEXT, "", true, "", DIF_SEPARATOR | DIF_BOXCOLOR);
   }
 
-  Dialog& DialogImpl::SetOnIdle(Callback cb)
+  Dialog& DialogImpl::SetOnPoll(Callback cb)
   {
-    OnIdle = cb;
+    OnPoll = cb;
     return *this;
   }
 
   intptr_t DialogImpl::DlgProc(void* hDlg, intptr_t Msg, intptr_t Param1, void* Param2)
   {
-    if (Msg == DN_ENTERIDLE && OnIdle)
-    {
-      OnIdle(DialogControllerImpl(*this, hDlg));
-    }
-
     if ((Msg == DN_BTNCLICK || Msg == DN_EDITCHANGE) && Items[Param1].OnChanged)
     {
       Items[Param1].OnChanged(DialogControllerImpl(*this, hDlg));
+    }
+    else if (Msg != DN_CLOSE && OnPoll && Since(LastPoll) >= PollTimeout)
+    {
+      LastPoll = std::chrono::system_clock::now();
+      OnPoll(DialogControllerImpl(*this, hDlg));
     }
 
     return FarAPI().DefDlgProc(hDlg, Msg, Param1, Param2);

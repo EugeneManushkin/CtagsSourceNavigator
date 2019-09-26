@@ -31,7 +31,7 @@ namespace Facade
     virtual Dialog& AddCheckbox(int textID, bool value, std::string const& id = "", bool enabled = true, Callback cb = Callback()) = 0;
     virtual Dialog& AddButton(int textID, std::string const& id = "", bool defaultButton = false, bool noclose = false, bool enabled = true, Callback cb = Callback()) = 0;
     virtual Dialog& AddSeparator() = 0;
-    virtual Dialog& SetOnIdle(Callback cb) = 0;
+    virtual Dialog& SetOnPoll(Callback cb) = 0;
     virtual std::unordered_map<std::string, std::string> Run() = 0;
   };
 }
