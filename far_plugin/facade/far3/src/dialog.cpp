@@ -144,7 +144,7 @@ namespace
   class DialogImpl : public Dialog
   {
   public:
-    DialogImpl(int width);
+    DialogImpl(int width, bool controlClosing);
     Dialog& SetTitle(int textID, std::string const& id) override;
     Dialog& SetTitle(std::string const& text, std::string const& id) override;
     Dialog& AddCaption(int textID, std::string const& id, bool enabled) override;
@@ -178,6 +178,7 @@ namespace
     std::string GetValue(void* dialogHandle, std::string const& id) const;
     void SetValue(void* dialogHandle, std::string const& id, std::string const& value);
     void SetEnabled(void* dialogHandle, std::string const& id, bool enabled);
+    void Close(void* dialogHandle);
     bool SetValue(std::vector<DialogItem>::iterator i, std::string const& value);
     bool ResizeItem(std::vector<DialogItem>::iterator i, int height);
     void ApplyValues(void* dialogHandle);
@@ -188,6 +189,8 @@ namespace
     int Height;
     Callback OnPoll;
     TimePoint LastPoll;
+    bool ControlClosing;
+    bool Closing;
   };
 
   DialogImpl::DialogControllerImpl::DialogControllerImpl(DialogImpl& dialog, void* dialogHandle)
@@ -213,13 +216,15 @@ namespace
 
   void DialogImpl::DialogControllerImpl::Close() const
   {
-    FarAPI().SendDlgMessage(DialogHandle, DM_CLOSE, -1, 0);
+    DialogInstance.Close(DialogHandle);
   }
 
-  DialogImpl::DialogImpl(int width)
+  DialogImpl::DialogImpl(int width, bool controlClosing)
     : Items(1, {DI_DOUBLEBOX})
     , Width(std::max(width, MinDialogWidth))
     , LastPoll(std::chrono::system_clock::now())
+    , ControlClosing(controlClosing)
+    , Closing(false)
   {
     Align();
   }
@@ -276,7 +281,11 @@ namespace
 
   intptr_t DialogImpl::DlgProc(void* hDlg, intptr_t Msg, intptr_t Param1, void* Param2)
   {
-    if ((Msg == DN_BTNCLICK || Msg == DN_EDITCHANGE) && Items[Param1].OnChanged)
+    if (Msg == DN_CLOSE && ControlClosing && !Closing)
+    {
+      return 0;
+    }
+    else if ((Msg == DN_BTNCLICK || Msg == DN_EDITCHANGE) && Items[Param1].OnChanged)
     {
       Items[Param1].OnChanged(DialogControllerImpl(*this, hDlg));
     }
@@ -360,6 +369,12 @@ namespace
     FarAPI().SendDlgMessage(dialogHandle, DM_ENABLE, std::distance(Items.cbegin(), GetItemByID(id)), reinterpret_cast<void*>(intptr_t(enabled ? 1 : 0)));
   }
 
+  void DialogImpl::Close(void* dialogHandle)
+  {
+    Closing = true;
+    FarAPI().SendDlgMessage(dialogHandle, DM_CLOSE, -1, 0);
+  }
+
   bool DialogImpl::ResizeItem(std::vector<DialogItem>::iterator i, int height)
   {
     int const dh = height - i->Position.Height;
@@ -395,8 +410,8 @@ namespace
 
 namespace Facade
 {
-  std::unique_ptr<Dialog> Dialog::Create(int width)
+  std::unique_ptr<Dialog> Dialog::Create(int width, bool controlClosing)
   {
-    return std::unique_ptr<Dialog>(new DialogImpl(width));
+    return std::unique_ptr<Dialog>(new DialogImpl(width, controlClosing));
   }
 }

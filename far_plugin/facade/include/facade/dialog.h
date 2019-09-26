@@ -21,7 +21,7 @@ namespace Facade
   {
   public:
     using Callback = std::function<void(DialogController const& controller)>;
-    static std::unique_ptr<Dialog> Create(int width);
+    static std::unique_ptr<Dialog> Create(int width, bool controlClosing = false);
     virtual ~Dialog() = default;
     virtual Dialog& SetTitle(int textID, std::string const& id = "") = 0;
     virtual Dialog& SetTitle(std::string const& text, std::string const& id = "") = 0;
