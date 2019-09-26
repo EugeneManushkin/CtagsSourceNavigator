@@ -14,6 +14,7 @@ namespace Facade
     virtual std::string GetValue(std::string const& id) const = 0;
     virtual void SetValue(std::string const& id, std::string const& value) const = 0;
     virtual void SetEnabled(std::string const& id, bool enabled) const = 0;
+    virtual void Close() const = 0;
   };
 
   class Dialog

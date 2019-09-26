@@ -157,6 +157,7 @@ namespace
       std::string GetValue(std::string const& id) const override;
       void SetValue(std::string const& id, std::string const& value) const override;
       void SetEnabled(std::string const& id, bool enabled) const override;
+      void Close() const override;
 
     private:
       DialogImpl& DialogInstance;
@@ -199,6 +200,11 @@ namespace
   void DialogImpl::DialogControllerImpl::SetEnabled(std::string const& id, bool enabled) const
   {
     DialogInstance.SetEnabled(DialogHandle, id, enabled);
+  }
+
+  void DialogImpl::DialogControllerImpl::Close() const
+  {
+    FarAPI().SendDlgMessage(DialogHandle, DM_CLOSE, -1, 0);
   }
 
   DialogImpl::DialogImpl(int width)
