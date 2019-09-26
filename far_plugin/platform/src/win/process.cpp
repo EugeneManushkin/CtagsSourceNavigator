@@ -19,6 +19,7 @@ namespace
     std::string result(buffer, sz);
     LocalFree(buffer);
     result.erase(std::remove(result.begin(), result.end(), '\r'));
+    for (; !result.empty() && result.back() == '\n'; result.erase(--result.end()));
     return std::move(result);
   }
 
