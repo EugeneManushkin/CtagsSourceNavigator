@@ -143,7 +143,7 @@ namespace
     Dialog& AddCaption(std::string const& text, std::string const& id, bool enabled) override;
     Dialog& AddEditbox(std::string const& value, std::string const& id, bool enabled, Callback cb) override;
     Dialog& AddCheckbox(int textID, bool value, std::string const& id, bool enabled, Callback cb) override;
-    Dialog& AddButton(int textID, std::string const& id, bool defaultButton, bool enabled, Callback cb) override;
+    Dialog& AddButton(int textID, std::string const& id, bool defaultButton, bool noclose, bool enabled, Callback cb) override;
     Dialog& AddSeparator() override;
     Dialog& SetOnIdle(Callback cb) override;
     std::unordered_map<std::string, std::string> Run() override;
@@ -242,9 +242,9 @@ namespace
     return AddItem(DI_CHECKBOX, id, enabled, BoolToString(value), 0, cb, GetMsg(textID));
   }
 
-  Dialog& DialogImpl::AddButton(int textID, std::string const& id, bool defaultButton, bool enabled, Callback cb)
+  Dialog& DialogImpl::AddButton(int textID, std::string const& id, bool defaultButton, bool noclose, bool enabled, Callback cb)
   {
-    return AddItem(DI_BUTTON, id, enabled, ToStdString(GetMsg(textID)), DIF_CENTERGROUP | (defaultButton ? DIF_DEFAULTBUTTON : 0), cb);
+    return AddItem(DI_BUTTON, id, enabled, ToStdString(GetMsg(textID)), DIF_CENTERGROUP | (defaultButton ? DIF_DEFAULTBUTTON : 0) | (noclose ? DIF_BTNNOCLOSE : 0), cb);
   }
 
   Dialog& DialogImpl::AddSeparator()
