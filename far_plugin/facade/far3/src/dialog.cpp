@@ -170,8 +170,8 @@ namespace
     std::string GetValue(void* dialogHandle, std::string const& id) const;
     void SetValue(void* dialogHandle, std::string const& id, std::string const& value);
     void SetEnabled(void* dialogHandle, std::string const& id, bool enabled);
-    void SetValue(std::vector<DialogItem>::iterator i, std::string const& value);
-    void ResizeItem(std::vector<DialogItem>::iterator i, int height);
+    bool SetValue(std::vector<DialogItem>::iterator i, std::string const& value);
+    bool ResizeItem(std::vector<DialogItem>::iterator i, int height);
     void ApplyValues(void* dialogHandle);
     void ApplyPosition(void* dialogHandle);
 
@@ -339,8 +339,9 @@ namespace
   void DialogImpl::SetValue(void* dialogHandle, std::string const& id, std::string const& value)
   {
     auto item = Items.begin() + std::distance(Items.cbegin(), GetItemByID(id));
-    SetValue(item, value);
-    ApplyPosition(dialogHandle);
+    if (SetValue(item, value))
+      ApplyPosition(dialogHandle);
+
     SetFarItemValue(dialogHandle, std::distance(Items.begin(), item), item->FarItemType, item->Value);
   }
 
@@ -349,7 +350,7 @@ namespace
     FarAPI().SendDlgMessage(dialogHandle, DM_ENABLE, std::distance(Items.cbegin(), GetItemByID(id)), reinterpret_cast<void*>(intptr_t(enabled ? 1 : 0)));
   }
 
-  void DialogImpl::ResizeItem(std::vector<DialogItem>::iterator i, int height)
+  bool DialogImpl::ResizeItem(std::vector<DialogItem>::iterator i, int height)
   {
     int const dh = height - i->Position.Height;
     i->Position.Height = height;
@@ -357,13 +358,14 @@ namespace
       i->Position.Top += dh;
 
     Align();
+    return !!dh;
   }
 
-  void DialogImpl::SetValue(std::vector<DialogItem>::iterator i, std::string const& value)
+  bool DialogImpl::SetValue(std::vector<DialogItem>::iterator i, std::string const& value)
   {
     i->Value = i->FarItemType == DI_TEXT ? FitToWidth(value, i->Position.Width) : value;
     auto height = i->FarItemType == DI_TEXT ? static_cast<int>(std::count(i->Value.cbegin(), i->Value.cend(), '\n') + 1) : 1;
-    ResizeItem(i, height);
+    return ResizeItem(i, height);
   }
 
   void DialogImpl::ApplyValues(void* dialogHandle)
