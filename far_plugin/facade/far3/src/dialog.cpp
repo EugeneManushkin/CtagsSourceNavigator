@@ -310,6 +310,7 @@ namespace
     auto handle = FarAPI().DialogInit(GetPluginGuid(), &*InteractiveDialogGuid, -1, -1, Width, Height, L"", &farItems[0], farItems.size(), 0, FDLG_NONE, &FarDlgProc, this);
     std::shared_ptr<void> handleHolder(handle, [](void* h){FarAPI().DialogFree(h);});
     ApplyValues(handle);
+    FarAPI().SendDlgMessage(handle, DM_SETINPUTNOTIFY, 1, 0);
     auto exitCode = FarAPI().DialogRun(handle);
     std::unordered_map<std::string, std::string> result;   
     intptr_t id = 0;
