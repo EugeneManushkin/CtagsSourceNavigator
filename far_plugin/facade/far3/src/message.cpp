@@ -21,11 +21,11 @@ namespace
   auto const ErrorMessageGuid = StringToGuid("{03cceb3e-20ba-438a-9972-85a48b0d28e4}");
   auto const InfoMessageGuid = StringToGuid("{58a20c1d-44e2-40ba-9223-5f96d31d8c09}");
 
-  void Message(WideString const& text, WideString const& title, FARMESSAGEFLAGS flags, GUID* guid)
+  intptr_t Message(WideString const& text, WideString const& title, FARMESSAGEFLAGS flags, GUID* guid)
   {
     const int numButtons = 0;
     WideString str = title + L"\n" + text;
-    FarAPI().Message(GetPluginGuid(), guid, flags | FMSG_ALLINONE, nullptr, reinterpret_cast<const wchar_t *const *>(str.c_str()), 0, numButtons);
+    return FarAPI().Message(GetPluginGuid(), guid, flags | FMSG_ALLINONE, nullptr, reinterpret_cast<const wchar_t *const *>(str.c_str()), 0, numButtons);
   }
 
   std::shared_ptr<void> LongOperationMessageImpl(WideString const& title, WideString const& text)
@@ -84,5 +84,10 @@ namespace Facade
   std::shared_ptr<void> LongOperationMessage(int textID, int titleID)
   {
     return LongOperationMessageImpl(GetMsg(textID), GetMsg(titleID));
+  }
+
+  YesNoCancel YesNoCancelMessage(int textID, int titleID)
+  {
+    return static_cast<YesNoCancel>(Message(GetMsg(textID), GetMsg(titleID), FMSG_MB_YESNOCANCEL | FMSG_WARNING, &*InfoMessageGuid));
   }
 }
