@@ -1,3 +1,5 @@
+#pragma once
+
 #include <facade/message.h>
 
 namespace Facade
