@@ -9,6 +9,7 @@
 #include <platform/path.h>
 #include <tags.h>
 
+#include <stack>
 #include <string>
 #include <stdexcept>
 
@@ -77,6 +78,7 @@ namespace
 
     void OnCmd(char const* cmd) override
     {
+      CleanupActions.push(CleanupAction([](bool success){throw std::runtime_error("Test cleanup action: " + std::to_string(success));}, true));
       LoadConfig();
       LoadTags(cmd);
     }
@@ -92,9 +94,14 @@ namespace
       LoadTags(file);
     }
 
-    void Cleanup() override
+    std::function<void(bool)> GetCleanupAction(bool& retriable) override
     {
-      ErrorMessage("Cleanup");
+      auto cleanupAction = !CleanupActions.empty() ? CleanupActions.top() : CleanupAction();
+      if (!CleanupActions.empty())
+        CleanupActions.pop();
+
+      retriable = cleanupAction.second;
+      return cleanupAction.first;
     }
 
     void LoadFromHistory();
@@ -108,6 +115,8 @@ namespace
     std::string const PluginFolder;
     std::string const ConfigPath;
     FarPlugin::Config Config;
+    using CleanupAction = std::pair<std::function<void(bool)>, bool>;
+    std::stack<CleanupAction> CleanupActions;
   };
 
   void PluginImpl::LoadFromHistory()

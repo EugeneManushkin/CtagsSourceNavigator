@@ -6,9 +6,11 @@
 #include <facade/plugin.h>
 #include <platform/path.h>
 #include <plugin_sdk/plugin.hpp>
+#include <safe_call.h>
 
 #include <vector>
 
+using Facade::Internal::SafeCall;
 using Facade::Internal::StringToGuid;
 using Facade::Internal::WideString;
 using Platform::GetDirOfFile;
@@ -72,6 +74,29 @@ namespace
     I.EditorControl(editorID, ECTL_GETFILENAME, buffer.size(), &buffer[0]);
     return WideString(buffer.begin(), buffer.end() - 1);
   }
+
+  bool ExecuteCleanupAction(std::function<void(bool)> action, bool retriable, bool success)
+  {
+    try
+    {
+      action(success);
+    }
+    catch(std::exception const& e)
+    {
+      return ErrorMessage(e.what(), Facade::DefaultTextID, retriable);
+    }
+
+    return false;
+  }
+
+  void ExecuteCleanupActions(Facade::Plugin& plugin, bool success)
+  {
+    bool retriable = false;
+    while (auto action = plugin.GetCleanupAction(retriable))
+    {
+      while (ExecuteCleanupAction(action, retriable, success));
+    }
+  }
 }
 
 namespace Facade
@@ -124,7 +149,7 @@ namespace Facade
       PluginInstance = Plugin::Create(GetDirOfFile(ToStdString(I.ModuleName)).c_str());
     }
     
-    void* OpenW(OpenInfo const* info)
+    void* OpenWImpl(OpenInfo const* info)
     {
       switch (info->OpenFrom)
       {
@@ -144,6 +169,14 @@ namespace Facade
   
       return nullptr;
     }
+
+    void* OpenW(OpenInfo const* info)
+    {
+      bool success = true;
+      auto result = SafeCall(std::bind(OpenWImpl, info), nullptr, success);
+      ExecuteCleanupActions(*PluginInstance, success);
+      return result;
+    }
     
     void* AnalyseW(AnalyseInfo const* info)
     {
@@ -162,7 +195,6 @@ namespace Facade
     
     void ExitFARW(ExitInfo const* info)
     {
-      PluginInstance->Cleanup();
     }
   }
 }

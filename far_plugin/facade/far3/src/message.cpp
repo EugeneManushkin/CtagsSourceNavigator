@@ -56,14 +56,14 @@ namespace Facade
     return std::string(buf.begin(), --buf.end());
   }
 
-  void ErrorMessage(std::string const& text, int titleID)
+  bool ErrorMessage(std::string const& text, int titleID, bool retry)
   {
-    Message(ToString(text), GetMsg(titleID), FMSG_MB_OK | FMSG_WARNING, &*ErrorMessageGuid);
+    return Message(ToString(text), GetMsg(titleID), (retry ? FMSG_MB_RETRYCANCEL : FMSG_MB_OK) | FMSG_WARNING, &*ErrorMessageGuid) == 0 && retry;
   }
 
-  void ErrorMessage(int textID, int titleID)
+  bool ErrorMessage(int textID, int titleID, bool retry)
   {
-    Message(GetMsg(textID), GetMsg(titleID), FMSG_MB_OK | FMSG_WARNING, &*ErrorMessageGuid);
+    return Message(GetMsg(textID), GetMsg(titleID), (retry ? FMSG_MB_RETRYCANCEL : FMSG_MB_OK) | FMSG_WARNING, &*ErrorMessageGuid) == 0 && retry;
   }
 
   void InfoMessage(std::string const& text, int titleID)

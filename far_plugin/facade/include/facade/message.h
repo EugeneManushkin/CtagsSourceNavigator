@@ -18,8 +18,8 @@ namespace Facade
   };
 
   std::string Format(int formatID, ...);
-  void ErrorMessage(std::string const& text, int titleID = DefaultTextID);
-  void ErrorMessage(int textID, int titleID = DefaultTextID);
+  bool ErrorMessage(std::string const& text, int titleID = DefaultTextID, bool retry = false);
+  bool ErrorMessage(int textID, int titleID = DefaultTextID, bool retry = false);
   void InfoMessage(std::string const& text, int titleID = DefaultTextID);
   void InfoMessage(int textID, int titleID = DefaultTextID);
   std::shared_ptr<void> LongOperationMessage(std::string const& text, int titleID = DefaultTextID);
