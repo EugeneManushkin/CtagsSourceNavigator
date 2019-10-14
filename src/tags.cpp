@@ -20,6 +20,7 @@
 #include <algorithm>
 #include <functional>
 #include <iterator>
+#include <list>
 #include <regex>
 #include <set>
 #include <stdio.h>
@@ -120,7 +121,6 @@ struct TagFileInfo{
     return fullpathrepo;
   }
 
-  //TODO: rework: filename must be hidden
   std::string const& GetName() const
   {
     return filename;
@@ -195,8 +195,13 @@ private:
   OffsetCont NamesOffsets;
 };
 
-using RepositoriesCont = std::unordered_map<std::string, std::unique_ptr<Tags::Repository> >;
+using RepositoriesCont = std::list<std::unique_ptr<Tags::Repository> >;
 RepositoriesCont Repositories;
+
+RepositoriesCont::iterator FindRepos(char const* tagsPath)
+{
+  return std::find_if(Repositories.begin(), Repositories.end(), [&tagsPath](RepositoriesCont::value_type const& r){return !r->CompareTagsPath(tagsPath);});
+}
 
 static std::string JoinPath(std::string const& dirPath, std::string const& name)
 {
@@ -1039,16 +1044,15 @@ std::string TagFileInfo::GetFullPath(std::string const& relativePath) const
 
 int Load(const char* filename, bool singleFileRepos, size_t& symbolsLoaded)
 {
-  auto key = ToLower(filename);
-  auto iter = Repositories.find(key);
-  auto repo = iter == Repositories.end() ? Tags::Repository::Create(filename, singleFileRepos) : std::move(iter->second);
+  auto iter = FindRepos(filename);
+  auto repo = iter == Repositories.end() ? Tags::Repository::Create(filename, singleFileRepos) : std::move(*iter);
   if (iter != Repositories.end())
     Repositories.erase(iter);
 
   if (auto err = repo->Load(symbolsLoaded))
     return err;
 
-  Repositories[key] = std::move(repo);
+  Repositories.push_front(std::move(repo));
   return 0;
 }
 
@@ -1296,10 +1300,10 @@ static std::vector<TagInfo> ForEachFileRepository(char const* fileFullPath, std:
   std::vector<TagInfo> result;
   for (auto const& repos : Repositories)
   {
-    if (!repos.second->Belongs(fileFullPath))
+    if (!repos->Belongs(fileFullPath))
       continue;
 
-    auto tags = func(*repos.second);
+    auto tags = func(*repos);
     std::move(tags.begin(), tags.end(), std::back_inserter(result));
   }
 
@@ -1398,7 +1402,7 @@ std::vector<TagInfo> FindFileSymbols(const char* file)
   std::vector<TagInfo> result;
   for (const auto& repos : Repositories)
   {
-    auto tags = repos.second->FindByFile(file);
+    auto tags = repos->FindByFile(file);
     std::move(tags.begin(), tags.end(), std::back_inserter(result));
   }
 
@@ -1408,7 +1412,7 @@ std::vector<TagInfo> FindFileSymbols(const char* file)
 std::vector<std::string> GetFiles()
 {
   std::vector<std::string> result;
-  std::transform(Repositories.begin(), Repositories.end(), std::back_inserter(result), [](RepositoriesCont::value_type const& v) {return v.first;});
+  std::transform(Repositories.begin(), Repositories.end(), std::back_inserter(result), [](RepositoriesCont::value_type const& v) {return v->TagsPath();});
   return std::move(result);
 }
 
@@ -1417,8 +1421,8 @@ std::vector<std::string> GetLoadedTags(const char* file)
   std::vector<std::string> result;
   for (auto const& repos : Repositories)
   {
-    if (repos.second->Belongs(file))
-      result.push_back(repos.first);
+    if (repos->Belongs(file))
+      result.push_back(repos->TagsPath());
   }
 
   return std::move(result);
@@ -1426,7 +1430,9 @@ std::vector<std::string> GetLoadedTags(const char* file)
 
 void UnloadTags(const char* tagsFile)
 {
-  Repositories.erase(ToLower(tagsFile));
+  auto repos = FindRepos(tagsFile);
+  if (repos != Repositories.end())
+    Repositories.erase(repos);
 }
 
 void UnloadAllTags()
@@ -1499,16 +1505,16 @@ std::vector<TagInfo>::const_iterator Reorder(TagInfo const& context, std::vector
 
 void CacheTag(TagInfo const& tag, size_t cacheSize, bool flush)
 {
-  auto repos = Repositories.find(ToLower(tag.Owner.TagsFile));
+  auto repos = FindRepos(tag.Owner.TagsFile.c_str());
   if (repos != Repositories.end())
-    repos->second->CacheTag(tag, cacheSize, flush);
+    (*repos)->CacheTag(tag, cacheSize, flush);
 }
 
 void EraseCachedTag(TagInfo const& tag, bool flush)
 {
-  auto repos = Repositories.find(ToLower(tag.Owner.TagsFile));
+  auto repos = FindRepos(tag.Owner.TagsFile.c_str());
   if (repos != Repositories.end())
-    repos->second->EraseCachedTag(tag, flush);
+    (*repos)->EraseCachedTag(tag, flush);
 }
 
 std::vector<TagInfo> GetCachedTags(const char* file, size_t limit, bool getFiles)
@@ -1516,10 +1522,10 @@ std::vector<TagInfo> GetCachedTags(const char* file, size_t limit, bool getFiles
   std::vector<TagInfo> result;
   for (auto const& repos : Repositories)
   {
-    if (!repos.second->Belongs(file))
+    if (!repos->Belongs(file))
       continue;
 
-    auto tags = getFiles ? repos.second->GetCachedFiles(limit) : repos.second->GetCachedNames(limit);
+    auto tags = getFiles ? repos->GetCachedFiles(limit) : repos->GetCachedNames(limit);
     std::move(tags.begin(), tags.end(), std::back_inserter(result));
   }
 
@@ -1603,6 +1609,16 @@ namespace
     bool SingleFileRepository() const override
     {
       return Info.SingleFileRepository();
+    }
+
+    int CompareTagsPath(const char* tagsPath) const override
+    {
+      return PathCompare(Info.GetName().c_str(), tagsPath, FullCompare);
+    }
+
+    std::string TagsPath() const override
+    {
+      return Info.GetName();
     }
 
     std::vector<TagInfo> FindByName(const char* name) const override
