@@ -195,7 +195,7 @@ private:
   OffsetCont NamesOffsets;
 };
 
-using RepositoriesCont = std::list<std::unique_ptr<Tags::Repository> >;
+using RepositoriesCont = std::list<std::unique_ptr<Tags::Internal::Repository> >;
 RepositoriesCont Repositories;
 
 RepositoriesCont::iterator FindRepos(char const* tagsPath)
@@ -1045,7 +1045,7 @@ std::string TagFileInfo::GetFullPath(std::string const& relativePath) const
 int Load(const char* filename, bool singleFileRepos, size_t& symbolsLoaded)
 {
   auto iter = FindRepos(filename);
-  auto repo = iter == Repositories.end() ? Tags::Repository::Create(filename, singleFileRepos) : std::move(*iter);
+  auto repo = iter == Repositories.end() ? Tags::Internal::Repository::Create(filename, singleFileRepos) : std::move(*iter);
   if (iter != Repositories.end())
     Repositories.erase(iter);
 
@@ -1295,7 +1295,7 @@ static std::vector<TagInfo> GetMatchedTags(TagFileInfo const* fi, IndexType inde
   return !f ? std::vector<TagInfo>() : GetMatchedTags(fi, &*f, offsets, visitor, maxCount);
 }
 
-static std::vector<TagInfo> ForEachFileRepository(char const* fileFullPath, std::function<std::vector<TagInfo>(Tags::Repository const&)> func)
+static std::vector<TagInfo> ForEachFileRepository(char const* fileFullPath, std::function<std::vector<TagInfo>(Tags::Internal::Repository const&)> func)
 {
   std::vector<TagInfo> result;
   for (auto const& repos : Repositories)
@@ -1351,12 +1351,12 @@ static std::vector<TagInfo> SortTags(std::vector<TagInfo>&& tags, char const* fi
 
 std::vector<TagInfo> Find(const char* name, const char* file, int sortOptions)
 {
-  return SortTags(ForEachFileRepository(file, [=](Tags::Repository const& repo){ return repo.FindByName(name); }), file, sortOptions);
+  return SortTags(ForEachFileRepository(file, [=](Tags::Internal::Repository const& repo){ return repo.FindByName(name); }), file, sortOptions);
 }
 
 std::vector<TagInfo> FindPartiallyMatchedTags(const char* file, const char* part, size_t maxCount, bool caseInsensitive, int sortOptions)
 {
-  return SortTags(ForEachFileRepository(file, [=](Tags::Repository const& repo){ return repo.FindByName(part, maxCount, caseInsensitive); }), file, sortOptions);
+  return SortTags(ForEachFileRepository(file, [=](Tags::Internal::Repository const& repo){ return repo.FindByName(part, maxCount, caseInsensitive); }), file, sortOptions);
 }
 
 static std::tuple<std::string, std::string, int> GetNamePathLine(char const* path)
@@ -1384,17 +1384,17 @@ static std::tuple<std::string, std::string, int> GetNamePathLine(char const* pat
 
 std::vector<TagInfo> FindFile(const char* file, const char* path)
 {
-  return SortTags(ForEachFileRepository(file, [=](Tags::Repository const& repo){ return repo.FindFiles(path); }), "", SortOptions::Default);
+  return SortTags(ForEachFileRepository(file, [=](Tags::Internal::Repository const& repo){ return repo.FindFiles(path); }), "", SortOptions::Default);
 }
 
 std::vector<TagInfo> FindPartiallyMatchedFile(const char* file, const char* part, size_t maxCount)
 {
-  return SortTags(ForEachFileRepository(file, [=](Tags::Repository const& repo){ return repo.FindFiles(part, maxCount); }), "", SortOptions::Default);
+  return SortTags(ForEachFileRepository(file, [=](Tags::Internal::Repository const& repo){ return repo.FindFiles(part, maxCount); }), "", SortOptions::Default);
 }
 
 std::vector<TagInfo> FindClassMembers(const char* file, const char* classname, int sortOptions)
 {
-  return SortTags(ForEachFileRepository(file, [=](Tags::Repository const& repo){ return repo.FindClassMembers(classname); }), file, sortOptions);
+  return SortTags(ForEachFileRepository(file, [=](Tags::Internal::Repository const& repo){ return repo.FindClassMembers(classname); }), file, sortOptions);
 }
 
 std::vector<TagInfo> FindFileSymbols(const char* file)
@@ -1588,7 +1588,7 @@ static std::vector<std::pair<TagInfo, size_t>> RefreshFilesCache(TagFileInfo* fi
 
 namespace
 {
-  class RepositoryImpl : public Tags::Repository
+  class RepositoryImpl : public Tags::Internal::Repository
   {
   public:
     RepositoryImpl(char const* filename, bool singleFileRepos)
@@ -1691,8 +1691,11 @@ namespace
 
 namespace Tags
 {
-  std::unique_ptr<Repository> Repository::Create(const char* filename, bool singleFileRepos)
+  namespace Internal
   {
-    return std::unique_ptr<Repository>(new RepositoryImpl(filename, singleFileRepos));
+    std::unique_ptr<Repository> Repository::Create(const char* filename, bool singleFileRepos)
+    {
+      return std::unique_ptr<Repository>(new RepositoryImpl(filename, singleFileRepos));
+    }
   }
 }
