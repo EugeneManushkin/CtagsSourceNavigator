@@ -25,26 +25,29 @@
 #include <string>
 #include <vector>
 
-class SortOptions
+namespace Tags
 {
-public:
-  enum
+  enum class SortOptions : int
   {
     DoNotSort = -1,
     Default = 0,
     SortByName = 1 << 0,
     CurFileFirst = 1 << 1,
   };
-};
+
+  inline SortOptions operator | (SortOptions left, SortOptions right) { return static_cast<SortOptions>(static_cast<int>(left) | static_cast<int>(right)); }
+  inline SortOptions operator & (SortOptions left, SortOptions right) { return static_cast<SortOptions>(static_cast<int>(left) & static_cast<int>(right)); }
+  inline bool operator ! (SortOptions option) { return !static_cast<int>(option); }
+}
 
 int Load(const char* filename, bool singleFileRepos, size_t& symbolsLoaded);
 void UnloadTags(const char* tagsFile);
 void UnloadAllTags();
-std::vector<TagInfo> Find(const char* name, const char* filename, int sortOptions = SortOptions::Default);
-std::vector<TagInfo> FindPartiallyMatchedTags(const char* file, const char* part, size_t maxCount, bool caseInsensitive, int sortOptions = SortOptions::Default);
+std::vector<TagInfo> Find(const char* name, const char* filename, Tags::SortOptions sortOptions = Tags::SortOptions::Default);
+std::vector<TagInfo> FindPartiallyMatchedTags(const char* file, const char* part, size_t maxCount, bool caseInsensitive, Tags::SortOptions sortOptions = Tags::SortOptions::Default);
 std::vector<TagInfo> FindFile(const char* file, const char* path);
 std::vector<TagInfo> FindPartiallyMatchedFile(const char* file, const char* part, size_t maxCount); 
-std::vector<TagInfo> FindClassMembers(const char* file, const char* classname, int sortOptions = SortOptions::Default);
+std::vector<TagInfo> FindClassMembers(const char* file, const char* classname, Tags::SortOptions sortOptions = Tags::SortOptions::Default);
 std::vector<TagInfo> FindFileSymbols(const char* file);
 std::vector<std::string> GetFiles();
 std::vector<std::string> GetLoadedTags(const char* file);
