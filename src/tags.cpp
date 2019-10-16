@@ -1310,10 +1310,12 @@ static std::vector<TagInfo> ForEachFileRepository(char const* fileFullPath, std:
   return std::move(result);
 }
 
+using Tags::SortOptions;
+
 class TagsLess
 {
 public:
-  TagsLess(char const* file, int sortOptions)
+  TagsLess(char const* file, SortOptions sortOptions)
     : File(file)
     , Options(sortOptions)
   {
@@ -1338,10 +1340,10 @@ public:
 
 private:
   char const* File;
-  int const Options;
+  SortOptions const Options;
 };
 
-static std::vector<TagInfo> SortTags(std::vector<TagInfo>&& tags, char const* file, int sortOptions)
+static std::vector<TagInfo> SortTags(std::vector<TagInfo>&& tags, char const* file, SortOptions sortOptions)
 {
   if (sortOptions != SortOptions::DoNotSort)
     std::sort(tags.begin(), tags.end(), TagsLess(file, sortOptions));
@@ -1349,12 +1351,12 @@ static std::vector<TagInfo> SortTags(std::vector<TagInfo>&& tags, char const* fi
   return std::move(tags);
 }
 
-std::vector<TagInfo> Find(const char* name, const char* file, int sortOptions)
+std::vector<TagInfo> Find(const char* name, const char* file, SortOptions sortOptions)
 {
   return SortTags(ForEachFileRepository(file, [=](Tags::Internal::Repository const& repo){ return repo.FindByName(name); }), file, sortOptions);
 }
 
-std::vector<TagInfo> FindPartiallyMatchedTags(const char* file, const char* part, size_t maxCount, bool caseInsensitive, int sortOptions)
+std::vector<TagInfo> FindPartiallyMatchedTags(const char* file, const char* part, size_t maxCount, bool caseInsensitive, SortOptions sortOptions)
 {
   return SortTags(ForEachFileRepository(file, [=](Tags::Internal::Repository const& repo){ return repo.FindByName(part, maxCount, caseInsensitive); }), file, sortOptions);
 }
@@ -1392,7 +1394,7 @@ std::vector<TagInfo> FindPartiallyMatchedFile(const char* file, const char* part
   return SortTags(ForEachFileRepository(file, [=](Tags::Internal::Repository const& repo){ return repo.FindFiles(part, maxCount); }), "", SortOptions::Default);
 }
 
-std::vector<TagInfo> FindClassMembers(const char* file, const char* classname, int sortOptions)
+std::vector<TagInfo> FindClassMembers(const char* file, const char* classname, SortOptions sortOptions)
 {
   return SortTags(ForEachFileRepository(file, [=](Tags::Internal::Repository const& repo){ return repo.FindClassMembers(classname); }), file, sortOptions);
 }
