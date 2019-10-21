@@ -34,6 +34,8 @@
 #include "tags.h"
 #include "tags_cache.h"
 #include "tags_repository.h"
+#include "tags_selector.h"
+#include "tags_selector_impl.h"
 
 #if defined _WIN32
 #include <io.h>
@@ -195,12 +197,23 @@ private:
   OffsetCont NamesOffsets;
 };
 
+using Tags::SortingOptions;
 using RepositoriesCont = std::list<std::unique_ptr<Tags::Internal::Repository> >;
 RepositoriesCont Repositories;
 
-RepositoriesCont::iterator FindRepos(char const* tagsPath)
+static RepositoriesCont::iterator FindRepos(char const* tagsPath)
 {
   return std::find_if(Repositories.begin(), Repositories.end(), [&tagsPath](RepositoriesCont::value_type const& r){return !r->CompareTagsPath(tagsPath);});
+}
+
+static std::unique_ptr<Tags::Selector> GetSelector(char const* currentFile, bool caseInsensitive, SortingOptions sortOptions, size_t limit = 0)
+{
+  std::vector<Tags::Internal::Repository const*> filtered;
+  for (auto const& repo : Repositories)
+    if (repo->Belongs(currentFile))
+      filtered.push_back(&*repo);
+
+  return Tags::Internal::CreateSelector(std::move(filtered), currentFile, caseInsensitive, sortOptions, limit);
 }
 
 static std::string JoinPath(std::string const& dirPath, std::string const& name)
@@ -1310,8 +1323,6 @@ static std::vector<TagInfo> ForEachFileRepository(char const* fileFullPath, std:
   return std::move(result);
 }
 
-using Tags::SortingOptions;
-
 class TagsLess
 {
 public:
@@ -1343,7 +1354,7 @@ private:
   SortingOptions const Options;
 };
 
-static std::vector<TagInfo> SortTags(std::vector<TagInfo>&& tags, char const* file, SortingOptions sortOptions)
+std::vector<TagInfo> SortTags(std::vector<TagInfo>&& tags, char const* file, SortingOptions sortOptions)
 {
   if (sortOptions != SortingOptions::DoNotSort)
     std::sort(tags.begin(), tags.end(), TagsLess(file, sortOptions));
@@ -1353,12 +1364,12 @@ static std::vector<TagInfo> SortTags(std::vector<TagInfo>&& tags, char const* fi
 
 std::vector<TagInfo> Find(const char* name, const char* file, SortingOptions sortOptions)
 {
-  return SortTags(ForEachFileRepository(file, [=](Tags::Internal::Repository const& repo){ return repo.FindByName(name); }), file, sortOptions);
+  return GetSelector(file, false, sortOptions)->GetByName(name);
 }
 
 std::vector<TagInfo> FindPartiallyMatchedTags(const char* file, const char* part, size_t maxCount, bool caseInsensitive, SortingOptions sortOptions)
 {
-  return SortTags(ForEachFileRepository(file, [=](Tags::Internal::Repository const& repo){ return repo.FindByName(part, maxCount, caseInsensitive); }), file, sortOptions);
+  return GetSelector(file, caseInsensitive, sortOptions, maxCount)->GetByNamePart(part);
 }
 
 static std::tuple<std::string, std::string, int> GetNamePathLine(char const* path)
@@ -1386,29 +1397,22 @@ static std::tuple<std::string, std::string, int> GetNamePathLine(char const* pat
 
 std::vector<TagInfo> FindFile(const char* file, const char* path)
 {
-  return SortTags(ForEachFileRepository(file, [=](Tags::Internal::Repository const& repo){ return repo.FindFiles(path); }), "", SortingOptions::Default);
+  return GetSelector(file, true, SortingOptions::Default)->GetFiles(path);
 }
 
 std::vector<TagInfo> FindPartiallyMatchedFile(const char* file, const char* part, size_t maxCount)
 {
-  return SortTags(ForEachFileRepository(file, [=](Tags::Internal::Repository const& repo){ return repo.FindFiles(part, maxCount); }), "", SortingOptions::Default);
+  return GetSelector(file, true, SortingOptions::Default, maxCount)->GetFilesByPart(part);
 }
 
 std::vector<TagInfo> FindClassMembers(const char* file, const char* classname, SortingOptions sortOptions)
 {
-  return SortTags(ForEachFileRepository(file, [=](Tags::Internal::Repository const& repo){ return repo.FindClassMembers(classname); }), file, sortOptions);
+  return GetSelector(file, false, sortOptions)->GetClassMembers(classname);
 }
 
 std::vector<TagInfo> FindFileSymbols(const char* file)
 {
-  std::vector<TagInfo> result;
-  for (const auto& repos : Repositories)
-  {
-    auto tags = repos->FindByFile(file);
-    std::move(tags.begin(), tags.end(), std::back_inserter(result));
-  }
-
-  return SortTags(std::move(result), file, SortingOptions::Default);
+  return GetSelector(file, false, SortingOptions::Default)->GetByFile(file);
 }
 
 std::vector<std::string> GetFiles()
