@@ -1303,21 +1303,6 @@ static std::vector<TagInfo> GetMatchedTags(TagFileInfo const* fi, IndexType inde
   return !f ? std::vector<TagInfo>() : GetMatchedTags(fi, &*f, offsets, visitor, maxCount);
 }
 
-static std::vector<TagInfo> ForEachFileRepository(char const* fileFullPath, std::function<std::vector<TagInfo>(Tags::Internal::Repository const&)> func)
-{
-  std::vector<TagInfo> result;
-  for (auto const& repos : Repositories)
-  {
-    if (!repos->Belongs(fileFullPath))
-      continue;
-
-    auto tags = func(*repos);
-    std::move(tags.begin(), tags.end(), std::back_inserter(result));
-  }
-
-  return std::move(result);
-}
-
 class TagsLess
 {
 public:
