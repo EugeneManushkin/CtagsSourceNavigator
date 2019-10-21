@@ -43,5 +43,6 @@ std::vector<TagInfo>::const_iterator Reorder(TagInfo const& context, std::vector
 void CacheTag(TagInfo const& tag, size_t cacheSize, bool flush);
 void EraseCachedTag(TagInfo const& tag, bool flush);
 std::vector<TagInfo> GetCachedTags(const char* file, size_t limit, bool getFiles);
+std::vector<TagInfo> SortTags(std::vector<TagInfo>&& tags, char const* file, Tags::SortingOptions sortOptions);
 
 #endif
