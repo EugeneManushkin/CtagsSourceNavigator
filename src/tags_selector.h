@@ -16,7 +16,6 @@ namespace Tags
     virtual std::vector<TagInfo> GetFilesByPart(const char* part) const = 0;
     virtual std::vector<TagInfo> GetClassMembers(const char* classname) const = 0;
     virtual std::vector<TagInfo> GetByFile(const char* file) const = 0;
-    virtual std::vector<TagInfo> GetCachedNames() const = 0;
-    virtual std::vector<TagInfo> GetCachedFiles() const = 0;
+    virtual std::vector<TagInfo> GetCachedTags(bool getFiles) const = 0;
   };
 }

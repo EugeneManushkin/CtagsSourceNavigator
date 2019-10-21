@@ -3,6 +3,7 @@
 #include "tags_selector.h"
 #include "tags_selector_impl.h"
 
+#include <algorithm>
 #include <functional>
 #include <iterator>
 
@@ -64,16 +65,20 @@ namespace
       return GetSorted([&file](Repository const& repo){ return repo.FindByFile(file); } );
     }
 
-    std::vector<TagInfo> GetCachedNames() const override
+    std::vector<TagInfo> GetCachedTags(bool getFiles) const override
     {
-      //TODO: implement
-      return std::vector<TagInfo>();
-    }
+      std::vector<std::pair<TagInfo, size_t>> stats;
+      for (auto const& repos : Repositories)
+      {
+        auto stat = repos->GetCachedTags(getFiles);
+        std::move(stat.begin(), stat.end(), std::back_inserter(stats));
+      }
 
-    std::vector<TagInfo> GetCachedFiles() const override
-    {
-      //TODO: implement
-      return std::vector<TagInfo>();
+      auto middle = Limit > stats.size() ? stats.end() : stats.begin() + Limit;
+      std::partial_sort(stats.begin(), middle, stats.end(), [](std::pair<TagInfo, size_t> &left, std::pair<TagInfo, size_t> &right) { return left.second < right.second; });
+      std::vector<TagInfo> result;
+      std::transform(stats.begin(), middle, std::back_inserter(result), [](std::pair<TagInfo, size_t>& v) { return std::move(v.first); });
+      return std::move(result);
     }
 
   protected:

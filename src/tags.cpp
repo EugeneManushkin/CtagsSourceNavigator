@@ -150,14 +150,9 @@ struct TagFileInfo{
     cache.Erase(tag);
   }
 
-  std::vector<TagInfo> GetCachedNames(size_t limit) const
+  std::vector<std::pair<TagInfo, size_t>> GetCachedTags(bool getFiles) const
   {
-    return NamesCache->Get(limit);
-  }
-
-  std::vector<TagInfo> GetCachedFiles(size_t limit) const
-  {
-    return FilesCache->Get(limit);
+    return getFiles ? FilesCache->GetStat() : NamesCache->GetStat();
   }
 
   void FlushCachedTags();
@@ -1525,17 +1520,7 @@ void EraseCachedTag(TagInfo const& tag, bool flush)
 
 std::vector<TagInfo> GetCachedTags(const char* file, size_t limit, bool getFiles)
 {
-  std::vector<TagInfo> result;
-  for (auto const& repos : Repositories)
-  {
-    if (!repos->Belongs(file))
-      continue;
-
-    auto tags = getFiles ? repos->GetCachedFiles(limit) : repos->GetCachedNames(limit);
-    std::move(tags.begin(), tags.end(), std::back_inserter(result));
-  }
-
-  return std::move(result);
+  return GetSelector(file, false, SortingOptions::Default, limit)->GetCachedTags(getFiles);
 }
 
 class TagMatch : public NameMatch
@@ -1672,14 +1657,9 @@ namespace
         Info.FlushCachedTags();
     }
 
-    std::vector<TagInfo> GetCachedNames(size_t limit) const override
+    std::vector<std::pair<TagInfo, size_t>> GetCachedTags(bool getFiles) const override
     {
-      return Info.GetCachedNames(limit);
-    }
-
-    std::vector<TagInfo> GetCachedFiles(size_t limit) const override
-    {
-      return Info.GetCachedFiles(limit);
+      return Info.GetCachedTags(getFiles);
     }
 
   private:
