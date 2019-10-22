@@ -34,6 +34,7 @@
 #include "tags.h"
 #include "tags_cache.h"
 #include "tags_repository.h"
+#include "tags_repository_storage.h"
 #include "tags_selector.h"
 #include "tags_selector_impl.h"
 
@@ -193,23 +194,7 @@ private:
 };
 
 using Tags::SortingOptions;
-using RepositoriesCont = std::list<std::unique_ptr<Tags::Internal::Repository> >;
-RepositoriesCont Repositories;
-
-static RepositoriesCont::iterator FindRepos(char const* tagsPath)
-{
-  return std::find_if(Repositories.begin(), Repositories.end(), [&tagsPath](RepositoriesCont::value_type const& r){return !r->CompareTagsPath(tagsPath);});
-}
-
-static std::unique_ptr<Tags::Selector> GetSelector(char const* currentFile, bool caseInsensitive, SortingOptions sortOptions, size_t limit = 0)
-{
-  std::vector<Tags::Internal::Repository const*> filtered;
-  for (auto const& repo : Repositories)
-    if (repo->Belongs(currentFile))
-      filtered.push_back(&*repo);
-
-  return Tags::Internal::CreateSelector(std::move(filtered), currentFile, caseInsensitive, sortOptions, limit);
-}
+auto Storage = Tags::RepositoryStorage::Create();
 
 static std::string JoinPath(std::string const& dirPath, std::string const& name)
 {
@@ -1052,16 +1037,7 @@ std::string TagFileInfo::GetFullPath(std::string const& relativePath) const
 
 int Load(const char* filename, bool singleFileRepos, size_t& symbolsLoaded)
 {
-  auto iter = FindRepos(filename);
-  auto repo = iter == Repositories.end() ? Tags::Internal::Repository::Create(filename, singleFileRepos) : std::move(*iter);
-  if (iter != Repositories.end())
-    Repositories.erase(iter);
-
-  if (auto err = repo->Load(symbolsLoaded))
-    return err;
-
-  Repositories.push_front(std::move(repo));
-  return 0;
+  return Storage->Load(filename, singleFileRepos ? Tags::RepositoryType::Temporary : Tags::RepositoryType::Regular, symbolsLoaded);
 }
 
 class MatchVisitor
@@ -1344,12 +1320,12 @@ std::vector<TagInfo> SortTags(std::vector<TagInfo>&& tags, char const* file, Sor
 
 std::vector<TagInfo> Find(const char* name, const char* file, SortingOptions sortOptions)
 {
-  return GetSelector(file, false, sortOptions)->GetByName(name);
+  return Storage->GetSelector(file, false, sortOptions)->GetByName(name);
 }
 
 std::vector<TagInfo> FindPartiallyMatchedTags(const char* file, const char* part, size_t maxCount, bool caseInsensitive, SortingOptions sortOptions)
 {
-  return GetSelector(file, caseInsensitive, sortOptions, maxCount)->GetByNamePart(part);
+  return Storage->GetSelector(file, caseInsensitive, sortOptions, maxCount)->GetByNamePart(part);
 }
 
 static std::tuple<std::string, std::string, int> GetNamePathLine(char const* path)
@@ -1377,53 +1353,49 @@ static std::tuple<std::string, std::string, int> GetNamePathLine(char const* pat
 
 std::vector<TagInfo> FindFile(const char* file, const char* path)
 {
-  return GetSelector(file, true, SortingOptions::Default)->GetFiles(path);
+  return Storage->GetSelector(file, true, SortingOptions::Default)->GetFiles(path);
 }
 
 std::vector<TagInfo> FindPartiallyMatchedFile(const char* file, const char* part, size_t maxCount)
 {
-  return GetSelector(file, true, SortingOptions::Default, maxCount)->GetFilesByPart(part);
+  return Storage->GetSelector(file, true, SortingOptions::Default, maxCount)->GetFilesByPart(part);
 }
 
 std::vector<TagInfo> FindClassMembers(const char* file, const char* classname, SortingOptions sortOptions)
 {
-  return GetSelector(file, false, sortOptions)->GetClassMembers(classname);
+  return Storage->GetSelector(file, false, sortOptions)->GetClassMembers(classname);
 }
 
 std::vector<TagInfo> FindFileSymbols(const char* file)
 {
-  return GetSelector(file, false, SortingOptions::Default)->GetByFile(file);
+  return Storage->GetSelector(file, false, SortingOptions::Default)->GetByFile(file);
+}
+
+static std::vector<std::string> ToTagsPaths(std::vector<Tags::RepositoryInfo> &&infos)
+{
+  std::vector<std::string> result;
+  std::transform(infos.begin(), infos.end(), std::back_inserter(result), [](Tags::RepositoryInfo const& info){ return info.TagsPath; });
+  return std::move(result);
 }
 
 std::vector<std::string> GetFiles()
 {
-  std::vector<std::string> result;
-  std::transform(Repositories.begin(), Repositories.end(), std::back_inserter(result), [](RepositoriesCont::value_type const& v) {return v->TagsPath();});
-  return std::move(result);
+  return ToTagsPaths(Storage->GetAll());
 }
 
 std::vector<std::string> GetLoadedTags(const char* file)
 {
-  std::vector<std::string> result;
-  for (auto const& repos : Repositories)
-  {
-    if (repos->Belongs(file))
-      result.push_back(repos->TagsPath());
-  }
-
-  return std::move(result);
+  return ToTagsPaths(Storage->GetInvolved(file));
 }
 
 void UnloadTags(const char* tagsFile)
 {
-  auto repos = FindRepos(tagsFile);
-  if (repos != Repositories.end())
-    Repositories.erase(repos);
+  Storage->RemoveByTags(tagsFile);
 }
 
 void UnloadAllTags()
 {
-  Repositories.clear();
+  Storage = Tags::RepositoryStorage::Create();
 }
 
 bool IsTagFile(const char* file)
@@ -1491,21 +1463,17 @@ std::vector<TagInfo>::const_iterator Reorder(TagInfo const& context, std::vector
 
 void CacheTag(TagInfo const& tag, size_t cacheSize, bool flush)
 {
-  auto repos = FindRepos(tag.Owner.TagsFile.c_str());
-  if (repos != Repositories.end())
-    (*repos)->CacheTag(tag, cacheSize, flush);
+  Storage->CacheTag(tag, cacheSize, flush);
 }
 
 void EraseCachedTag(TagInfo const& tag, bool flush)
 {
-  auto repos = FindRepos(tag.Owner.TagsFile.c_str());
-  if (repos != Repositories.end())
-    (*repos)->EraseCachedTag(tag, flush);
+  Storage->EraseCachedTag(tag, flush);
 }
 
 std::vector<TagInfo> GetCachedTags(const char* file, size_t limit, bool getFiles)
 {
-  return GetSelector(file, false, SortingOptions::Default, limit)->GetCachedTags(getFiles);
+  return Storage->GetSelector(file, false, SortingOptions::Default, limit)->GetCachedTags(getFiles);
 }
 
 class TagMatch : public NameMatch
