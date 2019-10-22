@@ -129,11 +129,6 @@ struct TagFileInfo{
     return filename;
   }
 
-  bool SingleFileRepository() const
-  {
-    return singlefilerepos;
-  }
-
   std::shared_ptr<FILE> OpenTags(OffsetCont& offsets, IndexType index) const;
 
   int Load(size_t& symbolsLoaded);
@@ -1548,11 +1543,6 @@ namespace
     bool Belongs(char const* file) const override
     {
       return !!Info.GetRelativePath(file);
-    }
-
-    bool SingleFileRepository() const override
-    {
-      return Info.SingleFileRepository();
     }
 
     int CompareTagsPath(const char* tagsPath) const override

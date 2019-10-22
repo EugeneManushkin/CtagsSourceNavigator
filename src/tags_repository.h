@@ -16,7 +16,6 @@ namespace Tags
       virtual ~Repository() = default;
       virtual int Load(size_t& symbolsLoaded) = 0;
       virtual bool Belongs(char const* file) const = 0;
-      virtual bool SingleFileRepository() const = 0;
       virtual int CompareTagsPath(const char* tagsPath) const = 0;
       virtual std::string TagsPath() const = 0;
       virtual std::vector<TagInfo> FindByName(const char* name) const = 0;
