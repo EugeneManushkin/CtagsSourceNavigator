@@ -21,7 +21,7 @@ namespace
     }
   };
 
-  class TagsCacheImpl : public TagsInternal::TagsCache
+  class TagsCacheImpl : public Tags::Internal::TagsCache
   {
   public:
     TagsCacheImpl(size_t capacity)
@@ -99,10 +99,13 @@ namespace
   };
 }
 
-namespace TagsInternal
+namespace Tags
+{
+namespace Internal
 {
   std::shared_ptr<TagsCache> CreateTagsCache(size_t capacity)
   {
     return std::shared_ptr<TagsCache>(new TagsCacheImpl(capacity));
   }
+}
 }

@@ -6,10 +6,10 @@
 
 namespace
 {
-  using TagsInternal::TagView;
-  using TagsInternal::TagsView;
-  using TagsInternal::TagsViewer;
-  using TagsInternal::FormatTagFlag;
+  using Tags::TagView;
+  using Tags::TagsView;
+  using Tags::TagsViewer;
+  using Tags::FormatTagFlag;
 
   class PartiallyMatchViewer : public TagsViewer
   {
@@ -93,10 +93,8 @@ namespace
   };
 }
 
-namespace TagsInternal
+namespace Tags
 {
-  using Tags::SortingOptions;
-
   std::unique_ptr<TagsViewer> GetPartiallyMatchedNamesViewer(std::string const& file, bool caseInsensitive, size_t maxResults, SortingOptions sortOptions)
   {
     return std::unique_ptr<TagsViewer>(new PartiallyMatchViewer(file, false, caseInsensitive, maxResults, sortOptions));

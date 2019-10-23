@@ -4,7 +4,7 @@
 
 #include <numeric>
 
-namespace TagsInternal
+namespace Tags
 {
   namespace Tests
   {

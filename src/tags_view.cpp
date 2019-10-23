@@ -2,7 +2,7 @@
 
 #include <algorithm>
 
-namespace TagsInternal
+namespace Tags
 {
   TagsView::TagsView()
   {

@@ -5,7 +5,7 @@
 
 #include <memory>
 
-namespace TagsInternal
+namespace Tags
 {
   class TagsViewer
   {

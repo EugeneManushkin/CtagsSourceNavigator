@@ -5,7 +5,7 @@
 
 #include <vector>
 
-namespace TagsInternal
+namespace Tags
 {
   class TagsView
   {

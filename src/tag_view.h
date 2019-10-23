@@ -4,7 +4,7 @@
 
 struct TagInfo;
 
-namespace TagsInternal
+namespace Tags
 {
   enum class FormatTagFlag
   {
