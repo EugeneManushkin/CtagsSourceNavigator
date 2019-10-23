@@ -24,8 +24,7 @@ namespace
     TagsView GetView(char const* filter, FormatTagFlag) const override
     {
       auto tags = !*filter ? Selector->GetCachedTags(GetFiles) : std::vector<TagInfo>();
-      tags = !tags.empty() ? tags : GetFiles ? Selector->GetFilesByPart(filter) :
-                                               Selector->GetByNamePart(filter);
+      tags = !tags.empty() ? tags : Selector->GetByPart(filter, GetFiles);
       return TagsView(std::move(tags));
     }
   

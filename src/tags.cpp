@@ -1320,7 +1320,7 @@ std::vector<TagInfo> Find(const char* name, const char* file, SortingOptions sor
 
 std::vector<TagInfo> FindPartiallyMatchedTags(const char* file, const char* part, size_t maxCount, bool caseInsensitive, SortingOptions sortOptions)
 {
-  return Storage->GetSelector(file, caseInsensitive, sortOptions, maxCount)->GetByNamePart(part);
+  return Storage->GetSelector(file, caseInsensitive, sortOptions, maxCount)->GetByPart(part, false);
 }
 
 static std::tuple<std::string, std::string, int> GetNamePathLine(char const* path)
@@ -1353,7 +1353,7 @@ std::vector<TagInfo> FindFile(const char* file, const char* path)
 
 std::vector<TagInfo> FindPartiallyMatchedFile(const char* file, const char* part, size_t maxCount)
 {
-  return Storage->GetSelector(file, true, SortingOptions::Default, maxCount)->GetFilesByPart(part);
+  return Storage->GetSelector(file, true, SortingOptions::Default, maxCount)->GetByPart(part, true);
 }
 
 std::vector<TagInfo> FindClassMembers(const char* file, const char* classname, SortingOptions sortOptions)
