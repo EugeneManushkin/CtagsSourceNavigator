@@ -15,6 +15,7 @@ endfunction(add_test)
 add_test(TARGET "tags_tests" SRC "tags/*.cpp" LIB "tags" INCLUDES "")
 add_test(TARGET "tags_cache_tests" SRC "tags_cache/*.cpp" LIB "tags" INCLUDES "")
 add_test(TARGET "tag_view_tests" SRC "tag_view/*.cpp" LIB "tags" INCLUDES "")
+add_test(TARGET "tags_repository_storage_tests" SRC "tags_repository_storage/*.cpp" LIB "tags" INCLUDES "")
 add_test(TARGET "composite_task_tests" SRC "composite_task/*.cpp" LIB "far_plugin" INCLUDES "${CMAKE_SOURCE_DIR}/far_plugin/src")
 add_test(TARGET "process_tests" SRC "process/*.cpp" LIB "platform" INCLUDES "${CMAKE_SOURCE_DIR}/far_plugin/platform/include")
 add_test(TARGET "execute_process_task" SRC "execute_process_task/*.cpp" LIB "far_plugin" INCLUDES

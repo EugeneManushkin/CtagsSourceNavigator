@@ -13,6 +13,7 @@ namespace
   using Tags::RepositoryInfo;
   using Tags::RepositoryType;
   using RepositoryPtr = std::unique_ptr<Tags::Internal::Repository>;
+  using RepositoryFactoryFunction = std::function<RepositoryPtr(char const*, RepositoryType)>;
 
   struct RepositoryRuntimeInfo
   {
@@ -25,9 +26,9 @@ namespace
     return !info.Repository.get();
   }
 
-  RepositoryRuntimeInfo CreateRuntimeInfo(char const* tagsPath, RepositoryType type)
+  RepositoryRuntimeInfo CreateRuntimeInfo(char const* tagsPath, RepositoryType type, RepositoryFactoryFunction const& createReposigory)
   {
-    return {type, Tags::Internal::Repository::Create(tagsPath, type == RepositoryType::Temporary)};
+    return {type, createReposigory(tagsPath, type)};
   }
 
   RepositoryInfo ToRepositoryInfo(RepositoryRuntimeInfo const& info)
@@ -43,10 +44,15 @@ namespace
   class RepositoryStorageImpl : public Tags::RepositoryStorage
   {
   public:
+    RepositoryStorageImpl::RepositoryStorageImpl(RepositoryFactoryFunction&& repoFactory)
+      : RepoFactory(std::move(repoFactory))
+    {
+    }
+
     int Load(char const* tagsPath, RepositoryType type, size_t& symbolsLoaded) override
     {
       auto info = Release(tagsPath);
-      info = Empty(info) ? CreateRuntimeInfo(tagsPath, type) : std::move(info);
+      info = Empty(info) ? CreateRuntimeInfo(tagsPath, type, RepoFactory) : std::move(info);
       auto err = info.Repository->Load(symbolsLoaded);
       if (!err)
         Repositories.push_front(std::move(info));
@@ -104,6 +110,7 @@ namespace
     RepositoryRuntimeInfo Release(char const* tagsPath);
     std::vector<RepositoryInfo> Filter(std::function<bool(RepositoryRuntimeInfo const&)>&& pred) const;
 
+    RepositoryFactoryFunction RepoFactory;
     RepositoriesCont Repositories;
   };
 
@@ -137,6 +144,12 @@ namespace Tags
 {
   std::unique_ptr<RepositoryStorage> RepositoryStorage::Create()
   {
-    return std::unique_ptr<RepositoryStorage>(new RepositoryStorageImpl);
+    auto defaultFactory = [](char const* tagsPath, RepositoryType type){ return Tags::Internal::Repository::Create(tagsPath, type == RepositoryType::Temporary); };
+    return Create(std::move(defaultFactory));
+  }
+
+  std::unique_ptr<RepositoryStorage> RepositoryStorage::Create(RepositoryFactoryFunction&& repoFactory)
+  {
+    return std::unique_ptr<RepositoryStorage>(new RepositoryStorageImpl(std::move(repoFactory)));
   }
 }

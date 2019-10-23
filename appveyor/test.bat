@@ -8,3 +8,4 @@ tag_view_tests.exe || exit /b 1
 composite_task_tests.exe || exit /b 1
 process_tests.exe mock_process.exe --gtest_filter=-Process.PassArgumentInSingleQuotes || exit /b 1
 execute_process_task.exe || exit /b 1
+tags_repository_storage_tests.exe || exit /b 1

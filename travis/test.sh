@@ -12,3 +12,4 @@ tests/tags_cache_tests
 tests/composite_task_tests
 tests/process_tests tests/mock_process
 tests/execute_process_task
+tests/tags_repository_storage_tests
