@@ -40,19 +40,9 @@ namespace
       return GetSorted([&name](Repository const& repo){ return repo.FindByName(name); });
     }
 
-    std::vector<TagInfo> GetByNamePart(const char* part) const override
-    {
-      return GetSorted([this, &part](Repository const& repo){ return repo.FindByName(part, Limit, CaseInsensitive); });
-    }
-
     std::vector<TagInfo> GetFiles(const char* path) const override
     {
       return GetSorted([&path](Repository const& repo){ return repo.FindFiles(path); });
-    }
-
-    std::vector<TagInfo> GetFilesByPart(const char* part) const override
-    {
-      return GetSorted([this, &part](Repository const& repo){ return repo.FindFiles(part, Limit); });
     }
 
     std::vector<TagInfo> GetClassMembers(const char* classname) const override
@@ -63,6 +53,12 @@ namespace
     std::vector<TagInfo> GetByFile(const char* file) const override
     {
       return GetSorted([&file](Repository const& repo){ return repo.FindByFile(file); } );
+    }
+
+    std::vector<TagInfo> GetByPart(const char* part, bool getFiles) const override
+    {
+      return getFiles ? GetSorted([this, &part](Repository const& repo){ return repo.FindFiles(part, Limit); })
+                      : GetSorted([this, &part](Repository const& repo){ return repo.FindByName(part, Limit, CaseInsensitive); });
     }
 
     std::vector<TagInfo> GetCachedTags(bool getFiles) const override
