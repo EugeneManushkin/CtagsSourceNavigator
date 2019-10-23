@@ -7,6 +7,8 @@
 
 namespace Tags
 {
+  class Selector;
+
   class TagsViewer
   {
   public:
@@ -14,7 +16,6 @@ namespace Tags
     virtual TagsView GetView(char const* filter, FormatTagFlag formatFlag) const = 0;
   };
 
-  std::unique_ptr<TagsViewer> GetPartiallyMatchedNamesViewer(std::string const& file, bool caseInsensitive, size_t maxResults, Tags::SortingOptions sortOptions);
-  std::unique_ptr<TagsViewer> GetPartiallyMatchedFilesViewer(std::string const& file, size_t maxResults);
+  std::unique_ptr<TagsViewer> GetPartiallyMatchedViewer(std::unique_ptr<Selector>&& selector, bool getFiles);
   std::unique_ptr<TagsViewer> GetFilterTagsViewer(std::vector<TagInfo>&& tags, bool caseInsensitive);
 }

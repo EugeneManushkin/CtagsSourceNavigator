@@ -1,4 +1,5 @@
 #include "tags.h"
+#include "tags_selector.h"
 #include "tags_viewer.h"
 
 #include <map>
@@ -14,29 +15,23 @@ namespace
   class PartiallyMatchViewer : public TagsViewer
   {
   public:
-    PartiallyMatchViewer(std::string const& file, bool getFiles, bool caseInsensitive, size_t maxResults, Tags::SortingOptions sortOptions)
-      : File(file)
+    PartiallyMatchViewer(std::unique_ptr<Tags::Selector>&& selector, bool getFiles)
+      : Selector(std::move(selector))
       , GetFiles(getFiles)
-      , CaseInsensitive(caseInsensitive)
-      , MaxResults(maxResults)
-      , SortOptions(sortOptions)
     {
     }
   
     TagsView GetView(char const* filter, FormatTagFlag) const override
     {
-      auto tags = !*filter ? GetCachedTags(File.c_str(), MaxResults, GetFiles) : std::vector<TagInfo>();
-      tags = !tags.empty() ? tags : GetFiles ? FindPartiallyMatchedFile(File.c_str(), filter, MaxResults) :
-                                               FindPartiallyMatchedTags(File.c_str(), filter, MaxResults, CaseInsensitive, SortOptions);
+      auto tags = !*filter ? Selector->GetCachedTags(GetFiles) : std::vector<TagInfo>();
+      tags = !tags.empty() ? tags : GetFiles ? Selector->GetFilesByPart(filter) :
+                                               Selector->GetByNamePart(filter);
       return TagsView(std::move(tags));
     }
   
   private:
-    std::string const File;
+    std::unique_ptr<Tags::Selector>&& Selector;
     bool GetFiles;
-    bool CaseInsensitive;
-    size_t MaxResults;
-    Tags::SortingOptions SortOptions;
   };
   
   bool GetRegex(char const* filter, bool caseInsensitive, std::regex& result)
@@ -95,14 +90,9 @@ namespace
 
 namespace Tags
 {
-  std::unique_ptr<TagsViewer> GetPartiallyMatchedNamesViewer(std::string const& file, bool caseInsensitive, size_t maxResults, SortingOptions sortOptions)
+  std::unique_ptr<TagsViewer> GetPartiallyMatchedViewer(std::unique_ptr<Selector>&& selector, bool getFiles)
   {
-    return std::unique_ptr<TagsViewer>(new PartiallyMatchViewer(file, false, caseInsensitive, maxResults, sortOptions));
-  }
-
-  std::unique_ptr<TagsViewer> GetPartiallyMatchedFilesViewer(std::string const& file, size_t maxResults)
-  {
-    return std::unique_ptr<TagsViewer>(new PartiallyMatchViewer(file, true, true, maxResults, SortingOptions::Default));
+    return std::unique_ptr<TagsViewer>(new PartiallyMatchViewer(std::move(selector), getFiles));
   }
 
   std::unique_ptr<TagsViewer> GetFilterTagsViewer(std::vector<TagInfo>&& tags, bool caseInsensitive)
