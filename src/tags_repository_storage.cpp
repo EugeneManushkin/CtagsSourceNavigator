@@ -44,7 +44,7 @@ namespace
   class RepositoryStorageImpl : public Tags::RepositoryStorage
   {
   public:
-    RepositoryStorageImpl::RepositoryStorageImpl(RepositoryFactoryFunction&& repoFactory)
+    RepositoryStorageImpl(RepositoryFactoryFunction&& repoFactory)
       : RepoFactory(std::move(repoFactory))
     {
     }
