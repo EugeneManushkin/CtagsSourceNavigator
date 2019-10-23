@@ -15,6 +15,7 @@ endfunction(add_test)
 add_test(TARGET "tags_tests" SRC "tags/*.cpp" LIB "tags" INCLUDES "")
 add_test(TARGET "tags_cache_tests" SRC "tags_cache/*.cpp" LIB "tags" INCLUDES "")
 add_test(TARGET "tag_view_tests" SRC "tag_view/*.cpp" LIB "tags" INCLUDES "")
+add_test(TARGET "tags_repository_storage_tests" SRC "tags_repository_storage/*.cpp" LIB "tags" INCLUDES "")
 
 #NOTE: this option is in fact disables overriding CMAKE_CXX_ flags inside googletest cmake scripts and allow to control runtime by global flags
 option(gtest_force_shared_crt "Use shared (DLL) run-time lib even when Google Test is built as static lib." ON)
