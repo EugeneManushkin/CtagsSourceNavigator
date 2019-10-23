@@ -108,8 +108,8 @@ struct TagFileInfo{
     , indexFile(filename + ".idx")
     , singlefilerepos(singleFileRepos)
     , IndexModTime(0)
-    , NamesCache(TagsInternal::CreateTagsCache(0))
-    , FilesCache(TagsInternal::CreateTagsCache(0))
+    , NamesCache(Tags::Internal::CreateTagsCache(0))
+    , FilesCache(Tags::Internal::CreateTagsCache(0))
   {
     if (filename.empty() || IsPathSeparator(filename.back()))
       throw std::logic_error("Invalid tags file name");
@@ -135,14 +135,14 @@ struct TagFileInfo{
 
   void CacheTag(TagInfo const& tag, size_t cacheSize)
   {
-    TagsInternal::TagsCache& cache = tag.name.empty() ? *FilesCache : *NamesCache;
+    Tags::Internal::TagsCache& cache = tag.name.empty() ? *FilesCache : *NamesCache;
     cache.SetCapacity(cacheSize);
     cache.Insert(tag.name.empty() ? MakeFileTag(-1)(TagInfo(tag)) : tag);
   }
 
   void EraseCachedTag(TagInfo const& tag)
   {
-    TagsInternal::TagsCache& cache = tag.name.empty() ? *FilesCache : *NamesCache;
+    Tags::Internal::TagsCache& cache = tag.name.empty() ? *FilesCache : *NamesCache;
     cache.Erase(tag);
   }
 
@@ -183,8 +183,8 @@ private:
   bool singlefilerepos;
   bool fullpathrepo;
   time_t IndexModTime;
-  std::shared_ptr<TagsInternal::TagsCache> NamesCache;
-  std::shared_ptr<TagsInternal::TagsCache> FilesCache;
+  std::shared_ptr<Tags::Internal::TagsCache> NamesCache;
+  std::shared_ptr<Tags::Internal::TagsCache> FilesCache;
   OffsetCont NamesOffsets;
 };
 
@@ -352,7 +352,7 @@ static void WriteTagsStat(FILE* f, std::vector<std::pair<TagInfo, size_t>> const
   }
 }
 
-static bool ReadTagsCache(FILE* f, TagsInternal::TagsCache& cache, std::string const& tagsFile)
+static bool ReadTagsCache(FILE* f, Tags::Internal::TagsCache& cache, std::string const& tagsFile)
 {
   size_t const capacityThreshold = 500;
   size_t sz = 0;
@@ -952,13 +952,13 @@ bool TagFileInfo::LoadCache()
 
   if (!IsEndOfFile(&*f))
   {
-    auto namesCache = TagsInternal::CreateTagsCache(0);
-    auto filesCache = TagsInternal::CreateTagsCache(0);
+    auto namesCache = Tags::Internal::CreateTagsCache(0);
+    auto filesCache = Tags::Internal::CreateTagsCache(0);
     auto tagsCacheBegins = ftell(&*f);
     if (!ReadTagsCache(&*f, *namesCache, filename) || !ReadTagsCache(&*f, *filesCache, filename))
     {
-      NamesCache = TagsInternal::CreateTagsCache(0);
-      FilesCache = TagsInternal::CreateTagsCache(0);
+      NamesCache = Tags::Internal::CreateTagsCache(0);
+      FilesCache = Tags::Internal::CreateTagsCache(0);
       Truncate(&*f, tagsCacheBegins);
     }
     else

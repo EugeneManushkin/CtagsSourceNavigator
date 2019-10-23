@@ -5,7 +5,9 @@
 #include <memory>
 #include <vector>
 
-namespace TagsInternal
+namespace Tags
+{
+namespace Internal
 {
   class TagsCache
   {
@@ -19,4 +21,5 @@ namespace TagsInternal
   };
 
   std::shared_ptr<TagsCache> CreateTagsCache(size_t);
+}
 }

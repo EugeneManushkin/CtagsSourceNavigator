@@ -1,7 +1,9 @@
 #include <gtest/gtest.h>
 #include <tags_cache.h>
 
-namespace TagsInternal
+namespace Tags
+{
+namespace Internal
 {
   namespace Tests
   {
@@ -279,6 +281,7 @@ namespace TagsInternal
       ASSERT_TRUE(Equal(SecondTag, TagAt(1, sut)));
     }
   }
+}
 }
 
 int main(int argc, char* argv[])

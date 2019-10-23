@@ -20,7 +20,7 @@ std::bitset<256> GetCharsMap(std::string const& str)
 
 namespace
 {
-  using TagsInternal::FormatTagFlag;
+  using Tags::FormatTagFlag;
   std::string const LineNumberCaption = "Line";
 
   static std::string::iterator ReplaceRegexSpecialChars(std::string::iterator begin, std::string::iterator end)
@@ -116,7 +116,7 @@ namespace
   std::array<size_t(*)(TagInfo const&, FormatTagFlag), 3> const GetColumnLengthCallbacks = {GetLeftColumnLen, GetDeclarationColumnLength, GetFileColumnLength};
 }
 
-namespace TagsInternal
+namespace Tags
 {
   TagView::TagView(TagInfo const* tag)
     : Tag(tag)
