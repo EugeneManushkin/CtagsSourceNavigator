@@ -69,14 +69,9 @@ namespace
       return Filter([](RepositoryRuntimeInfo const&){ return true; });
     }
 
-    void RemoveByTags(char const* tagsPath) override
+    void Remove(char const* tagsPath) override
     {
       Repositories.remove_if([&tagsPath](RepositoryRuntimeInfo const& info) { return !info.Repository->CompareTagsPath(tagsPath); });
-    }
-
-    void RemoveByFile(char const* currentFile) override
-    {
-      Repositories.remove_if([&currentFile](RepositoryRuntimeInfo const& info) { return info.Type == RepositoryType::Temporary && info.Repository->Belongs(currentFile); });
     }
 
     void CacheTag(TagInfo const& tag, size_t cacheSize, bool flush) override
