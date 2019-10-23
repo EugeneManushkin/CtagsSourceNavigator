@@ -1385,7 +1385,7 @@ std::vector<std::string> GetLoadedTags(const char* file)
 
 void UnloadTags(const char* tagsFile)
 {
-  Storage->RemoveByTags(tagsFile);
+  Storage->Remove(tagsFile);
 }
 
 void UnloadAllTags()
