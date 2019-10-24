@@ -191,6 +191,11 @@ private:
 using Tags::SortingOptions;
 auto Storage = Tags::RepositoryStorage::Create();
 
+std::unique_ptr<Tags::Selector> GetSelector(char const* file, bool caseInsensitive, Tags::SortingOptions sortOptions, size_t maxCount)
+{
+  return Storage->GetSelector(file, caseInsensitive, sortOptions, maxCount);
+}
+
 static std::string JoinPath(std::string const& dirPath, std::string const& name)
 {
   return dirPath.empty() || IsPathSeparator(dirPath.back()) ? dirPath + name : dirPath + std::string("\\") + name;
@@ -1315,12 +1320,12 @@ std::vector<TagInfo> SortTags(std::vector<TagInfo>&& tags, char const* file, Sor
 
 std::vector<TagInfo> Find(const char* name, const char* file, SortingOptions sortOptions)
 {
-  return Storage->GetSelector(file, false, sortOptions)->GetByName(name);
+  return GetSelector(file, false, sortOptions)->GetByName(name);
 }
 
 std::vector<TagInfo> FindPartiallyMatchedTags(const char* file, const char* part, size_t maxCount, bool caseInsensitive, SortingOptions sortOptions)
 {
-  return Storage->GetSelector(file, caseInsensitive, sortOptions, maxCount)->GetByPart(part, false);
+  return GetSelector(file, caseInsensitive, sortOptions, maxCount)->GetByPart(part, false);
 }
 
 static std::tuple<std::string, std::string, int> GetNamePathLine(char const* path)
@@ -1348,22 +1353,22 @@ static std::tuple<std::string, std::string, int> GetNamePathLine(char const* pat
 
 std::vector<TagInfo> FindFile(const char* file, const char* path)
 {
-  return Storage->GetSelector(file, true, SortingOptions::Default)->GetFiles(path);
+  return GetSelector(file, true, SortingOptions::Default)->GetFiles(path);
 }
 
 std::vector<TagInfo> FindPartiallyMatchedFile(const char* file, const char* part, size_t maxCount)
 {
-  return Storage->GetSelector(file, true, SortingOptions::Default, maxCount)->GetByPart(part, true);
+  return GetSelector(file, true, SortingOptions::Default, maxCount)->GetByPart(part, true);
 }
 
 std::vector<TagInfo> FindClassMembers(const char* file, const char* classname, SortingOptions sortOptions)
 {
-  return Storage->GetSelector(file, false, sortOptions)->GetClassMembers(classname);
+  return GetSelector(file, false, sortOptions)->GetClassMembers(classname);
 }
 
 std::vector<TagInfo> FindFileSymbols(const char* file)
 {
-  return Storage->GetSelector(file, false, SortingOptions::Default)->GetByFile(file);
+  return GetSelector(file, false, SortingOptions::Default)->GetByFile(file);
 }
 
 static std::vector<std::string> ToTagsPaths(std::vector<Tags::RepositoryInfo> &&infos)
@@ -1468,7 +1473,7 @@ void EraseCachedTag(TagInfo const& tag, bool flush)
 
 std::vector<TagInfo> GetCachedTags(const char* file, size_t limit, bool getFiles)
 {
-  return Storage->GetSelector(file, false, SortingOptions::Default, limit)->GetCachedTags(getFiles);
+  return GetSelector(file, false, SortingOptions::Default, limit)->GetCachedTags(getFiles);
 }
 
 class TagMatch : public NameMatch

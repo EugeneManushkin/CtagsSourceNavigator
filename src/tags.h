@@ -23,9 +23,16 @@
 #include "tag_info.h"
 #include "tags_sorting_options.h"
 
+#include <memory>
 #include <string>
 #include <vector>
 
+namespace Tags
+{
+  class Selector;
+}
+
+std::unique_ptr<Tags::Selector> GetSelector(char const* file, bool caseInsensitive, Tags::SortingOptions sortOptions, size_t maxCount = 0);
 int Load(const char* filename, bool singleFileRepos, size_t& symbolsLoaded);
 void UnloadTags(const char* tagsFile);
 void UnloadAllTags();
