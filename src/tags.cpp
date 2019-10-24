@@ -1385,7 +1385,7 @@ std::vector<std::string> GetFiles()
 
 std::vector<std::string> GetLoadedTags(const char* file)
 {
-  return ToTagsPaths(Storage->GetInvolved(file));
+  return ToTagsPaths(Storage->GetOwners(file));
 }
 
 void UnloadTags(const char* tagsFile)
