@@ -38,6 +38,7 @@
 #define _FAR_NO_NAMELESS_UNIONS
 #include <plugin_sdk/plugin.hpp>
 #include "tags.h"
+#include "tags_selector.h"
 #include "tags_viewer.h"
 #include "text.h"
 #include "resource.h"
@@ -1178,17 +1179,19 @@ bool IsCtrlDel(FarKey const& key)
   return key.VirtualKeyCode == VK_DELETE && (key.ControlKeyState == LEFT_CTRL_PRESSED || key.ControlKeyState == RIGHT_CTRL_PRESSED);
 }
 
-inline int GetSortOptions(Config const& config)
+using Tags::SortingOptions;
+
+inline SortingOptions GetSortOptions(Config const& config)
 {
-  return SortOptions::SortByName | (config.cur_file_first ? SortOptions::CurFileFirst : 0);
+  return SortingOptions::SortByName | (config.cur_file_first ? SortingOptions::CurFileFirst : SortingOptions::Default);
 }
 
-using TagsInternal::FormatTagFlag;
+using Tags::FormatTagFlag;
 
-static std::vector<WideString> GetMenuStrings(TagsInternal::TagsView const& tagsView, size_t menuWidth, FormatTagFlag formatFlag)
+static std::vector<WideString> GetMenuStrings(Tags::TagsView const& tagsView, size_t menuWidth, FormatTagFlag formatFlag)
 {
   std::string const separator = " ";
-  auto colLengths = TagsInternal::ShrinkColumnLengths(tagsView.GetMaxColumnLengths(formatFlag), separator.length(), menuWidth);
+  auto colLengths = Tags::ShrinkColumnLengths(tagsView.GetMaxColumnLengths(formatFlag), separator.length(), menuWidth);
   std::vector<WideString> result;
   for (size_t i = 0; i < tagsView.Size(); result.push_back(ToString(tagsView[i].GetRaw(separator, formatFlag, colLengths))), ++i);
   return std::move(result);
@@ -1196,7 +1199,7 @@ static std::vector<WideString> GetMenuStrings(TagsInternal::TagsView const& tags
 
 static void OpenInNewWindow(TagInfo const& tag);
 
-using TagsInternal::TagsViewer;
+using Tags::TagsViewer;
 
 static bool LookupTagsMenu(TagsViewer const& viewer, TagInfo& tag, FormatTagFlag formatFlag = FormatTagFlag::Default, intptr_t separatorPos = -1)
 {
@@ -2029,24 +2032,29 @@ static WideString ReindexRepository(WideString const& fileName)
   return tagsFile;
 }
 
-static void Lookup(TagsViewer const& viewer, WideString const& file, bool setPanelDir, bool createTempTags)
+static std::unique_ptr<Tags::Selector> GetSelector(std::string const& file)
+{
+  return ::GetSelector(file.c_str(), !config.casesens, GetSortOptions(config), config.max_results);
+}
+
+static void Lookup(WideString const& file, bool getFiles, bool setPanelDir, bool createTempTags)
 {
   if (!EnsureTagsLoaded(file, createTempTags))
     return;
 
   TagInfo selectedTag;
-  if (LookupTagsMenu(viewer, selectedTag))
+  if (LookupTagsMenu(*Tags::GetPartiallyMatchedViewer(GetSelector(ToStdString(file)), getFiles), selectedTag))
     NavigateTo(&selectedTag, setPanelDir);
 }
 
 static void LookupSymbol(WideString const& file, bool setPanelDir, bool createTempTags)
 {
-  Lookup(*TagsInternal::GetPartiallyMatchedNamesViewer(ToStdString(file), !config.casesens, config.max_results, GetSortOptions(config)), file, setPanelDir, createTempTags);
+  Lookup(file, false, setPanelDir, createTempTags);
 }
 
 static void LookupFile(WideString const& file, bool setPanelDir)
 {
-  Lookup(*TagsInternal::GetPartiallyMatchedFilesViewer(ToStdString(file), config.max_results), file, setPanelDir, false);
+  Lookup(file, true, setPanelDir, false);
 }
 
 static void NavigateToTag(std::vector<TagInfo>&& ta, intptr_t separatorPos, FormatTagFlag formatFlag = FormatTagFlag::Default)
@@ -2055,7 +2063,7 @@ static void NavigateToTag(std::vector<TagInfo>&& ta, intptr_t separatorPos, Form
     throw Error(MNothingFound);
 
   TagInfo tag;
-  if (LookupTagsMenu(*TagsInternal::GetFilterTagsViewer(std::move(ta), !config.casesens), tag, formatFlag, separatorPos))
+  if (LookupTagsMenu(*Tags::GetFilterTagsViewer(std::move(ta), !config.casesens), tag, formatFlag, separatorPos))
     NavigateTo(&tag);
 }
 
@@ -2121,14 +2129,14 @@ static void CompleteName(char const* fileName, EditorInfo const& ei)
   if(word.empty())
     return;
 
-  auto tags = FindPartiallyMatchedTags(fileName, word.c_str(), 0, !config.casesens, SortOptions::DoNotSort);
+  auto tags = FindPartiallyMatchedTags(fileName, word.c_str(), 0, !config.casesens, SortingOptions::DoNotSort);
   if(tags.empty())
     throw Error(MNothingFound);
 
   std::sort(tags.begin(), tags.end(), [](TagInfo const& left, TagInfo const& right) {return left.name < right.name;});
   tags.erase(std::unique(tags.begin(), tags.end(), [](TagInfo const& left, TagInfo const& right) {return left.name == right.name;}), tags.end());
   TagInfo tag = tags.back();
-  if (tags.size() > 1 && !LookupTagsMenu(*TagsInternal::GetFilterTagsViewer(std::move(tags), !config.casesens), tag, FormatTagFlag::DisplayOnlyName))
+  if (tags.size() > 1 && !LookupTagsMenu(*Tags::GetFilterTagsViewer(std::move(tags), !config.casesens), tag, FormatTagFlag::DisplayOnlyName))
     return;
 
   EditorGetString egs = {sizeof(EditorGetString)};
@@ -2231,8 +2239,8 @@ HANDLE WINAPI OpenW(const struct OpenInfo *info)
                       L"",buf,sizeof(buf)/sizeof(buf[0]),nullptr,0))return nullptr;
           word=ToStdString(buf);
         }
-        auto options = GetSortOptions(config) & ~SortOptions::SortByName;
-        options |= config.sort_class_members_by_name ? SortOptions::SortByName : 0;
+        auto options = GetSortOptions(config) & static_cast<SortingOptions>(~static_cast<int>(SortingOptions::SortByName));
+        options = options | (config.sort_class_members_by_name ? SortingOptions::SortByName : SortingOptions::Default);
         SafeCall([&]{ NavigateToTag(FindClassMembers(ToStdString(fileName).c_str(), word.c_str(), options), FormatTagFlag::Default); });
       }break;
       case miLookupSymbol:
