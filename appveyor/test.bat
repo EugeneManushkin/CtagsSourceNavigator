@@ -5,4 +5,3 @@ tags_tests.exe || exit /b 1
 tags_tests.exe --CheckIdxFiles || exit /b 1
 tags_cache_tests.exe || exit /b 1
 tag_view_tests.exe || exit /b 1
-composite_task_tests.exe || exit /b 1
