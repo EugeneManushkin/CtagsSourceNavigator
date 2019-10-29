@@ -1304,9 +1304,26 @@ static std::string GetWord(int offset=0)
 }
 
 //TODO: remove
-static bool IsCppInclude(std::string const& str)
+static std::string GetCppInclude(std::string const& str)
 {
-  return std::regex_match(str, std::regex("^\\s*#\\s*include.+"));
+  std::smatch sm;
+  return std::regex_match(str, sm, std::regex("^\\s*#\\s*include\\s*<(.+)>\\s*")) ? sm[1] : std::string();
+}
+
+static std::string GetQuotedString(std::string const& line, size_t pos)
+{
+  auto IsQuotes = [](char c) { return c == '"' || c == '\''; };
+  auto middle = line.begin() + std::min(pos, line.size());
+  auto left = line.begin();
+  for (auto right = left == line.end() ? left : left + 1; left < middle && right != line.end(); ++right)
+  {
+    if (IsQuotes(*right) && *left == *right && left < middle && middle < right)
+      return std::string(left + 1, right);
+
+    left = !IsQuotes(*left) || (left != right - 1 && *left == *(right - 1)) ? right : left;
+  }
+
+  return std::string();
 }
 
 static std::string GetStringLiteral()
@@ -1319,15 +1336,10 @@ static std::string GetStringLiteral()
      return std::string();
 
   auto pos = static_cast<size_t>(ei.CurPos < 0 ? 0 : ei.CurPos);
-  std::string line = ToStdString(egs.StringText);
-  auto closeBracketPos = line.find_first_of("\"'>", pos + 1);
-  if (closeBracketPos == std::string::npos)
-    return std::string();
-
-  char openBracket = line[closeBracketPos] == '>' ? '<' : line[closeBracketPos];
-  auto openBraketPos = line.rfind(openBracket, pos);
-//TODO: remove language depending logic
-  return openBraketPos != std::string::npos && openBraketPos < closeBracketPos && (openBracket != '<' || IsCppInclude(line)) ? line.substr(openBraketPos + 1, closeBracketPos - openBraketPos - 1) : std::string();
+  auto line = ToStdString(egs.StringText);
+  auto result = GetQuotedString(line, pos);
+//TODO: remove language specific logic
+  return !result.empty() ? result : GetCppInclude(line);
 }
 
 /*static const char* GetType(char type)
