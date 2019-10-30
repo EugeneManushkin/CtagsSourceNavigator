@@ -52,8 +52,8 @@ namespace
   class FilterTagsViewer : public TagsViewer
   {
   public:
-    FilterTagsViewer(std::vector<TagInfo>&& tags, bool caseInsensitive)
-      : Tags(std::move(tags))
+    FilterTagsViewer(TagsView const& view, bool caseInsensitive)
+      : View(view)
       , CaseInsensitive(caseInsensitive)
     {
     }
@@ -64,17 +64,17 @@ namespace
       std::regex regexFilter;
       if (!*filter || !GetRegex(filter, CaseInsensitive, regexFilter))
       {
-        for (auto const& tag : Tags) result.PushBack(&tag);
+        for (size_t i = 0; i < View.Size(); ++i) result.PushBack(View[i].GetTag());
         return std::move(result);
       }
   
       std::multimap<std::string::difference_type, TagInfo const*> idx;
-      for (auto const& tag : Tags)
+      for (size_t i = 0; i < View.Size(); ++i)
       {
         std::smatch matchResult;
-        auto str = TagView(&tag).GetRaw(" ", formatFlag);
+        auto str = View[i].GetRaw(" ", formatFlag);
         if (std::regex_search(str, matchResult, regexFilter) && !matchResult.empty())
-          idx.insert(std::make_pair(matchResult.position(), &tag));
+          idx.insert(std::make_pair(matchResult.position(), View[i].GetTag()));
       }
 
       for (auto const& v : idx) result.PushBack(v.second);
@@ -82,7 +82,7 @@ namespace
     }
 
   private:
-    std::vector<TagInfo> Tags;
+    TagsView const& View;
     bool CaseInsensitive;
   };
 }
@@ -94,8 +94,8 @@ namespace Tags
     return std::unique_ptr<TagsViewer>(new PartiallyMatchViewer(std::move(selector), getFiles));
   }
 
-  std::unique_ptr<TagsViewer> GetFilterTagsViewer(std::vector<TagInfo>&& tags, bool caseInsensitive)
+  std::unique_ptr<TagsViewer> GetFilterTagsViewer(TagsView const& view, bool caseInsensitive)
   {
-    return std::unique_ptr<TagsViewer>(new FilterTagsViewer(std::move(tags), caseInsensitive));
+    return std::unique_ptr<TagsViewer>(new FilterTagsViewer(view, caseInsensitive));
   }
 }
