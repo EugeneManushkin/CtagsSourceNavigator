@@ -1133,7 +1133,7 @@ HKL GetAsciiLayout()
 
 inline std::string GetFilterKeys()
 {
-  return "1234567890abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_$\\\x08-_=|;':\",./<>?[]()+*&^%#@!~";
+  return "1234567890abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_$\\\x08\x09-_=|;':\",./<>?[]()+*&^%#@!~";
 }
 
 std::vector<FarKey> GetFarKeys(std::string const& filterkeys)
@@ -1157,6 +1157,8 @@ std::vector<FarKey> GetFarKeys(std::string const& filterkeys)
   fk.push_back({VK_F4});
   fk.push_back({VK_DELETE, LEFT_CTRL_PRESSED});
   fk.push_back({VK_DELETE, RIGHT_CTRL_PRESSED});
+  fk.push_back({0x5A, LEFT_CTRL_PRESSED});
+  fk.push_back({0x5A, RIGHT_CTRL_PRESSED});
   fk.push_back(FarKey());
   return fk;
 }
@@ -1177,6 +1179,12 @@ bool IsF4(FarKey const& key)
 bool IsCtrlDel(FarKey const& key)
 {
   return key.VirtualKeyCode == VK_DELETE && (key.ControlKeyState == LEFT_CTRL_PRESSED || key.ControlKeyState == RIGHT_CTRL_PRESSED);
+}
+
+bool IsCtrlZ(FarKey const& key)
+{
+  return (key.VirtualKeyCode == 0x5A && key.ControlKeyState == LEFT_CTRL_PRESSED)
+      || (key.VirtualKeyCode == 0x5A && key.ControlKeyState == RIGHT_CTRL_PRESSED);
 }
 
 using Tags::SortingOptions;
@@ -1201,7 +1209,20 @@ static void OpenInNewWindow(TagInfo const& tag);
 
 using Tags::TagsViewer;
 
-static bool LookupTagsMenu(TagsViewer const& viewer, TagInfo& tag, FormatTagFlag formatFlag = FormatTagFlag::Default, intptr_t separatorPos = -1)
+enum class LookupResult
+{
+  Ok = 0,
+  Cancel,
+  Exit,
+};
+
+static std::string JoinFilters(std::string const& left, std::string const& right, bool neverEmpty = false)
+{
+  auto result = (left.empty() ? left : left + "|") + right;
+  return result.empty() && neverEmpty ? "\"\"" : std::move(result);
+}
+
+static LookupResult LookupTagsMenu(TagsViewer const& viewer, TagInfo& tag, FormatTagFlag formatFlag = FormatTagFlag::Default, intptr_t separatorPos = -1, std::string&& prevFilter = "")
 {
   std::string filter;
   auto title = GetMsg(MSelectSymbol);
@@ -1226,24 +1247,24 @@ static bool LookupTagsMenu(TagsViewer const& viewer, TagInfo& tag, FormatTagFlag
       menu.insert(menu.begin() + separatorPos, FarMenuItem({MIF_SEPARATOR}));
 
     intptr_t bkey = -1;
-    WideString ftitle = !filter.empty() ? L"[Filter: " + ToString(filter) + L"]" : WideString(L" [") + title + L"]";
-    WideString bottomText = L"";
+    auto displayFilter = JoinFilters(prevFilter, filter);
+    WideString ftitle = !displayFilter.empty() ? L"[Filter: " + ToString(displayFilter) + L"]" : WideString(L" [") + title + L"]";
     selected = -1;
     auto res = I.Menu(&PluginGuid, &CtagsMenuGuid,-1,-1,0,FMENU_WRAPMODE|FMENU_SHOWAMPERSAND,ftitle.c_str(),
-                     bottomText.c_str(),L"content",&fk[0],&bkey, menu.empty() ? nullptr : &menu[0],menu.size());
-    if(res==-1 && bkey==-1)return false;
+                     GetMsg(MLookupMenuBottom),L"content",&fk[0],&bkey, menu.empty() ? nullptr : &menu[0],menu.size());
+    if(res==-1 && bkey==-1) return LookupResult::Cancel;
     auto selectedTag = res >= 0 ? tagsView[menu[res].UserData].GetTag() : nullptr;
     if(bkey==-1)
     {
       tag = *selectedTag;
-      return true;
+      return LookupResult::Ok;
     }
     if (IsCtrlC(fk[bkey]))
     {
       if (selectedTag)
         SetClipboardText(selectedTag->name.empty() ? selectedTag->file : selectedTag->name);
 
-      return false;
+      return LookupResult::Exit;
     }
     if (IsF4(fk[bkey]))
     {
@@ -1256,20 +1277,36 @@ static bool LookupTagsMenu(TagsViewer const& viewer, TagInfo& tag, FormatTagFlag
       EraseCachedTag(*selectedTag, FlushTagsCache);
       continue;
     }
+    if (IsCtrlZ(fk[bkey]))
+    {
+      return LookupResult::Exit;
+    }
     if (static_cast<size_t>(bkey) >= filterkeys.length())
     {
       filter += GetClipboardText();
       continue;
     }
     int key=filterkeys[bkey];
-    if(key==8)
+    if(key == VK_BACK)
     {
+      if (!prevFilter.empty() && filter.empty())
+        return LookupResult::Cancel;
+
       filter.resize(filter.empty() ? 0 : filter.length() - 1);
       continue;
     }
+    if(key == VK_TAB)
+    {
+      LookupResult result = LookupResult::Ok;
+      if ((!prevFilter.empty() && filter.empty())
+       || (result = LookupTagsMenu(*Tags::GetFilterTagsViewer(tagsView, !config.casesens), tag, formatFlag, -1, JoinFilters(prevFilter, filter, true))) == LookupResult::Cancel)
+        continue;
+
+      return result;
+    }
     filter+=(char)key;
   }
-  return false;
+  return LookupResult::Cancel;
 }
 
 void WINAPI SetStartupInfoW(const struct PluginStartupInfo *Info)
@@ -2055,7 +2092,7 @@ static void Lookup(WideString const& file, bool getFiles, bool setPanelDir, bool
     return;
 
   TagInfo selectedTag;
-  if (LookupTagsMenu(*Tags::GetPartiallyMatchedViewer(GetSelector(ToStdString(file)), getFiles), selectedTag))
+  if (LookupTagsMenu(*Tags::GetPartiallyMatchedViewer(GetSelector(ToStdString(file)), getFiles), selectedTag) == LookupResult::Ok)
     NavigateTo(&selectedTag, setPanelDir);
 }
 
@@ -2075,7 +2112,7 @@ static void NavigateToTag(std::vector<TagInfo>&& ta, intptr_t separatorPos, Form
     throw Error(MNothingFound);
 
   TagInfo tag;
-  if (LookupTagsMenu(*Tags::GetFilterTagsViewer(std::move(ta), !config.casesens), tag, formatFlag, separatorPos))
+  if (LookupTagsMenu(*Tags::GetFilterTagsViewer(Tags::TagsView(std::move(ta)), !config.casesens), tag, formatFlag, separatorPos) == LookupResult::Ok)
     NavigateTo(&tag);
 }
 
@@ -2148,7 +2185,7 @@ static void CompleteName(char const* fileName, EditorInfo const& ei)
   std::sort(tags.begin(), tags.end(), [](TagInfo const& left, TagInfo const& right) {return left.name < right.name;});
   tags.erase(std::unique(tags.begin(), tags.end(), [](TagInfo const& left, TagInfo const& right) {return left.name == right.name;}), tags.end());
   TagInfo tag = tags.back();
-  if (tags.size() > 1 && !LookupTagsMenu(*Tags::GetFilterTagsViewer(std::move(tags), !config.casesens), tag, FormatTagFlag::DisplayOnlyName))
+  if (tags.size() > 1 && LookupTagsMenu(*Tags::GetFilterTagsViewer(Tags::TagsView(std::move(tags)), !config.casesens), tag, FormatTagFlag::DisplayOnlyName) != LookupResult::Ok)
     return;
 
   EditorGetString egs = {sizeof(EditorGetString)};

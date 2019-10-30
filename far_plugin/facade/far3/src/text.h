@@ -67,4 +67,5 @@ enum{
   MNavigationHistory,
   MNavigationHistoryMenuTitle,
   MUseBuiltInCtags,
+  MLookupMenuBottom,
 };
