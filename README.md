@@ -19,6 +19,11 @@ This is a [Far Manager](https://www.farmanager.com/) plugin for browsing source 
 + Reindexing repository.
 + Hotkeys macro
 ## What's new 
+### 2.1.0.47
++ Supported filtering search results with in any selecting menu. You may also filter filtered results. Press 'Tab' key to enter filtering mode, 'Esc' to return to previous filter and 'Ctrl+Z' to close menu (#54)
++ Improved parsing string literals for navigation (#46)
++ Supported line numbers in round brackets like ```src\plugin.cpp(1323)``` or ```src\plugin.cpp(1323):``` (#47)
++ Included regular linux build
 ### 2.1.0.42
 + Ctags utility installation is no longer required! Latest [Universal Ctags](https://ctags.io/) utility is included in plugins archive (#42)
 + Most recently searched names and files are shown in lookup menus. List of recently searched names and files is kept for each repository and synchronized accross multiple Far Manager instances (#33)
@@ -30,9 +35,6 @@ This is a [Far Manager](https://www.farmanager.com/) plugin for browsing source 
 + Improved navigation: implemented 'Go forward' (Ctrl+D hotkey) command. Update your hotkeys macro
 + Plugin is built with Appveyor continuous integration service
 + Fixed bugs
-### 2.1.0.31
-+ Supported shadow indexing of currently edited file
-+ Plugin configuration dialog is available in main menu and editor menu
 ## Installation
 1. Download latest release from [release page](https://github.com/EugeneManushkin/CtagsSourceNavigator/releases)
 2. Extract downloaded archive to FarManager/Plugins folder
@@ -74,7 +76,10 @@ This option works in plugin main menu and in editor menu. Press **F11->Ctags Sou
 #### 11. Search indexed file (Ctrl+Shift+R)
 This feature is available from main and editor menu: press **F11->Ctags Source Navigator->Search file by name** and begin typing a file name you want to open. You may specify a partial path to file with a filename to filter search result by location: ```tests\tags_cache\main.cpp```.
 You may also specify a line number after a colon symbol like ```my_file.h:1234```
-#### 12. Reindex your repository 
+#### 12. Filter results in any select menu (Tab - new filter, Esc - return to previous filter, Ctrl+Z - close menu)
+You may filter any results and even filter your filtered results in any select menu. Press **Tab** to begin new filter, **Esc** or **Backspace** to return to previous filter and **Ctrl+Z** to close menu.
+Regular expressions are supported.
+#### 13. Reindex your repository 
 You may reindex your repository if current code database is outdated. Press **F11->Ctags Source Navigator->Reindex repository** in main menu or in editor menu and then plugin will suggest you to select one of the tags files which you may reindex. **If something goes wrong while reindexing (e.g. reindexing is canceled) plugin will rollback on old tags file.**
 ## Default macro hotkeys (available if installed)
 ### Editor hotkeys:
