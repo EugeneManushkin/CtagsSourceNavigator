@@ -193,13 +193,15 @@ namespace Tags
 namespace TESTS
 {
   int const LoadSuccess = 0;
+  size_t const DefaultMaxCount = 1;
+  bool const Unlimited = true;
 
   class Tags : public ::testing::Test
   {
   protected:
     std::unique_ptr<RepositoryStorage> Storage;
 
-    std::unique_ptr<Selector> GetSelector(char const* file, bool caseInsensitive, SortingOptions sortOptions, size_t maxCount = 0)
+    std::unique_ptr<Selector> GetSelector(char const* file, bool caseInsensitive, SortingOptions sortOptions = SortingOptions::Default, size_t maxCount = DefaultMaxCount)
     {
       return Storage->GetSelector(file, caseInsensitive, sortOptions, maxCount);
     }
@@ -209,19 +211,9 @@ namespace TESTS
       return GetSelector(file, false, sortOptions)->GetByName(name);
     }
 
-    std::vector<TagInfo> FindPartiallyMatchedTags(const char* file, const char* part, size_t maxCount, bool caseInsensitive, SortingOptions sortOptions = SortingOptions::Default)
-    {
-      return GetSelector(file, caseInsensitive, sortOptions, maxCount)->GetByPart(part, false);
-    }
-
     std::vector<TagInfo> FindFile(const char* file, const char* path)
     {
-      return GetSelector(file, true, SortingOptions::Default)->GetFiles(path);
-    }
-
-    std::vector<TagInfo> FindPartiallyMatchedFile(const char* file, const char* part, size_t maxCount)
-    {
-      return GetSelector(file, true, SortingOptions::Default, maxCount)->GetByPart(part, true);
+      return GetSelector(file, true)->GetFiles(path);
     }
 
     std::vector<TagInfo> FindClassMembers(const char* file, const char* classname, SortingOptions sortOptions = SortingOptions::Default)
@@ -231,7 +223,7 @@ namespace TESTS
 
     std::vector<TagInfo> FindFileSymbols(const char* file)
     {
-      return GetSelector(file, false, SortingOptions::Default)->GetByFile(file);
+      return GetSelector(file, false)->GetByFile(file);
     }
 
     std::vector<std::string> GetLoadedTags(const char* file)
@@ -304,7 +296,7 @@ namespace TESTS
       std::string part = name + "zzzz";
       while (!part.empty())
       {
-        auto tags = FindPartiallyMatchedTags(metaTag.FullPath.c_str(), part.c_str(), 0, caseInsensitive);
+        auto tags = GetSelector(metaTag.FullPath.c_str(), caseInsensitive)->GetByPart(part.c_str(), false, Unlimited);
         ASSERT_EQ(part.length() > metaTag.Name.length(), tags.empty()) << "Part: " << part;
         ASSERT_EQ(part.length() > metaTag.Name.length(), std::find(tags.begin(), tags.end(), metaTag) == tags.end()) << "Part: " << part;
         part.resize(part.length() - 1);
@@ -326,7 +318,7 @@ namespace TESTS
       std::string part = fileName + "extra";
       while (!part.empty())
       {
-        auto paths = ToStrings(FindPartiallyMatchedFile(metaTag.FullPath.c_str(), part.c_str(), 0));
+        auto paths = ToStrings(GetSelector(metaTag.FullPath.c_str(), true)->GetByPart(part.c_str(), true, Unlimited));
         ASSERT_EQ(part.length() > fileName.length(), paths.empty()) << "Part: " << part;
         ASSERT_EQ(part.length() > fileName.length(), std::find_if(paths.begin(), paths.end(), std::bind(HasFilenamePart, std::placeholders::_1, part)) == paths.end()) << "Part: " << part;
         part.resize(part.length() - 1);
@@ -398,7 +390,7 @@ namespace TESTS
 
     void TestRepeatedFile(std::string const& reposFile, std::string const& filePart, size_t maxCount, size_t expectedCount)
     {
-      auto paths = ToStrings(FindPartiallyMatchedFile(reposFile.c_str(), filePart.c_str(), maxCount));
+      auto paths = ToStrings(GetSelector(reposFile.c_str(), true, SortingOptions::Default, !maxCount ? DefaultMaxCount : maxCount)->GetByPart(filePart.c_str(), true, !maxCount));
       ASSERT_EQ(expectedCount, paths.size());
       if (filePart.empty())
         return;
