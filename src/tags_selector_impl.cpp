@@ -33,6 +33,8 @@ namespace
       , SortOptions(sortOptions)
       , Limit(limit)
     {
+      if (!Limit)
+        throw std::invalid_argument("Limit parameter must be greated zero");
     }
 
     std::vector<TagInfo> GetByName(const char* name) const override
@@ -55,10 +57,10 @@ namespace
       return GetSorted([&file](Repository const& repo){ return repo.FindByFile(file); } );
     }
 
-    std::vector<TagInfo> GetByPart(const char* part, bool getFiles) const override
+    std::vector<TagInfo> GetByPart(const char* part, bool getFiles, bool unlimited) const override
     {
-      return getFiles ? GetSorted([this, &part](Repository const& repo){ return repo.FindFiles(part, Limit); })
-                      : GetSorted([this, &part](Repository const& repo){ return repo.FindByName(part, Limit, CaseInsensitive); });
+      return getFiles ? GetSorted([this, &part, unlimited](Repository const& repo){ return repo.FindFiles(part, unlimited ? 0 : Limit); })
+                      : GetSorted([this, &part, unlimited](Repository const& repo){ return repo.FindByName(part, unlimited ? 0 : Limit, CaseInsensitive); });
     }
 
     std::vector<TagInfo> GetCachedTags(bool getFiles) const override
