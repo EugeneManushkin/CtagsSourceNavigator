@@ -1875,78 +1875,6 @@ static WideString SelectFromHistory()
   return *selected;
 }
 
-class TemprepoStorage
-{
-public:
-  void Register(WideString const& fileFullPath, WideString const& tempDirectory)
-  {
-    if (!FileToTempdir.insert(std::make_pair(fileFullPath, tempDirectory)).second)
-      throw std::logic_error("Internal error: file already indexed " + ToStdString(fileFullPath));
-
-    if (!TempdirToFile.insert(std::make_pair(tempDirectory, fileFullPath)).second)
-    {
-      FileToTempdir.erase(fileFullPath);
-      throw std::logic_error("Internal error: temporary directory already used " + ToStdString(tempDirectory));
-    }
-  }
-
-  void ClearByFile(WideString const& fileFullPath)
-  {
-    auto const file = FileToTempdir.find(fileFullPath);
-    auto const tempDir = file == FileToTempdir.end() ? TempdirToFile.end() : TempdirToFile.find(file->second);
-    Clear(file, tempDir);
-  }
-
-  void ClearByTags(WideString const& tagsFile)
-  {
-    auto const tempDir = TempdirToFile.find(GetDirOfFile(tagsFile));
-    auto const file = tempDir == TempdirToFile.end() ? FileToTempdir.end() : FileToTempdir.find(tempDir->second);
-    Clear(file, tempDir);
-  }
-
-  void ClearAll()
-  {
-    for (auto const& i : FileToTempdir)
-      SafeCall(std::bind(&TemprepoStorage::ClearTempRepository, i.second));
-
-    FileToTempdir.clear();
-    TempdirToFile.clear();
-  }
-
-private:
-  using PathToPathMap = std::unordered_map<WideString, WideString>;
-
-  std::logic_error IndexMissedError(PathToPathMap::iterator iter) const
-  {
-    return std::logic_error("Internal error: index missed for " + ToStdString(iter->first) + ", " + ToStdString(iter->second));
-  }
-
-  void Clear(PathToPathMap::iterator file, PathToPathMap::iterator tempDir)
-  {
-    if (file == FileToTempdir.end() && tempDir == TempdirToFile.end())
-      return;
-
-    if (file == FileToTempdir.end() || tempDir == TempdirToFile.end())
-        throw IndexMissedError(file == FileToTempdir.end() ? tempDir : file);
-
-    auto tempDirPath = std::move(file->second);
-    FileToTempdir.erase(file);
-    TempdirToFile.erase(tempDir);
-    ClearTempRepository(tempDirPath);
-  }
-
-  static void ClearTempRepository(WideString const& tempDirectory)
-  {
-    Storage->Remove(ToStdString(JoinPath(tempDirectory, DefaultTagsFilename)).c_str());
-    RemoveDirWithFiles(tempDirectory);
-  }
-
-  PathToPathMap FileToTempdir;
-  PathToPathMap TempdirToFile;
-};
-
-TemprepoStorage TemporaryRepositories;
-
 static std::string RemoveFileMask(std::string const& args)
 {
   auto fileMaskEndPos = config.opt.find_last_not_of(" ");
@@ -1971,22 +1899,23 @@ static bool CreateTemporaryTags(WideString const& fileFullPath)
 {
   auto tempDirPath = GenerateTempPath();
   MkDir(tempDirPath);
-  TemporaryRepositories.Register(fileFullPath, tempDirPath);
   if (SafeCall(std::bind(IndexSingleFile, fileFullPath, tempDirPath), false))
     return true;
 
-  TemporaryRepositories.ClearByFile(fileFullPath);
+  RemoveDirWithFiles(tempDirPath);
   return false;
-}
-
-static void ClearTemporaryTags(WideString const& tagsFile)
-{
-  TemporaryRepositories.ClearByTags(tagsFile);
 }
 
 static void ClearTemporaryTagsByFile(WideString const& file)
 {
-  TemporaryRepositories.ClearByFile(file);
+  for (auto const& owner : Storage->GetOwners(ToStdString(file).c_str()))
+  {
+    if (owner.Type == Tags::RepositoryType::Temporary)
+    {
+      Storage->Remove(owner.TagsPath.c_str());
+      SafeCall(std::bind(RemoveDirWithFiles, GetDirOfFile(ToString(owner.TagsPath))));
+    }
+  }
 }
 
 static std::vector<WideString> GetDirectoryTags(WideString const& dir)
@@ -2354,6 +2283,7 @@ HANDLE WINAPI OpenW(const struct OpenInfo *info)
           ml.clear();
           ml.push_back(MI(MAll, 0));
           auto files = Storage->GetAll();
+          files.erase(std::remove_if(files.begin(), files.end(), [](Tags::RepositoryInfo const& i){ return i.Type == Tags::RepositoryType::Temporary; }), files.end());
           int i = 0;
           for(auto const& file : files)
           {
@@ -2364,14 +2294,11 @@ HANDLE WINAPI OpenW(const struct OpenInfo *info)
           if (!rc)
           {
             for (auto const& file : files)
-              SafeCall(std::bind(ClearTemporaryTags, ToString(file.TagsPath)));
-
-            Storage = Tags::RepositoryStorage::Create();
+              Storage->Remove(file.TagsPath.c_str());
           }
           else
           {
             auto const& file = files.at(rc - 1);
-            SafeCall(std::bind(ClearTemporaryTags, ToString(file.TagsPath)));
             Storage->Remove(file.TagsPath.c_str());
           }
         }break;
@@ -2684,5 +2611,4 @@ intptr_t WINAPI ProcessEditorEventW(const struct ProcessEditorEventInfo *info)
 
 void WINAPI ExitFARW(const struct ExitInfo *info)
 {
-  TemporaryRepositories.ClearAll();
 }
