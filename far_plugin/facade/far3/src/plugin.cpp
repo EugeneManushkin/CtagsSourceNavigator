@@ -38,6 +38,7 @@
 #define _FAR_NO_NAMELESS_UNIONS
 #include <plugin_sdk/plugin.hpp>
 #include "tags.h"
+#include "tags_repository_storage.h"
 #include "tags_selector.h"
 #include "tags_viewer.h"
 #include "text.h"
@@ -979,6 +980,20 @@ static std::vector<std::string> LoadStrings(std::string const& fileName)
   return result;
 }
 
+static auto Storage = Tags::RepositoryStorage::Create();
+
+using Tags::SortingOptions;
+
+inline SortingOptions GetSortOptions(Config const& config)
+{
+  return SortingOptions::SortByName | (config.cur_file_first ? SortingOptions::CurFileFirst : SortingOptions::Default);
+}
+
+static std::unique_ptr<Tags::Selector> GetSelector(std::string const& file)
+{
+  return Storage->GetSelector(file.c_str(), !config.casesens, GetSortOptions(config), config.max_results);
+}
+
 //TODO: remove
 static void Autoload(std::string const& fileName)
 {
@@ -987,7 +1002,7 @@ static void Autoload(std::string const& fileName)
     if (str.length() > 1 || str[1] == ':')
     {
       size_t symbolsLoaded;
-      Load(str.c_str(), false, symbolsLoaded);
+      Storage->Load(str.c_str(), Tags::RepositoryType::Regular, symbolsLoaded);
     }
   }
 }
@@ -1022,11 +1037,11 @@ static int AddToAutoload(std::string const& fname)
   return 0;
 }
 
-static size_t LoadTagsImpl(std::string const& tagsFile, bool singleFileRepos = false)
+static size_t LoadTagsImpl(std::string const& tagsFile, Tags::RepositoryType type = Tags::RepositoryType::Regular)
 {
   size_t symbolsLoaded = 0;
   auto message = LongOperationMessage(GetMsg(MLoadingTags));
-  if (auto err = Load(tagsFile.c_str(), singleFileRepos, symbolsLoaded))
+  if (auto err = Storage->Load(tagsFile.c_str(), type, symbolsLoaded))
     throw Error(err == ENOENT ? MEFailedToOpen : MFailedToWriteIndex, "Tags file", tagsFile);
 
   return symbolsLoaded;
@@ -1187,13 +1202,6 @@ bool IsCtrlZ(FarKey const& key)
       || (key.VirtualKeyCode == 0x5A && key.ControlKeyState == RIGHT_CTRL_PRESSED);
 }
 
-using Tags::SortingOptions;
-
-inline SortingOptions GetSortOptions(Config const& config)
-{
-  return SortingOptions::SortByName | (config.cur_file_first ? SortingOptions::CurFileFirst : SortingOptions::Default);
-}
-
 using Tags::FormatTagFlag;
 
 static std::vector<WideString> GetMenuStrings(Tags::TagsView const& tagsView, size_t menuWidth, FormatTagFlag formatFlag)
@@ -1274,7 +1282,7 @@ static LookupResult LookupTagsMenu(TagsViewer const& viewer, TagInfo& tag, Forma
     }
     if (IsCtrlDel(fk[bkey]))
     {
-      EraseCachedTag(*selectedTag, FlushTagsCache);
+      Storage->EraseCachedTag(*selectedTag, FlushTagsCache);
       continue;
     }
     if (IsCtrlZ(fk[bkey]))
@@ -1636,7 +1644,7 @@ void PlainNavigator::Goto(TagInfo const& tag, bool setPanelDir)
       return;
   }
 
-  CacheTag(tag, config.max_results, FlushTagsCache);
+  Storage->CacheTag(tag, config.max_results, FlushTagsCache);
   Move(ToString(tag.file), line, setPanelDir);
 }
 
@@ -1929,7 +1937,7 @@ private:
 
   static void ClearTempRepository(WideString const& tempDirectory)
   {
-    UnloadTags(ToStdString(JoinPath(tempDirectory, DefaultTagsFilename)).c_str());
+    Storage->Remove(ToStdString(JoinPath(tempDirectory, DefaultTagsFilename)).c_str());
     RemoveDirWithFiles(tempDirectory);
   }
 
@@ -1956,7 +1964,7 @@ static bool IndexSingleFile(WideString const& fileFullPath, WideString const& ta
   args += args.empty() || args.back() == ' ' ? L" " : L"";
   args += L"\"" + fileFullPath + L"\"";
   ExecuteScript(GetCtagsUtilityPath(), args, tagsDirectoryPath);
-  return !!LoadTagsImpl(ToStdString(JoinPath(tagsDirectoryPath, DefaultTagsFilename)), true);
+  return !!LoadTagsImpl(ToStdString(JoinPath(tagsDirectoryPath, DefaultTagsFilename)), Tags::RepositoryType::Temporary);
 }
 
 static bool CreateTemporaryTags(WideString const& fileFullPath)
@@ -2046,7 +2054,9 @@ static bool LoadMultipleTags(std::vector<std::string> const& tags)
 
 static bool EnsureTagsLoaded(WideString const& fileName, bool createTempTags)
 {
-  auto tags = GetLoadedTags(ToStdString(fileName).c_str());
+  auto owners = Storage->GetOwners(ToStdString(fileName).c_str());
+  std::vector<std::string> tags;
+  std::transform(owners.begin(), owners.end(), std::back_inserter(tags), [](Tags::RepositoryInfo& i) { return std::move(i.TagsPath); });
   if (!tags.empty())
     return LoadMultipleTags(tags);
 
@@ -2079,11 +2089,6 @@ static WideString ReindexRepository(WideString const& fileName)
     SafeCall(std::bind(RemoveFile, tempName));
 
   return tagsFile;
-}
-
-static std::unique_ptr<Tags::Selector> GetSelector(std::string const& file)
-{
-  return ::GetSelector(file.c_str(), !config.casesens, GetSortOptions(config), config.max_results);
 }
 
 static void Lookup(WideString const& file, bool getFiles, bool setPanelDir, bool createTempTags)
@@ -2140,7 +2145,7 @@ static std::vector<TagInfo>::const_iterator AdjustToContext(std::vector<TagInfo>
 
 static void GotoDeclaration(char const* fileName, std::string word)
 {
-  auto tags = Find(word.c_str(), fileName, GetSortOptions(config));
+  auto tags = GetSelector(fileName)->GetByName(word.c_str());
   if (tags.empty())
     throw Error(MNotFound);
 
@@ -2156,7 +2161,7 @@ static void GotoDeclaration(char const* fileName, std::string word)
 
 static void GotoFile(char const* fileName, std::string path)
 {
-  auto tags = FindFile(fileName, path.c_str());
+  auto tags = GetSelector(fileName)->GetFiles(path.c_str());
   if (tags.size() == 1)
     NavigateTo(&tags.back());
   else if (!tags.empty())
@@ -2178,7 +2183,7 @@ static void CompleteName(char const* fileName, EditorInfo const& ei)
   if(word.empty())
     return;
 
-  auto tags = FindPartiallyMatchedTags(fileName, word.c_str(), 0, !config.casesens, SortingOptions::DoNotSort);
+  auto tags = GetSelector(fileName)->GetByPart(word.c_str(), false);
   if(tags.empty())
     throw Error(MNothingFound);
 
@@ -2273,7 +2278,7 @@ HANDLE WINAPI OpenW(const struct OpenInfo *info)
       }break;
       case miBrowseFile:
       {
-        SafeCall([&]{ NavigateToTag(FindFileSymbols(ToStdString(fileName).c_str()), FormatTagFlag::NotDisplayFile); });
+        SafeCall([&]{ NavigateToTag(GetSelector(ToStdString(fileName).c_str())->GetByFile(ToStdString(fileName).c_str()), FormatTagFlag::NotDisplayFile); });
       }break;
       case miBrowseClass:
       {
@@ -2290,7 +2295,7 @@ HANDLE WINAPI OpenW(const struct OpenInfo *info)
         }
         auto options = GetSortOptions(config) & static_cast<SortingOptions>(~static_cast<int>(SortingOptions::SortByName));
         options = options | (config.sort_class_members_by_name ? SortingOptions::SortByName : SortingOptions::Default);
-        SafeCall([&]{ NavigateToTag(FindClassMembers(ToStdString(fileName).c_str(), word.c_str(), options), FormatTagFlag::Default); });
+        SafeCall([&]{ NavigateToTag(GetSelector(ToStdString(fileName).c_str())->GetClassMembers(word.c_str()), FormatTagFlag::Default); });
       }break;
       case miLookupSymbol:
       {
@@ -2348,26 +2353,26 @@ HANDLE WINAPI OpenW(const struct OpenInfo *info)
         {
           ml.clear();
           ml.push_back(MI(MAll, 0));
-          auto files = GetFiles();
+          auto files = Storage->GetAll();
           int i = 0;
           for(auto const& file : files)
           {
-            ml.push_back(MI(ToString(file), ++i));
+            ml.push_back(MI(ToString(file.TagsPath), ++i));
           }
           int rc=Menu(GetMsg(MUnloadTagsFile),ml,0);
           if(rc==-1)return nullptr;
           if (!rc)
           {
             for (auto const& file : files)
-              SafeCall(std::bind(ClearTemporaryTags, ToString(file)));
+              SafeCall(std::bind(ClearTemporaryTags, ToString(file.TagsPath)));
 
-            UnloadAllTags();
+            Storage = Tags::RepositoryStorage::Create();
           }
           else
           {
-            auto file = files.at(rc - 1);
-            SafeCall(std::bind(ClearTemporaryTags, ToString(file)));
-            UnloadTags(file.c_str());
+            auto const& file = files.at(rc - 1);
+            SafeCall(std::bind(ClearTemporaryTags, ToString(file.TagsPath)));
+            Storage->Remove(file.TagsPath.c_str());
           }
         }break;
         case miCreateTagsFile:
