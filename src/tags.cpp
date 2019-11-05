@@ -34,9 +34,6 @@
 #include "tags.h"
 #include "tags_cache.h"
 #include "tags_repository.h"
-#include "tags_repository_storage.h"
-#include "tags_selector.h"
-#include "tags_selector_impl.h"
 
 #if defined _WIN32
 #include <io.h>
@@ -189,12 +186,6 @@ private:
 };
 
 using Tags::SortingOptions;
-auto Storage = Tags::RepositoryStorage::Create();
-
-std::unique_ptr<Tags::Selector> GetSelector(char const* file, bool caseInsensitive, Tags::SortingOptions sortOptions, size_t maxCount)
-{
-  return Storage->GetSelector(file, caseInsensitive, sortOptions, maxCount);
-}
 
 static std::string JoinPath(std::string const& dirPath, std::string const& name)
 {
@@ -1035,11 +1026,6 @@ std::string TagFileInfo::GetFullPath(std::string const& relativePath) const
   return IsFullPath(relativePath.c_str()) ? relativePath : JoinPath(reporoot, relativePath);
 }
 
-int Load(const char* filename, bool singleFileRepos, size_t& symbolsLoaded)
-{
-  return Storage->Load(filename, singleFileRepos ? Tags::RepositoryType::Temporary : Tags::RepositoryType::Regular, symbolsLoaded);
-}
-
 class MatchVisitor
 {
 public:
@@ -1318,16 +1304,6 @@ std::vector<TagInfo> SortTags(std::vector<TagInfo>&& tags, char const* file, Sor
   return std::move(tags);
 }
 
-std::vector<TagInfo> Find(const char* name, const char* file, SortingOptions sortOptions)
-{
-  return GetSelector(file, false, sortOptions)->GetByName(name);
-}
-
-std::vector<TagInfo> FindPartiallyMatchedTags(const char* file, const char* part, size_t maxCount, bool caseInsensitive, SortingOptions sortOptions)
-{
-  return GetSelector(file, caseInsensitive, sortOptions, maxCount)->GetByPart(part, false);
-}
-
 static std::tuple<std::string, std::string, int> GetNamePathLine(char const* path)
 {
   for (; *path && IsPathSeparator(*path); ++path);
@@ -1349,53 +1325,6 @@ static std::tuple<std::string, std::string, int> GetNamePathLine(char const* pat
   for (; nameBegin != path - 1 && IsPathSeparator(*nameBegin); --nameBegin);
   int lineNum = linenumBegin == linenumEnd ? -1 : std::stoi(std::string(linenumBegin, linenumEnd));
   return std::make_tuple(std::move(name), std::string(path, nameBegin + 1), lineNum);
-}
-
-std::vector<TagInfo> FindFile(const char* file, const char* path)
-{
-  return GetSelector(file, true, SortingOptions::Default)->GetFiles(path);
-}
-
-std::vector<TagInfo> FindPartiallyMatchedFile(const char* file, const char* part, size_t maxCount)
-{
-  return GetSelector(file, true, SortingOptions::Default, maxCount)->GetByPart(part, true);
-}
-
-std::vector<TagInfo> FindClassMembers(const char* file, const char* classname, SortingOptions sortOptions)
-{
-  return GetSelector(file, false, sortOptions)->GetClassMembers(classname);
-}
-
-std::vector<TagInfo> FindFileSymbols(const char* file)
-{
-  return GetSelector(file, false, SortingOptions::Default)->GetByFile(file);
-}
-
-static std::vector<std::string> ToTagsPaths(std::vector<Tags::RepositoryInfo> &&infos)
-{
-  std::vector<std::string> result;
-  std::transform(infos.begin(), infos.end(), std::back_inserter(result), [](Tags::RepositoryInfo const& info){ return info.TagsPath; });
-  return std::move(result);
-}
-
-std::vector<std::string> GetFiles()
-{
-  return ToTagsPaths(Storage->GetAll());
-}
-
-std::vector<std::string> GetLoadedTags(const char* file)
-{
-  return ToTagsPaths(Storage->GetOwners(file));
-}
-
-void UnloadTags(const char* tagsFile)
-{
-  Storage->Remove(tagsFile);
-}
-
-void UnloadAllTags()
-{
-  Storage = Tags::RepositoryStorage::Create();
 }
 
 bool IsTagFile(const char* file)
@@ -1459,21 +1388,6 @@ inline bool TagsOpposite(TagInfo const& left, TagInfo const& right)
 std::vector<TagInfo>::const_iterator Reorder(TagInfo const& context, std::vector<TagInfo>& tags)
 {
   return std::stable_partition(tags.begin(), tags.end(), [&](TagInfo const& tag) { return TagsOpposite(tag, context); });
-}
-
-void CacheTag(TagInfo const& tag, size_t cacheSize, bool flush)
-{
-  Storage->CacheTag(tag, cacheSize, flush);
-}
-
-void EraseCachedTag(TagInfo const& tag, bool flush)
-{
-  Storage->EraseCachedTag(tag, flush);
-}
-
-std::vector<TagInfo> GetCachedTags(const char* file, size_t limit, bool getFiles)
-{
-  return GetSelector(file, false, SortingOptions::Default, limit)->GetCachedTags(getFiles);
 }
 
 class TagMatch : public NameMatch
