@@ -2183,7 +2183,7 @@ static void CompleteName(char const* fileName, EditorInfo const& ei)
   if(word.empty())
     return;
 
-  auto tags = GetSelector(fileName)->GetByPart(word.c_str(), false);
+  auto tags = GetSelector(fileName)->GetByPart(word.c_str(), false, true);
   if(tags.empty())
     throw Error(MNothingFound);
 
