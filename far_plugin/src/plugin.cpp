@@ -8,6 +8,7 @@
 #include <facade/plugin.h>
 #include <platform/path.h>
 #include <tags.h>
+#include <tags_repository_storage.h>
 
 #include <stack>
 #include <string>
@@ -18,6 +19,8 @@ using Facade::InfoMessage;
 using Facade::LongOperationMessage;
 using FarPlugin::ActionMenu;
 using Platform::JoinPath;
+using Tags::RepositoryStorage;
+using Tags::RepositoryType;
 
 namespace
 {
@@ -33,6 +36,7 @@ namespace
     PluginImpl(std::string&& pluginFolder)
       : PluginFolder(std::move(pluginFolder))
       , ConfigPath(JoinPath(PluginFolder, "config"))
+      , Storage(RepositoryStorage::Create())
     {
     }
 
@@ -115,6 +119,7 @@ namespace
     std::string const PluginFolder;
     std::string const ConfigPath;
     FarPlugin::Config Config;
+    std::unique_ptr<RepositoryStorage> Storage;
     using CleanupAction = std::pair<std::function<void(bool)>, bool>;
     std::stack<CleanupAction> CleanupActions;
   };
@@ -140,8 +145,7 @@ namespace
   {
     auto message = LongOperationMessage(MLoadingTags, MPlugin);
     size_t symbolsLoaded = 0;
-    bool const singleFileRepos = false;
-    if (auto err = Load(tagsFile.c_str(), singleFileRepos, symbolsLoaded))
+    if (auto err = Storage->Load(tagsFile.c_str(), RepositoryType::Regular, symbolsLoaded))
       throw std::runtime_error(Facade::Format(err == ENOENT ? MEFailedToOpen : MFailedToWriteIndex, tagsFile.c_str()));
 
     FarPlugin::AddToTagsHistory(tagsFile.c_str(), HistoryFileFullPath().c_str(), Config.HistoryLen);
@@ -150,17 +154,7 @@ namespace
 
   void PluginImpl::UnloadTagsFiles()
   {
-    auto loadedTags = GetFiles();
-    auto menu = Facade::Menu::Create();
-    menu->Add(MUnloadAll, 0, false);
-    for (auto const& file : loadedTags)
-      menu->Add(file, 0, false);
-
-    auto selected = menu->Run(MUnloadTagsFile, -1);
-    if (selected == 0)
-      UnloadAllTags();
-    else if (selected > 0)
-      UnloadTags(loadedTags.at(selected - 1).c_str());
+  //TODO: rework
   }
 }
 
