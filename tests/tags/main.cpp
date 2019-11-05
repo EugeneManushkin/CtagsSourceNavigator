@@ -1,4 +1,6 @@
 #include <gtest/gtest.h>
+#include <tags_repository_storage.h>
+#include <tags_selector.h>
 #include <tags.h>
 
 #include <fstream>
@@ -11,9 +13,6 @@
 
 namespace
 {
-  bool const SingleFileRepos = true;
-  bool const MultipleFileRepos = false;
-
   bool CheckIdxFiles = false;
 
   std::string GetFilePath(std::string const& file)
@@ -189,47 +188,91 @@ namespace
   }
 }
 
+namespace Tags
+{
 namespace TESTS
 {
   int const LoadSuccess = 0;
 
   class Tags : public ::testing::Test
   {
+  protected:
+    std::unique_ptr<RepositoryStorage> Storage;
+
+    std::unique_ptr<Selector> GetSelector(char const* file, bool caseInsensitive, SortingOptions sortOptions, size_t maxCount = 0)
+    {
+      return Storage->GetSelector(file, caseInsensitive, sortOptions, maxCount);
+    }
+
+    std::vector<TagInfo> Find(const char* name, const char* file, SortingOptions sortOptions = SortingOptions::Default)
+    {
+      return GetSelector(file, false, sortOptions)->GetByName(name);
+    }
+
+    std::vector<TagInfo> FindPartiallyMatchedTags(const char* file, const char* part, size_t maxCount, bool caseInsensitive, SortingOptions sortOptions = SortingOptions::Default)
+    {
+      return GetSelector(file, caseInsensitive, sortOptions, maxCount)->GetByPart(part, false);
+    }
+
+    std::vector<TagInfo> FindFile(const char* file, const char* path)
+    {
+      return GetSelector(file, true, SortingOptions::Default)->GetFiles(path);
+    }
+
+    std::vector<TagInfo> FindPartiallyMatchedFile(const char* file, const char* part, size_t maxCount)
+    {
+      return GetSelector(file, true, SortingOptions::Default, maxCount)->GetByPart(part, true);
+    }
+
+    std::vector<TagInfo> FindClassMembers(const char* file, const char* classname, SortingOptions sortOptions = SortingOptions::Default)
+    {
+      return GetSelector(file, false, sortOptions)->GetClassMembers(classname);
+    }
+
+    std::vector<TagInfo> FindFileSymbols(const char* file)
+    {
+      return GetSelector(file, false, SortingOptions::Default)->GetByFile(file);
+    }
+
+    std::vector<std::string> GetLoadedTags(const char* file)
+    {
+      std::vector<std::string> result;
+      auto infos = Storage->GetOwners(file);
+      std::transform(infos.begin(), infos.end(), std::back_inserter(result), [](RepositoryInfo const& info){ return info.TagsPath; });
+      return std::move(result);
+    }
+
   public:
     virtual void SetUp()
     {
+      Storage = RepositoryStorage::Create();
     }
 
-    virtual void TearDown() 
-    {
-      UnloadAllTags();
-    }
-
-    void LoadTagsFileImpl(std::string const& tagsFile, bool singleFileRepos, size_t expectedTagsCount)
+    void LoadTagsFileImpl(std::string const& tagsFile, RepositoryType type, size_t expectedTagsCount)
     {
       size_t symbolsLoaded = -1;
-      ASSERT_EQ(LoadSuccess, Load(tagsFile.c_str(), singleFileRepos, symbolsLoaded));
+      ASSERT_EQ(LoadSuccess, Storage->Load(tagsFile.c_str(), type, symbolsLoaded));
       ASSERT_EQ(expectedTagsCount, expectedTagsCount == -1 ? expectedTagsCount : symbolsLoaded);
     }
 
-    void LoadTagsFile(std::string const& tagsFile, bool singleFileRepos, size_t expectedTagsCount)
+    void LoadTagsFile(std::string const& tagsFile, RepositoryType type, size_t expectedTagsCount)
     {
       auto idxFile = tagsFile + ".idx";
       auto modTime = GetModificationTime(idxFile);
       ASSERT_EQ(CheckIdxFiles, !!modTime);
-      ASSERT_NO_FATAL_FAILURE(LoadTagsFileImpl(tagsFile, singleFileRepos, expectedTagsCount));
+      ASSERT_NO_FATAL_FAILURE(LoadTagsFileImpl(tagsFile, type, expectedTagsCount));
       ASSERT_TRUE(!CheckIdxFiles || modTime == GetModificationTime(idxFile));
     }
 
-    void TestLoadTags(std::string const& tagsFile, bool singleFileRepos, size_t expectedTagsCount)
+    void TestLoadTags(std::string const& tagsFile, RepositoryType type, size_t expectedTagsCount)
     {
-      ASSERT_NO_FATAL_FAILURE(LoadTagsFileImpl(ToUpper(tagsFile), singleFileRepos, expectedTagsCount));
-      ASSERT_NO_FATAL_FAILURE(LoadTagsFileImpl(ToLower(tagsFile), singleFileRepos, expectedTagsCount));
-      ASSERT_NO_FATAL_FAILURE(LoadTagsFileImpl(AddExtraSlashes(tagsFile), singleFileRepos, expectedTagsCount));
+      ASSERT_NO_FATAL_FAILURE(LoadTagsFileImpl(ToUpper(tagsFile), type, expectedTagsCount));
+      ASSERT_NO_FATAL_FAILURE(LoadTagsFileImpl(ToLower(tagsFile), type, expectedTagsCount));
+      ASSERT_NO_FATAL_FAILURE(LoadTagsFileImpl(AddExtraSlashes(tagsFile), type, expectedTagsCount));
       size_t symbolsLoaded = -1;
-      ASSERT_NE(LoadSuccess, Load((tagsFile + "extra").c_str(), singleFileRepos, symbolsLoaded));
-      ASSERT_THROW(Load((tagsFile + "\\").c_str(), singleFileRepos, symbolsLoaded), std::logic_error);
-      ASSERT_THROW(Load((tagsFile + "/").c_str(), singleFileRepos, symbolsLoaded), std::logic_error);
+      ASSERT_NE(LoadSuccess, Storage->Load((tagsFile + "extra").c_str(), type, symbolsLoaded));
+      ASSERT_THROW(Storage->Load((tagsFile + "\\").c_str(), type, symbolsLoaded), std::logic_error);
+      ASSERT_THROW(Storage->Load((tagsFile + "/").c_str(), type, symbolsLoaded), std::logic_error);
     }
 
     void LookupMetaTag(MetaTag const& metaTag)
@@ -290,12 +333,12 @@ namespace TESTS
       }
     }
 
-    void LoadAndLookupNames(std::string const& tagsFile, std::string const& metaTagsFile, bool singleFileRepos = false)
+    void LoadAndLookupNames(std::string const& tagsFile, std::string const& metaTagsFile, RepositoryType type = RepositoryType::Regular)
     {
       auto const metaTags = LoadMetaTags(metaTagsFile, GetFilePath(tagsFile));
       ASSERT_FALSE(metaTags.empty());
-      ASSERT_NO_FATAL_FAILURE(LoadTagsFile(tagsFile, singleFileRepos, metaTags.size()));
-      EXPECT_NO_FATAL_FAILURE(TestLoadTags(tagsFile, singleFileRepos, metaTags.size()));
+      ASSERT_NO_FATAL_FAILURE(LoadTagsFile(tagsFile, type, metaTags.size()));
+      EXPECT_NO_FATAL_FAILURE(TestLoadTags(tagsFile, type, metaTags.size()));
       for (auto const& metaTag : metaTags)
       {
         EXPECT_NO_FATAL_FAILURE(LookupMetaTag(metaTag)) << "Tag info: " << metaTag << ", tags file: " << tagsFile;
@@ -309,7 +352,7 @@ namespace TESTS
     {
       auto const metaClasses = LoadMetaClasses(metaClassesFile, GetFilePath(metaClassesFile));
       ASSERT_FALSE(metaClasses.empty());
-      ASSERT_NO_FATAL_FAILURE(LoadTagsFile(tagsFile, false, -1));
+      ASSERT_NO_FATAL_FAILURE(LoadTagsFile(tagsFile, RepositoryType::Regular, -1));
       for (auto const& metaClass : metaClasses)
       {
         EXPECT_NO_FATAL_FAILURE(LookupClassMembers(metaClass.first, metaClass.second));
@@ -369,7 +412,7 @@ namespace TESTS
     void TestRepeatedFiles(std::string const& tagsFile)
     {
       size_t const expectedTags = 32;
-      ASSERT_NO_FATAL_FAILURE(LoadTagsFile(tagsFile, MultipleFileRepos, expectedTags));
+      ASSERT_NO_FATAL_FAILURE(LoadTagsFile(tagsFile, RepositoryType::Regular, expectedTags));
       EXPECT_NO_FATAL_FAILURE(TestRepeatedFile(tagsFile, "", 0, 0));
       EXPECT_NO_FATAL_FAILURE(TestRepeatedFile(tagsFile, "", expectedTags, expectedTags));
       EXPECT_NO_FATAL_FAILURE(TestRepeatedFile(tagsFile, "", 10, 10));
@@ -421,7 +464,7 @@ namespace TESTS
     void TestFindFile(std::string const& tagsFile)
     {
       size_t const expectedTags = 4;
-      ASSERT_NO_FATAL_FAILURE(LoadTagsFile(tagsFile, MultipleFileRepos, expectedTags));
+      ASSERT_NO_FATAL_FAILURE(LoadTagsFile(tagsFile, RepositoryType::Regular, expectedTags));
       EXPECT_NO_FATAL_FAILURE(TestFindFile(tagsFile, "", "", 0));
       EXPECT_NO_FATAL_FAILURE(TestFindFile(tagsFile, "/", "", 0));
       EXPECT_NO_FATAL_FAILURE(TestFindFile(tagsFile, "some/path/header", "", 0));
@@ -457,7 +500,7 @@ namespace TESTS
 
   TEST_F(Tags, LoadsEmptyRepos)
   {
-    LoadTagsFile("empty_repos/tags", MultipleFileRepos, 0);
+    LoadTagsFile("empty_repos/tags", RepositoryType::Regular, 0);
   }
 
   TEST_F(Tags, AllNamesFoundInUniversalSingleFileRepos)
@@ -519,21 +562,23 @@ namespace TESTS
     TestTagsLoadedForFile();
   }
 
+  bool const SingleFileRepos = true;
+
   TEST_F(Tags, AllNamesFoundInCygwinSingleFileFullPathRepos)
   {
-    LoadAndLookupNames("full_path_single_file_repo/tags.exuberant", "full_path_single_file_repo/tags.exuberant.meta", SingleFileRepos);
+    LoadAndLookupNames("full_path_single_file_repo/tags.exuberant", "full_path_single_file_repo/tags.exuberant.meta", RepositoryType::Temporary);
     TestTagsLoadedForFile(SingleFileRepos);
   }
 
   TEST_F(Tags, AllNamesFoundInExuberantSingleFileFullPathRepos)
   {
-    LoadAndLookupNames("full_path_single_file_repo/tags.exuberant.w", "full_path_single_file_repo/tags.exuberant.meta", SingleFileRepos);
+    LoadAndLookupNames("full_path_single_file_repo/tags.exuberant.w", "full_path_single_file_repo/tags.exuberant.meta", RepositoryType::Temporary);
     TestTagsLoadedForFile(SingleFileRepos);
   }
 
   TEST_F(Tags, AllNamesFoundInUniversalSingleFileFullPathRepos)
   {
-    LoadAndLookupNames("full_path_single_file_repo/tags.universal", "full_path_single_file_repo/tags.universal.meta", SingleFileRepos);
+    LoadAndLookupNames("full_path_single_file_repo/tags.universal", "full_path_single_file_repo/tags.universal.meta", RepositoryType::Temporary);
     TestTagsLoadedForFile(SingleFileRepos);
   }
 
@@ -564,7 +609,7 @@ namespace TESTS
 
   TEST_F(Tags, AnyFileBelongsToMinimalSingleFileRepos)
   {
-    ASSERT_NO_FATAL_FAILURE(LoadTagsFile("minimal_single_file_repos/tags", MultipleFileRepos, 1));
+    ASSERT_NO_FATAL_FAILURE(LoadTagsFile("minimal_single_file_repos/tags", RepositoryType::Regular, 1));
     TestTagsLoadedForFile();
   }
 
@@ -582,6 +627,7 @@ namespace TESTS
   {
     TestFindFile("include_file_repos/tags.universal");
   }
+}
 }
 
 int main(int argc, char* argv[])
