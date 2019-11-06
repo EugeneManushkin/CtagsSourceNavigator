@@ -1070,15 +1070,15 @@ struct MI{
   MI(int msgid,int value,bool disabled=false,char label=0):item(GetMsg(msgid)),data(value),Disabled(disabled),Label(label){}
   bool IsSeparator() const
   {
-    return item.empty();
+    return data == -2;
   }
   bool IsDisabled() const
   {
     return Disabled;
   }
-  static MI Separator()
+  static MI Separator(int msgid = -1)
   {
-    return MI(L"", -1);
+    return MI(msgid == -1 ? L"" : GetMsg(msgid), -2);
   }
 };
 
@@ -1093,12 +1093,11 @@ int Menu(const wchar_t *title,MenuList& lst,int sel,int flags=MF_LABELS,const vo
   std::vector<FarMenuItem> menu(lst.size());
   wchar_t const labels[]=L"1234567890ABCDEFGHIJKLMNOPQRSTUVWXYZ";
   int const labelsCount=sizeof(labels)-1;
-  ZeroMemory(&menu[0],sizeof(FarMenuItem)*lst.size());
   int i = 0;
   int curLabel = 0;
   for (auto& lstItem : lst)
   {
-    if (!lstItem.IsSeparator())
+    if (!lstItem.item.empty())
     {
       if((flags&MF_LABELS))
       {
@@ -1126,6 +1125,45 @@ int Menu(const wchar_t *title,MenuList& lst,int sel,int flags=MF_LABELS,const vo
     auto iter = lst.begin();
     std::advance(iter, res);
     return iter->data;
+}
+
+static std::vector<Tags::RepositoryInfo> GetManagedRepositories()
+{
+  auto repositories = Storage->GetAll();
+  repositories.erase(std::remove_if(repositories.begin(), repositories.end(), [](Tags::RepositoryInfo const& r){ return r.Type == Tags::RepositoryType::Temporary; }), repositories.end());
+  return std::move(repositories);
+}
+
+static Tags::RepositoryInfo SelectRepository()
+{
+  auto repositories = GetManagedRepositories();
+  std::sort(repositories.begin(), repositories.end(), [](Tags::RepositoryInfo const& l, Tags::RepositoryInfo const& r) { return l.Type < r.Type || (l.Type == r.Type && l.TagsPath < r.TagsPath);});
+  MenuList menuList;
+  if (!repositories.empty() && repositories.front().Type == Tags::RepositoryType::Permanent)
+    menuList.push_back(MI(MNoRegularRepositories, 0, true));
+
+  int i = 0;
+  Tags::RepositoryType currentType = Tags::RepositoryType::Regular;
+  for (auto r = repositories.begin(); r != repositories.end(); ++r)
+  {
+    if (currentType != r->Type)
+      menuList.push_back(MI::Separator(r->Type == Tags::RepositoryType::Permanent ? MPermanentRepositories : -1));
+
+    menuList.push_back(MI(ToString(r->TagsPath), i++));
+    currentType = r->Type;
+  }
+
+  int selected = -1;
+  return repositories.empty() || (selected = Menu(GetMsg(MUnloadTagsFile), menuList, 0, 0)) == -1 ? Tags::RepositoryInfo() : std::move(repositories.at(selected));
+}
+
+static void ManageRepositories()
+{
+  auto selected = SelectRepository();
+  if (selected.TagsPath.empty())
+    return;
+
+  Storage->Remove(selected.TagsPath.c_str());
 }
 
 HKL GetAsciiLayout()
@@ -2259,7 +2297,7 @@ HANDLE WINAPI OpenW(const struct OpenInfo *info)
          , MI::Separator()
          , MI(MLoadTagsFile, miLoadTagsFile)
          , MI(MLoadFromHistory, miLoadFromHistory, !config.history_len)
-         , MI(MUnloadTagsFile, miUnloadTagsFile)
+         , MI(MManageRepositories, miUnloadTagsFile, GetManagedRepositories().empty())
          , MI(MAddTagsToAutoload, miAddTagsToAutoload)
          , MI::Separator()
          , MI(MCreateTagsFile, miCreateTagsFile)
@@ -2280,27 +2318,7 @@ HANDLE WINAPI OpenW(const struct OpenInfo *info)
         }break;
         case miUnloadTagsFile:
         {
-          ml.clear();
-          ml.push_back(MI(MAll, 0));
-          auto files = Storage->GetAll();
-          files.erase(std::remove_if(files.begin(), files.end(), [](Tags::RepositoryInfo const& i){ return i.Type == Tags::RepositoryType::Temporary; }), files.end());
-          int i = 0;
-          for(auto const& file : files)
-          {
-            ml.push_back(MI(ToString(file.TagsPath), ++i));
-          }
-          int rc=Menu(GetMsg(MUnloadTagsFile),ml,0);
-          if(rc==-1)return nullptr;
-          if (!rc)
-          {
-            for (auto const& file : files)
-              Storage->Remove(file.TagsPath.c_str());
-          }
-          else
-          {
-            auto const& file = files.at(rc - 1);
-            Storage->Remove(file.TagsPath.c_str());
-          }
+          SafeCall(ManageRepositories);
         }break;
         case miCreateTagsFile:
         {

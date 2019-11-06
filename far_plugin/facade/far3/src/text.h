@@ -68,4 +68,7 @@ enum{
   MNavigationHistoryMenuTitle,
   MUseBuiltInCtags,
   MLookupMenuBottom,
+  MManageRepositories,
+  MNoRegularRepositories,
+  MPermanentRepositories,
 };
