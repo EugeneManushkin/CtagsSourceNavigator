@@ -37,7 +37,6 @@ namespace Tags
     static std::unique_ptr<RepositoryStorage> Create(std::function<std::unique_ptr<Internal::Repository>(char const*, RepositoryType)>&& repoFactory);
     virtual ~RepositoryStorage() = default;
     virtual int Load(char const* tagsPath, RepositoryType type, size_t& symbolsLoaded) = 0;
-    virtual std::vector<RepositoryInfo> GetInvolved(char const* currentFile) const = 0;
     virtual std::vector<RepositoryInfo> GetOwners(char const* currentFile) const = 0;
     virtual std::vector<RepositoryInfo> GetAll() const = 0;
     virtual void Remove(char const* tagsPath) = 0;

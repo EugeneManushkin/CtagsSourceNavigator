@@ -60,11 +60,6 @@ namespace
       return err;
     }
 
-    std::vector<RepositoryInfo> GetInvolved(char const* currentFile) const override
-    {
-      return Filter([&currentFile](RepositoryRuntimeInfo const& info){ return Involved(info, currentFile); });
-    }
-
     std::vector<RepositoryInfo> GetOwners(char const* currentFile) const override
     {
       return Filter([&currentFile](RepositoryRuntimeInfo const& info){ return info.Repository->Belongs(currentFile); });
