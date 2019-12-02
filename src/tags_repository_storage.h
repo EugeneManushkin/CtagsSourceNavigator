@@ -16,12 +16,18 @@ namespace Tags
     class Repository;
   }
 
-  enum class RepositoryType
+  enum class RepositoryType : int
   {
-    Regular,
-    Temporary,
-    Permanent,
+    Any = ~0,
+    Regular = 1 << 0,
+    Temporary = 1 << 1,
+    Permanent = 1 << 2,
   };
+
+  inline RepositoryType operator | (RepositoryType left, RepositoryType right) { return static_cast<RepositoryType>(static_cast<int>(left) | static_cast<int>(right)); }
+  inline RepositoryType operator & (RepositoryType left, RepositoryType right) { return static_cast<RepositoryType>(static_cast<int>(left) & static_cast<int>(right)); }
+  inline RepositoryType operator ~ (RepositoryType type) { return static_cast<RepositoryType>(~static_cast<int>(type)); }
+  inline bool operator ! (RepositoryType type) { return !static_cast<int>(type); }
 
   struct RepositoryInfo
   {
@@ -38,7 +44,7 @@ namespace Tags
     virtual ~RepositoryStorage() = default;
     virtual int Load(char const* tagsPath, RepositoryType type, size_t& symbolsLoaded) = 0;
     virtual std::vector<RepositoryInfo> GetOwners(char const* currentFile) const = 0;
-    virtual std::vector<RepositoryInfo> GetAll() const = 0;
+    virtual std::vector<RepositoryInfo> GetByType(RepositoryType type) const = 0;
     virtual void Remove(char const* tagsPath) = 0;
     virtual void CacheTag(TagInfo const& tag, size_t cacheSize, bool flush) = 0;
     virtual void EraseCachedTag(TagInfo const& tag, bool flush) = 0;

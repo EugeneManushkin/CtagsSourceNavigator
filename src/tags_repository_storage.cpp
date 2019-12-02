@@ -65,9 +65,9 @@ namespace
       return Filter([&currentFile](RepositoryRuntimeInfo const& info){ return info.Repository->Belongs(currentFile); });
     }
 
-    std::vector<RepositoryInfo> GetAll() const override
+    std::vector<RepositoryInfo> GetByType(RepositoryType type) const override
     {
-      return Filter([](RepositoryRuntimeInfo const&){ return true; });
+      return Filter([&type](RepositoryRuntimeInfo const& info){ return !!(info.Type & type); });
     }
 
     void Remove(char const* tagsPath) override

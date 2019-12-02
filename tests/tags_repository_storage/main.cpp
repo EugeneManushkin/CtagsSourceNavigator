@@ -115,8 +115,8 @@ namespace Tags
     {
       auto sut = RepositoryStorage::Create(&MockRepositoryFactory);
       LoadRepository(sut, RegularRepository);
-      ASSERT_EQ(1, sut->GetAll().size());
-      ASSERT_EQ(RegularRepository, sut->GetAll().back());
+      ASSERT_EQ(1, sut->GetByType(RepositoryType::Any).size());
+      ASSERT_EQ(RegularRepository, sut->GetByType(RepositoryType::Any).back());
     }
   }
 }
