@@ -1129,9 +1129,7 @@ int Menu(const wchar_t *title,MenuList& lst,int sel,int flags=MF_LABELS,const vo
 
 static std::vector<Tags::RepositoryInfo> GetManagedRepositories()
 {
-  auto repositories = Storage->GetAll();
-  repositories.erase(std::remove_if(repositories.begin(), repositories.end(), [](Tags::RepositoryInfo const& r){ return r.Type == Tags::RepositoryType::Temporary; }), repositories.end());
-  return std::move(repositories);
+  return Storage->GetByType(~Tags::RepositoryType::Temporary);
 }
 
 static Tags::RepositoryInfo SelectRepository()
