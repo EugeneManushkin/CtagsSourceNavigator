@@ -2,6 +2,8 @@
 #include <tags_repository.h>
 #include <tags_repository_storage.h>
 
+#include <ostream>
+
 namespace
 {
   std::string GetDirOfFile(std::string const& fileName)
@@ -90,12 +92,6 @@ namespace
   {
     return std::unique_ptr<Tags::Internal::Repository>(new MockRepository(tagsPath, type));
   }
-
-  int LoadRepository(std::unique_ptr<Tags::RepositoryStorage> const& storage, Tags::RepositoryInfo const& info)
-  {
-    size_t symbolsLoaded = 0;
-    return storage->Load(info.TagsPath.c_str(), info.Type, symbolsLoaded);
-  }
 }
 
 namespace Tags
@@ -107,16 +103,102 @@ namespace Tags
     ;
   }
 
+  bool operator == (std::vector<RepositoryInfo> const& left, std::vector<RepositoryInfo> const& right)
+  {
+    auto minuend = right;
+    for (auto const& repo : left)
+    {
+      auto i = std::find(minuend.begin(), minuend.end(), repo);
+      if (i == minuend.end())
+        return false;
+
+      minuend.erase(i);
+    }
+
+    return minuend.empty();
+  }
+
+  std::ostream& operator << (std::ostream& os, RepositoryInfo const& repo)
+  {
+    return os << "{'" << repo.TagsPath << "', '" << repo.Root << "', '" << static_cast<int>(repo.Type) << "'}";
+  }
+
   namespace Tests
   {
+    using R = std::vector<RepositoryInfo>;
     RepositoryInfo const RegularRepository = {"regular/repository/tags", "regular/repository", RepositoryType::Regular};
+    RepositoryInfo const RegularSubRepository = {"regular/repository/sub/tags", "regular/repository/sub", RepositoryType::Regular};
+    RepositoryInfo const TemporaryRepository = {"temporary/repository/tags", "temporary/repository", RepositoryType::Temporary};
+    RepositoryInfo const PermanentRepository = {"permanent/repository/tags", "permanent/repository", RepositoryType::Permanent};
+    R const AllRepositories{TemporaryRepository, RegularRepository, PermanentRepository, RegularSubRepository};
 
-    TEST(RepositoryStorage, LoadsRegularRepository)
+    class RepositoryStorage : public ::testing::Test
     {
-      auto sut = RepositoryStorage::Create(&MockRepositoryFactory);
-      LoadRepository(sut, RegularRepository);
-      ASSERT_EQ(1, sut->GetByType(RepositoryType::Any).size());
-      ASSERT_EQ(RegularRepository, sut->GetByType(RepositoryType::Any).back());
+    protected:
+      void SetUp() override
+      {
+        SUT = Tags::RepositoryStorage::Create(&MockRepositoryFactory);
+      }
+
+      bool LoadRepository(RepositoryInfo const& info)
+      {
+        size_t symbolsLoaded = 0;
+        return !SUT->Load(info.TagsPath.c_str(), info.Type, symbolsLoaded);
+      }
+
+      void LoadRepositories(std::vector<RepositoryInfo> const& repositories)
+      {
+        for (auto const& r : repositories)
+          ASSERT_TRUE(LoadRepository(r)) << r;
+
+        ASSERT_EQ(repositories, SUT->GetByType(RepositoryType::Any));
+      }
+
+      std::unique_ptr<Tags::RepositoryStorage> SUT;
+    };
+
+    TEST_F(RepositoryStorage, LoadsRegularRepository)
+    {
+      ASSERT_NO_FATAL_FAILURE(LoadRepositories({RegularRepository}));
+    }
+
+    TEST_F(RepositoryStorage, ReloadsRepository)
+    {
+      ASSERT_TRUE(LoadRepository(RegularRepository));
+      ASSERT_EQ(R{RegularRepository}, SUT->GetByType(RepositoryType::Any));
+      ASSERT_TRUE(LoadRepository(RegularRepository));
+      ASSERT_EQ(R{RegularRepository}, SUT->GetByType(RepositoryType::Any));
+    }
+
+    TEST_F(RepositoryStorage, LoadsSameRepositoryWithDifferentType)
+    {
+      RepositoryInfo const sameRepository = {RegularRepository.TagsPath, RegularRepository.Root, RepositoryType::Temporary};
+      ASSERT_TRUE(LoadRepository(RegularRepository));
+      ASSERT_EQ(R{RegularRepository}, SUT->GetByType(RepositoryType::Any));
+      ASSERT_TRUE(LoadRepository(sameRepository));
+      ASSERT_EQ(R{RegularRepository}, SUT->GetByType(RepositoryType::Any));
+    }
+
+    TEST_F(RepositoryStorage, ReturnsRegularRepositories)
+    {
+      R const Regular{RegularRepository, RegularSubRepository};
+      ASSERT_NO_FATAL_FAILURE(LoadRepositories(AllRepositories));
+      ASSERT_EQ(Regular, SUT->GetByType(RepositoryType::Regular));
+    }
+
+    TEST_F(RepositoryStorage, ReturnsNonregularRepositories)
+    {
+      R const Nonregular{TemporaryRepository, PermanentRepository};
+      ASSERT_NO_FATAL_FAILURE(LoadRepositories(AllRepositories));
+      ASSERT_EQ(Nonregular, SUT->GetByType(~RepositoryType::Regular));
+    }
+
+    TEST_F(RepositoryStorage, ReturnsOwnersOfSubrepositoryFile)
+    {
+      std::string const SubrepositoryFile = RegularSubRepository.Root + "/file.cpp";
+      R const Owners{RegularRepository, RegularSubRepository};
+      ASSERT_NO_FATAL_FAILURE(LoadRepositories(AllRepositories));
+      ASSERT_EQ(Owners, SUT->GetOwners(SubrepositoryFile.c_str()));
     }
   }
 }
