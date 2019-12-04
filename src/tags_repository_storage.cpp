@@ -12,8 +12,8 @@ namespace
 {
   using Tags::RepositoryInfo;
   using Tags::RepositoryType;
-  using RepositoryPtr = std::unique_ptr<Tags::Internal::Repository>;
-  using RepositoryFactoryFunction = std::function<RepositoryPtr(char const*, RepositoryType)>;
+  using RepositoryPtr = std::shared_ptr<Tags::Internal::Repository>;
+  using RepositoryFactoryFunction = std::function<std::unique_ptr<Tags::Internal::Repository>(char const*, RepositoryType)>;
 
   struct RepositoryRuntimeInfo
   {
@@ -70,23 +70,29 @@ namespace
       return Filter([&type](RepositoryRuntimeInfo const& info){ return !!(info.Type & type); });
     }
 
+    RepositoryInfo GetInfo(char const* tagsPath) const override
+    {
+      auto runtimeInfo = GetRuntimeInfo(tagsPath);
+      return Empty(runtimeInfo) ? RepositoryInfo() : ToRepositoryInfo(runtimeInfo);
+    }
+
     void Remove(char const* tagsPath) override
     {
-      Repositories.remove_if([&tagsPath](RepositoryRuntimeInfo const& info) { return !info.Repository->CompareTagsPath(tagsPath); });
+      Release(tagsPath);
     }
 
     void CacheTag(TagInfo const& tag, size_t cacheSize, bool flush) override
     {
-      auto iter = FindByTagsPath(tag.Owner.TagsFile.c_str());
-      if (iter != Repositories.end())
-        iter->Repository->CacheTag(tag, cacheSize, flush);
+      auto info = GetRuntimeInfo(tag.Owner.TagsFile.c_str());
+      if (!Empty(info))
+        info.Repository->CacheTag(tag, cacheSize, flush);
     }
 
     void EraseCachedTag(TagInfo const& tag, bool flush) override
     {
-      auto iter = FindByTagsPath(tag.Owner.TagsFile.c_str());
-      if (iter != Repositories.end())
-        iter->Repository->EraseCachedTag(tag, flush);
+      auto info = GetRuntimeInfo(tag.Owner.TagsFile.c_str());
+      if (!Empty(info))
+        info.Repository->EraseCachedTag(tag, flush);
     }
 
     std::unique_ptr<Tags::Selector> GetSelector(char const* currentFile, bool caseInsensitive, Tags::SortingOptions sortOptions, size_t limit) override
@@ -101,7 +107,7 @@ namespace
 
   private:
     using RepositoriesCont = std::list<RepositoryRuntimeInfo>;
-    RepositoriesCont::iterator FindByTagsPath(char const* tagsPath);
+    RepositoryRuntimeInfo GetRuntimeInfo(char const* tagsPath) const;
     RepositoryRuntimeInfo Release(char const* tagsPath);
     std::vector<RepositoryInfo> Filter(std::function<bool(RepositoryRuntimeInfo const&)>&& pred) const;
 
@@ -109,14 +115,15 @@ namespace
     RepositoriesCont Repositories;
   };
 
-  RepositoryStorageImpl::RepositoriesCont::iterator RepositoryStorageImpl::FindByTagsPath(char const* tagsPath)
+  RepositoryRuntimeInfo RepositoryStorageImpl::GetRuntimeInfo(char const* tagsPath) const
   {
-    return std::find_if(Repositories.begin(), Repositories.end(), [&tagsPath](RepositoryRuntimeInfo const& r){ return !r.Repository->CompareTagsPath(tagsPath); });
+    auto iter = std::find_if(Repositories.begin(), Repositories.end(), [&tagsPath](RepositoryRuntimeInfo const& r){ return !r.Repository->CompareTagsPath(tagsPath); });
+    return iter != Repositories.end() ? *iter : RepositoryRuntimeInfo();
   }
 
   RepositoryRuntimeInfo RepositoryStorageImpl::Release(char const* tagsPath)
   {
-    auto iter = FindByTagsPath(tagsPath);
+    auto iter = std::find_if(Repositories.begin(), Repositories.end(), [&tagsPath](RepositoryRuntimeInfo const& r){ return !r.Repository->CompareTagsPath(tagsPath); });
     auto result = iter != Repositories.end() ? std::move(*iter) : RepositoryRuntimeInfo();
     if (iter != Repositories.end())
       Repositories.erase(iter);

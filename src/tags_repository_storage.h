@@ -45,6 +45,7 @@ namespace Tags
     virtual int Load(char const* tagsPath, RepositoryType type, size_t& symbolsLoaded) = 0;
     virtual std::vector<RepositoryInfo> GetOwners(char const* currentFile) const = 0;
     virtual std::vector<RepositoryInfo> GetByType(RepositoryType type) const = 0;
+    virtual RepositoryInfo GetInfo(char const* tagsPath) const = 0;
     virtual void Remove(char const* tagsPath) = 0;
     virtual void CacheTag(TagInfo const& tag, size_t cacheSize, bool flush) = 0;
     virtual void EraseCachedTag(TagInfo const& tag, bool flush) = 0;

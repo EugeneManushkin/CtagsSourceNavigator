@@ -200,6 +200,37 @@ namespace Tags
       ASSERT_NO_FATAL_FAILURE(LoadRepositories(AllRepositories));
       ASSERT_EQ(Owners, SUT->GetOwners(SubrepositoryFile.c_str()));
     }
+
+    TEST_F(RepositoryStorage, RemovesRepository)
+    {
+      auto const toRemove = PermanentRepository;
+      auto remained = AllRepositories;
+      remained.erase(std::remove(remained.begin(), remained.end(), toRemove), remained.end());
+      ASSERT_LT(remained.size(), AllRepositories.size());
+      ASSERT_NO_FATAL_FAILURE(LoadRepositories(AllRepositories));
+      SUT->Remove(toRemove.TagsPath.c_str());
+      ASSERT_EQ(remained, SUT->GetByType(RepositoryType::Any));
+    }
+
+    TEST_F(RepositoryStorage, NotRemoveNotExistingRepository)
+    {
+      ASSERT_NO_FATAL_FAILURE(LoadRepositories(AllRepositories));
+      SUT->Remove("Not/Existing/Repository");
+      ASSERT_EQ(AllRepositories, SUT->GetByType(RepositoryType::Any));
+    }
+
+    TEST_F(RepositoryStorage, ReturnsInfoOfLoadedRepository)
+    {
+      ASSERT_NO_FATAL_FAILURE(LoadRepositories(AllRepositories));
+      for (auto const& repo : AllRepositories)
+        ASSERT_EQ(repo, SUT->GetInfo(repo.TagsPath.c_str()));
+    }
+
+    TEST_F(RepositoryStorage, ReturnsEmptyInfoOfNotExistingRepository)
+    {
+      ASSERT_NO_FATAL_FAILURE(LoadRepositories(AllRepositories));
+      ASSERT_EQ(RepositoryInfo(), SUT->GetInfo("Not/Existing/Repository"));
+    }
   }
 }
 
