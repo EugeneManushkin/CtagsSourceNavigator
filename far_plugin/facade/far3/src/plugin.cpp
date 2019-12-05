@@ -56,6 +56,7 @@
 #include <vector>
 #include <list>
 #include <unordered_map>
+#include <unordered_set>
 
 static struct PluginStartupInfo I;
 FarStandardFunctions FSF;
@@ -951,7 +952,6 @@ static void SynchronizeConfig()
   configSynchronizer.Synchronize();
 }
 
-//TODO: remove
 static void SaveStrings(std::vector<std::string> const& strings, std::string const& fileName)
 {
   std::ofstream file;
@@ -962,7 +962,6 @@ static void SaveStrings(std::vector<std::string> const& strings, std::string con
     file << str << std::endl;
 }
 
-//TODO: remove
 static std::vector<std::string> LoadStrings(std::string const& fileName)
 {
   std::ifstream file;
@@ -992,49 +991,6 @@ inline SortingOptions GetSortOptions(Config const& config)
 static std::unique_ptr<Tags::Selector> GetSelector(std::string const& file)
 {
   return Storage->GetSelector(file.c_str(), !config.casesens, GetSortOptions(config), config.max_results);
-}
-
-//TODO: remove
-static void Autoload(std::string const& fileName)
-{
-  for(auto const& str : LoadStrings(fileName))
-  {
-    if (str.length() > 1 || str[1] == ':')
-    {
-      size_t symbolsLoaded;
-      Storage->Load(str.c_str(), Tags::RepositoryType::Regular, symbolsLoaded);
-    }
-  }
-}
-
-//TODO: remove
-static void LazyAutoload()
-{
-  if (config.autoload_changed)
-  {
-    Autoload(ExpandEnvString(config.autoload));
-  }
-
-  config.autoload_changed = false;
-}
-
-//TODO: remove
-static int AddToAutoload(std::string const& fname)
-{
-  if (!IsTagFile(fname.c_str()))
-    return MNotTagFile;
-
-  auto autoloadFilename = ExpandEnvString(config.autoload);
-  auto strings = LoadStrings(autoloadFilename);
-  for (auto const& str : strings)
-  {
-    if (!fname.compare(str))
-      return 0;
-  }
-  strings.push_back(fname.c_str());
-  SaveStrings(strings, autoloadFilename);
-  config.autoload_changed = true;
-  return 0;
 }
 
 static size_t LoadTagsImpl(std::string const& tagsFile, Tags::RepositoryType type = Tags::RepositoryType::Regular)
@@ -1155,13 +1111,19 @@ static Tags::RepositoryInfo SelectRepository()
   return repositories.empty() || (selected = Menu(GetMsg(MUnloadTagsFile), menuList, 0, 0)) == -1 ? Tags::RepositoryInfo() : std::move(repositories.at(selected));
 }
 
+static std::string GetPermanentsFilePath();
+static void SavePermanents(std::string const& fileName);
+static bool LoadPermanents(std::string const& fileName);
+
 static void ManageRepositories()
 {
+  LoadPermanents(GetPermanentsFilePath());
   auto selected = SelectRepository();
   if (selected.TagsPath.empty())
     return;
 
   Storage->Remove(selected.TagsPath.c_str());
+  SavePermanents(GetPermanentsFilePath());
 }
 
 HKL GetAsciiLayout()
@@ -2017,11 +1979,62 @@ static bool LoadMultipleTags(std::vector<std::string> const& tags)
   return errCount < tags.size();
 }
 
-static bool EnsureTagsLoaded(WideString const& fileName, bool createTempTags)
+static std::string GetPermanentsFilePath()
 {
-  auto owners = Storage->GetOwners(ToStdString(fileName).c_str());
-  std::vector<std::string> tags;
-  std::transform(owners.begin(), owners.end(), std::back_inserter(tags), [](Tags::RepositoryInfo& i) { return std::move(i.TagsPath); });
+  return ExpandEnvString(config.autoload);
+}
+
+static std::vector<std::string> RepositoriesToTagsPaths(std::vector<Tags::RepositoryInfo> const& repositories)
+{
+  std::vector<std::string> result;
+  std::transform(repositories.begin(), repositories.end(), std::back_inserter(result), [](Tags::RepositoryInfo const& r){ return r.TagsPath; });
+  return std::move(result);
+}
+
+static void RemoveNotOf(std::vector<std::string> const& permanents)
+{
+  std::unordered_set<std::string> loaded;
+  for (auto const& r : permanents)
+  {
+    auto info = Storage->GetInfo(r.c_str());
+    if (info.Type == Tags::RepositoryType::Permanent)
+      loaded.insert(std::move(info.TagsPath));
+    else if (!info.TagsPath.empty())
+      Storage->Remove(info.TagsPath.c_str());
+  }
+
+  for (auto const& r : Storage->GetByType(Tags::RepositoryType::Permanent))
+  {
+    if (!loaded.count(r.TagsPath))
+      Storage->Remove(r.TagsPath.c_str());
+  }
+}
+
+static void SavePermanents(std::string const& fileName)
+{
+  SaveStrings(RepositoriesToTagsPaths(Storage->GetByType(Tags::RepositoryType::Permanent)), fileName);
+}
+
+static bool LoadPermanents(std::string const& fileName)
+{
+  auto permanents = LoadStrings(fileName);
+  RemoveNotOf(permanents);
+  auto result = !permanents.empty() && LoadMultipleTags(permanents);
+  SavePermanents(fileName);
+  return result;
+}
+
+static void AddPermanent(std::string const& tagsFile, std::string const& fileName)
+{
+  Storage->Remove(tagsFile.c_str());
+  LoadPermanents(fileName);
+  LoadTagsImpl(tagsFile, Tags::RepositoryType::Permanent);
+  SavePermanents(fileName);
+}
+
+static bool EnsureNonpermanentsLoaded(WideString const& fileName, bool createTempTags)
+{
+  auto tags = RepositoriesToTagsPaths(Storage->GetOwners(ToStdString(fileName).c_str()));
   if (!tags.empty())
     return LoadMultipleTags(tags);
 
@@ -2031,6 +2044,12 @@ static bool EnsureTagsLoaded(WideString const& fileName, bool createTempTags)
 
   LoadTags(ToStdString(tagsFile).c_str(), true);
   return true;
+}
+
+static bool EnsureTagsLoaded(WideString const& fileName, bool createTempTags)
+{
+  bool permanentsLoaded = LoadPermanents(GetPermanentsFilePath());
+  return EnsureNonpermanentsLoaded(fileName, createTempTags) || permanentsLoaded;
 }
 
 static WideString ReindexRepository(WideString const& fileName)
@@ -2186,7 +2205,6 @@ HANDLE WINAPI OpenW(const struct OpenInfo *info)
   {
     auto ei = GetCurrentEditorInfo();
     auto fileName = GetFileNameFromEditor(ei.EditorID);
-    LazyAutoload();
     enum{
       miFindSymbol,miGoBack,miGoForward,miReindexRepo,
       miComplete,miBrowseClass,miBrowseFile,miLookupSymbol,miSearchFile,
@@ -2330,11 +2348,7 @@ HANDLE WINAPI OpenW(const struct OpenInfo *info)
         }break;
         case miAddTagsToAutoload:
         {
-          auto err = AddToAutoload(ToStdString(GetSelectedItem()));
-          if (err)
-          {
-            Msg(err);
-          }
+          SafeCall(std::bind(AddPermanent, ToStdString(GetSelectedItem()), GetPermanentsFilePath()));
         }break;
         case miLookupSymbol:
         {
