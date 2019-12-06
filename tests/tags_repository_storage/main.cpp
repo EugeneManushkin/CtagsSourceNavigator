@@ -179,6 +179,17 @@ namespace Tags
       ASSERT_EQ(R{RegularRepository}, SUT->GetByType(RepositoryType::Any));
     }
 
+    TEST_F(RepositoryStorage, StoresRepositoriesOrdered)
+    {
+      ASSERT_TRUE(LoadRepository(RegularSubRepository));
+      ASSERT_TRUE(LoadRepository(TemporaryRepository));
+      ASSERT_TRUE(LoadRepository(RegularRepository));
+      R ordered = {RegularSubRepository, TemporaryRepository, RegularRepository};
+      std::sort(ordered.begin(), ordered.end(), [](RepositoryInfo const& l, RepositoryInfo const& r){ return l.TagsPath < r.TagsPath; });
+      for (size_t i = 0; i < ordered.size(); ++i)
+        ASSERT_EQ(ordered.at(i), SUT->GetByType(RepositoryType::Any).at(i));
+    }
+
     TEST_F(RepositoryStorage, ReturnsRegularRepositories)
     {
       R const Regular{RegularRepository, RegularSubRepository};
