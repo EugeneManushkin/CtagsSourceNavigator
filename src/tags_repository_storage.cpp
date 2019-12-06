@@ -6,6 +6,7 @@
 
 #include <algorithm>
 #include <functional>
+#include <iterator>
 #include <list>
 
 namespace
@@ -34,11 +35,6 @@ namespace
   RepositoryInfo ToRepositoryInfo(RepositoryRuntimeInfo const& info)
   {
     return {info.Repository->TagsPath(), "TODO: get repository root", info.Type};
-  }
-
-  bool Involved(RepositoryRuntimeInfo const& info, char const* currentFile)
-  {
-    return info.Type == RepositoryType::Permanent || info.Repository->Belongs(currentFile);
   }
 
   class RepositoryStorageImpl : public Tags::RepositoryStorage
@@ -97,12 +93,18 @@ namespace
 
     std::unique_ptr<Tags::Selector> GetSelector(char const* currentFile, bool caseInsensitive, Tags::SortingOptions sortOptions, size_t limit) override
     {
-      std::vector<Tags::Internal::Repository const*> found;
+      std::vector<Tags::Internal::Repository const*> repositories;
+      std::vector<Tags::Internal::Repository const*> permanents;
       for (auto const& info : Repositories)
-        if (Involved(info, currentFile))
-          found.push_back(&*info.Repository);
+        if (info.Repository->Belongs(currentFile))
+          repositories.push_back(&*info.Repository);
+        else if (info.Type == RepositoryType::Permanent)
+          permanents.push_back(&*info.Repository);
 
-      return Tags::Internal::CreateSelector(std::move(found), currentFile, caseInsensitive, sortOptions, limit);
+      if (!repositories.empty())
+        std::copy(permanents.begin(), permanents.end(), std::back_inserter(repositories));
+
+      return Tags::Internal::CreateSelector(std::move(repositories), currentFile, caseInsensitive, sortOptions, limit);
     }
 
   private:
