@@ -51,7 +51,7 @@ namespace
       info = Empty(info) ? CreateRuntimeInfo(tagsPath, type, RepoFactory) : std::move(info);
       auto err = info.Repository->Load(symbolsLoaded);
       if (!err)
-        Repositories.push_front(std::move(info));
+        Insert(std::move(info));
 
       return err;
     }
@@ -110,6 +110,7 @@ namespace
   private:
     using RepositoriesCont = std::list<RepositoryRuntimeInfo>;
     RepositoryRuntimeInfo GetRuntimeInfo(char const* tagsPath) const;
+    void Insert(RepositoryRuntimeInfo&& info);
     RepositoryRuntimeInfo Release(char const* tagsPath);
     std::vector<RepositoryInfo> Filter(std::function<bool(RepositoryRuntimeInfo const&)>&& pred) const;
 
@@ -121,6 +122,12 @@ namespace
   {
     auto iter = std::find_if(Repositories.begin(), Repositories.end(), [&tagsPath](RepositoryRuntimeInfo const& r){ return !r.Repository->CompareTagsPath(tagsPath); });
     return iter != Repositories.end() ? *iter : RepositoryRuntimeInfo();
+  }
+
+  void RepositoryStorageImpl::Insert(RepositoryRuntimeInfo&& info)
+  {
+    auto iter = std::find_if(Repositories.begin(), Repositories.end(), [&info](RepositoryRuntimeInfo const& r){ return r.Repository->CompareTagsPath(info.Repository->TagsPath().c_str()) > 0; });
+    Repositories.insert(iter, std::move(info));
   }
 
   RepositoryRuntimeInfo RepositoryStorageImpl::Release(char const* tagsPath)
