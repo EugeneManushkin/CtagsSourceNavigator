@@ -11,18 +11,6 @@ namespace
 {
   using Tags::Internal::Repository;
 
-  std::vector<TagInfo> ForEachRepository(std::vector<Repository const*> const& repositories, std::function<std::vector<TagInfo>(Tags::Internal::Repository const&)>&& func)
-  {
-    std::vector<TagInfo> result;
-    for (auto const& repos : repositories)
-    {
-      auto tags = func(*repos);
-      std::move(tags.begin(), tags.end(), std::back_inserter(result));
-    }
-
-    return std::move(result);
-  }
-
   class SelectorImpl : public Tags::Selector
   {
   public:
@@ -65,24 +53,28 @@ namespace
 
     std::vector<TagInfo> GetCachedTags(bool getFiles) const override
     {
-      std::vector<std::pair<TagInfo, size_t>> stats;
-      for (auto const& repos : Repositories)
+      std::vector<TagInfo> result;
+      for (auto repos = Repositories.begin(); repos != Repositories.end() && result.size() < Limit; ++repos)
       {
-        auto stat = repos->GetCachedTags(getFiles);
-        std::move(stat.begin(), stat.end(), std::back_inserter(stats));
+        auto stat = (*repos)->GetCachedTags(getFiles);
+        auto statEnd = result.size() + stat.size() > Limit ? stat.begin() + (Limit - result.size()) : stat.end();
+        std::transform(stat.begin(), statEnd, std::back_inserter(result), [](std::pair<TagInfo, size_t>& v) { return std::move(v.first); });
       }
 
-      auto middle = Limit > stats.size() ? stats.end() : stats.begin() + Limit;
-      std::partial_sort(stats.begin(), middle, stats.end(), [](std::pair<TagInfo, size_t> &left, std::pair<TagInfo, size_t> &right) { return left.second < right.second; });
-      std::vector<TagInfo> result;
-      std::transform(stats.begin(), middle, std::back_inserter(result), [](std::pair<TagInfo, size_t>& v) { return std::move(v.first); });
       return std::move(result);
     }
 
   protected:
-    std::vector<TagInfo> GetSorted(std::function<std::vector<TagInfo>(Tags::Internal::Repository const&)>&& func) const
+    std::vector<TagInfo> GetSorted(std::function<std::vector<TagInfo>(Repository const&)>&& func) const
     {
-      return SortTags(ForEachRepository(Repositories, std::move(func)), CurrentFile.c_str(), SortOptions);
+      std::vector<TagInfo> result;
+      for (auto const& repos : Repositories)
+      {
+        auto tags = SortTags(func(*repos), CurrentFile.c_str(), SortOptions);
+        std::move(tags.begin(), tags.end(), std::back_inserter(result));
+      }
+
+      return std::move(result);
     }
 
     std::vector<Repository const*> Repositories;
