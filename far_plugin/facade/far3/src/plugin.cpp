@@ -1964,11 +1964,11 @@ static WideString SearchTagsFile(WideString const& fileName)
   return tagsFile;
 }
 
-static bool LoadMultipleTags(std::vector<std::string> const& tags)
+static bool LoadMultipleTags(std::vector<std::string> const& tags, Tags::RepositoryType type = Tags::RepositoryType::Regular)
 {
   auto errCount = static_cast<size_t>(0);
   for (auto const& tag : tags)
-    errCount += SafeCall([&tag]() { LoadTagsImpl(tag); return 0; }, 1);
+    errCount += SafeCall([&tag, type]() { LoadTagsImpl(tag, type); return 0; }, 1);
 
   return errCount < tags.size();
 }
@@ -2013,7 +2013,7 @@ static void LoadPermanents()
 {
   auto permanents = LoadStrings(GetPermanentsFilePath());
   RemoveNotOf(permanents);
-  LoadMultipleTags(permanents);
+  LoadMultipleTags(permanents, Tags::RepositoryType::Permanent);
   SavePermanents();
 }
 
