@@ -1083,17 +1083,12 @@ int Menu(const wchar_t *title,MenuList& lst,int sel,int flags=MF_LABELS,const vo
     return iter->data;
 }
 
-static std::vector<Tags::RepositoryInfo> GetManagedRepositories()
-{
-  return Storage->GetByType(~Tags::RepositoryType::Temporary);
-}
-
 static Tags::RepositoryInfo SelectRepository()
 {
-  auto repositories = GetManagedRepositories();
+  auto repositories = Storage->GetByType(~Tags::RepositoryType::Temporary);
   std::sort(repositories.begin(), repositories.end(), [](Tags::RepositoryInfo const& l, Tags::RepositoryInfo const& r) { return l.Type < r.Type || (l.Type == r.Type && l.TagsPath < r.TagsPath);});
   MenuList menuList;
-  if (!repositories.empty() && repositories.front().Type == Tags::RepositoryType::Permanent)
+  if (repositories.empty() || repositories.front().Type == Tags::RepositoryType::Permanent)
     menuList.push_back(MI(MNoRegularRepositories, 0, true));
 
   int i = 0;
@@ -1108,7 +1103,7 @@ static Tags::RepositoryInfo SelectRepository()
   }
 
   int selected = -1;
-  return repositories.empty() || (selected = Menu(GetMsg(MUnloadTagsFile), menuList, 0, 0)) == -1 ? Tags::RepositoryInfo() : std::move(repositories.at(selected));
+  return (selected = Menu(GetMsg(MUnloadTagsFile), menuList, 0, 0)) == -1 ? Tags::RepositoryInfo() : std::move(repositories.at(selected));
 }
 
 static void SavePermanents();
@@ -2312,7 +2307,7 @@ HANDLE WINAPI OpenW(const struct OpenInfo *info)
          , MI::Separator()
          , MI(MLoadTagsFile, miLoadTagsFile)
          , MI(MLoadFromHistory, miLoadFromHistory, !config.history_len)
-         , MI(MManageRepositories, miUnloadTagsFile, GetManagedRepositories().empty())
+         , MI(MManageRepositories, miUnloadTagsFile)
          , MI(MAddTagsToAutoload, miAddTagsToAutoload)
          , MI::Separator()
          , MI(MCreateTagsFile, miCreateTagsFile)
