@@ -87,12 +87,11 @@ struct Config{
 
   std::string exe;
   std::string opt;
-  std::string autoload;
+  std::string permanents;
   std::string tagsmask;
   std::string history_file;
   size_t history_len;
   bool casesens;
-  bool autoload_changed;
   size_t max_results;
   bool cur_file_first;
   bool index_edited_file;
@@ -110,12 +109,11 @@ const size_t Config::max_history_len = 100;
 Config::Config()
   : exe("ctags.exe")
   , opt("--c++-types=+px --c-types=+px --fields=+n -R *")
-  , autoload("%USERPROFILE%\\.tags-autoload")
+  , permanents("%USERPROFILE%\\.tags-autoload")
   , tagsmask("tags,*.tags")
   , history_file("%USERPROFILE%\\.tags-history")
   , history_len(10)
   , casesens(true)
-  , autoload_changed(true)
   , max_results(10)
   , cur_file_first(true)
   , index_edited_file(true)
@@ -869,7 +867,6 @@ static void VisitTags(WideString const& tagsFile)
 static void LoadConfig(std::string const& fileName)
 {
   SetDefaultConfig();
-  config.autoload_changed = true;
   std::ifstream file;
   file.exceptions(std::ifstream::goodbit);
   file.open(fileName);
@@ -893,7 +890,7 @@ static void LoadConfig(std::string const& fileName)
     }
     else if(key == "autoload")
     {
-      config.autoload=val.c_str();
+      config.permanents=val.c_str();
     }
     else if(key == "casesensfilt")
     {
@@ -2001,7 +1998,7 @@ static void RemoveNotOf(std::vector<std::string> const& permanents)
 
 static std::string GetPermanentsFilePath()
 {
-  return ExpandEnvString(config.autoload);
+  return ExpandEnvString(config.permanents);
 }
 
 static void SavePermanents()
@@ -2568,8 +2565,8 @@ static intptr_t ConfigurePlugin()
     DI_EDIT,      5, ++y, 62, 9, 1,0,              0,0,-1,ToString(config.history_file),{"historyfile"},
     DI_TEXT,      5, ++y,  0, 0, 0,0,              0,0,MHistoryLength,L"",{},
     DI_EDIT,      5, ++y, 62, 9, 1,0,              0,0,-1,ToString(std::to_string(config.history_len)),{"historylen", true},
-    DI_TEXT,      5, ++y,  0, 0, 0,0,              0,0,MAutoloadFile,L"",{},
-    DI_EDIT,      5, ++y, 62, 7, 1,0,              0,0,-1,ToString(config.autoload),{"autoload"},
+    DI_TEXT,      5, ++y,  0, 0, 0,0,              0,0,MPermanentsFile,L"",{},
+    DI_EDIT,      5, ++y, 62, 7, 1,0,              0,0,-1,ToString(config.permanents),{"autoload"},
     DI_TEXT,      5, ++y, 62,10, 1,0,DIF_SEPARATOR|DIF_BOXCOLOR,0,-1,L"",{},
     DI_BUTTON,    0, ++y,  0, 0, 0,0,DIF_CENTERGROUP,1,MOk,L"",{},
     DI_BUTTON,    0,   y,  0, 0, 0,0,DIF_CENTERGROUP,0,MCancel,L"",{}

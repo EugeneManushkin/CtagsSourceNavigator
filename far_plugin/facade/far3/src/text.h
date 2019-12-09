@@ -30,7 +30,7 @@ enum{
   MOk,
   MCancel,
   MCmdLineOptions,
-  MAutoloadFile,
+  MPermanentsFile,
   MRegFailed,
   MTagingCurrentDirectory,
   MUpdatingTagsFile,
