@@ -15,7 +15,7 @@ namespace
   class MockRepository : public Tags::Internal::Repository
   {
   public:
-    MockRepository(char const* tagsPath, Tags::RepositoryType)
+    MockRepository(char const* tagsPath)
       : TagsFilePath(tagsPath)
     {
     }
@@ -39,6 +39,11 @@ namespace
     std::string TagsPath() const override
     {
       return TagsFilePath;
+    }
+
+    std::string Root() const override
+    {
+      return GetDirOfFile(TagsFilePath);
     }
 
     std::vector<TagInfo> FindByName(const char* name) const override
@@ -88,9 +93,9 @@ namespace
     std::string TagsFilePath;
   };
 
-  std::unique_ptr<Tags::Internal::Repository> MockRepositoryFactory(char const* tagsPath, Tags::RepositoryType type)
+  std::unique_ptr<Tags::Internal::Repository> MockRepositoryFactory(char const* tagsPath, Tags::RepositoryType)
   {
-    return std::unique_ptr<Tags::Internal::Repository>(new MockRepository(tagsPath, type));
+    return std::unique_ptr<Tags::Internal::Repository>(new MockRepository(tagsPath));
   }
 }
 
@@ -100,6 +105,7 @@ namespace Tags
   {
     return left.TagsPath == right.TagsPath
         && left.Type == right.Type
+        && left.Root == right.Root
     ;
   }
 
@@ -185,7 +191,7 @@ namespace Tags
       ASSERT_TRUE(LoadRepository(TemporaryRepository));
       ASSERT_TRUE(LoadRepository(RegularRepository));
       R ordered = {RegularSubRepository, TemporaryRepository, RegularRepository};
-      std::sort(ordered.begin(), ordered.end(), [](RepositoryInfo const& l, RepositoryInfo const& r){ return l.TagsPath < r.TagsPath; });
+      std::sort(ordered.begin(), ordered.end(), [](RepositoryInfo const& l, RepositoryInfo const& r){ return l.Root < r.Root; });
       for (size_t i = 0; i < ordered.size(); ++i)
         ASSERT_EQ(ordered.at(i), SUT->GetByType(RepositoryType::Any).at(i));
     }

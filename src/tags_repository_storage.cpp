@@ -34,7 +34,7 @@ namespace
 
   RepositoryInfo ToRepositoryInfo(RepositoryRuntimeInfo const& info)
   {
-    return {info.Repository->TagsPath(), "TODO: get repository root", info.Type};
+    return {info.Repository->TagsPath(), info.Repository->Root(), info.Type};
   }
 
   class RepositoryStorageImpl : public Tags::RepositoryStorage
@@ -126,7 +126,7 @@ namespace
 
   void RepositoryStorageImpl::Insert(RepositoryRuntimeInfo&& info)
   {
-    auto iter = std::find_if(Repositories.begin(), Repositories.end(), [&info](RepositoryRuntimeInfo const& r){ return r.Repository->CompareTagsPath(info.Repository->TagsPath().c_str()) > 0; });
+    auto iter = std::find_if(Repositories.begin(), Repositories.end(), [&info](RepositoryRuntimeInfo const& r){ return r.Repository->Root() > info.Repository->Root(); });
     Repositories.insert(iter, std::move(info));
   }
 
