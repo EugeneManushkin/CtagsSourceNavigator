@@ -1111,19 +1111,18 @@ static Tags::RepositoryInfo SelectRepository()
   return repositories.empty() || (selected = Menu(GetMsg(MUnloadTagsFile), menuList, 0, 0)) == -1 ? Tags::RepositoryInfo() : std::move(repositories.at(selected));
 }
 
-static std::string GetPermanentsFilePath();
-static void SavePermanents(std::string const& fileName);
-static bool LoadPermanents(std::string const& fileName);
+static void SavePermanents();
+static bool LoadPermanents();
 
 static void ManageRepositories()
 {
-  LoadPermanents(GetPermanentsFilePath());
+  LoadPermanents();
   auto selected = SelectRepository();
   if (selected.TagsPath.empty())
     return;
 
   Storage->Remove(selected.TagsPath.c_str());
-  SavePermanents(GetPermanentsFilePath());
+  SavePermanents();
 }
 
 HKL GetAsciiLayout()
@@ -2010,26 +2009,26 @@ static void RemoveNotOf(std::vector<std::string> const& permanents)
   }
 }
 
-static void SavePermanents(std::string const& fileName)
+static void SavePermanents()
 {
-  SaveStrings(RepositoriesToTagsPaths(Storage->GetByType(Tags::RepositoryType::Permanent)), fileName);
+  SaveStrings(RepositoriesToTagsPaths(Storage->GetByType(Tags::RepositoryType::Permanent)), GetPermanentsFilePath());
 }
 
-static bool LoadPermanents(std::string const& fileName)
+static bool LoadPermanents()
 {
-  auto permanents = LoadStrings(fileName);
+  auto permanents = LoadStrings(GetPermanentsFilePath());
   RemoveNotOf(permanents);
   auto result = !permanents.empty() && LoadMultipleTags(permanents);
-  SavePermanents(fileName);
+  SavePermanents();
   return result;
 }
 
-static void AddPermanent(std::string const& tagsFile, std::string const& fileName)
+static void AddPermanent(std::string const& tagsFile)
 {
   Storage->Remove(tagsFile.c_str());
-  LoadPermanents(fileName);
+  LoadPermanents();
   LoadTagsImpl(tagsFile, Tags::RepositoryType::Permanent);
-  SavePermanents(fileName);
+  SavePermanents();
 }
 
 static bool EnsureNonpermanentsLoaded(WideString const& fileName, bool createTempTags)
@@ -2048,7 +2047,7 @@ static bool EnsureNonpermanentsLoaded(WideString const& fileName, bool createTem
 
 static bool EnsureTagsLoaded(WideString const& fileName, bool createTempTags)
 {
-  bool permanentsLoaded = LoadPermanents(GetPermanentsFilePath());
+  bool permanentsLoaded = LoadPermanents();
   return EnsureNonpermanentsLoaded(fileName, createTempTags) || permanentsLoaded;
 }
 
@@ -2348,7 +2347,7 @@ HANDLE WINAPI OpenW(const struct OpenInfo *info)
         }break;
         case miAddTagsToAutoload:
         {
-          SafeCall(std::bind(AddPermanent, ToStdString(GetSelectedItem()), GetPermanentsFilePath()));
+          SafeCall(std::bind(AddPermanent, ToStdString(GetSelectedItem())));
         }break;
         case miLookupSymbol:
         {
