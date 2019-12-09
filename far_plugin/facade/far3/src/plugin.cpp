@@ -1107,7 +1107,7 @@ static Tags::RepositoryInfo SelectRepository()
 }
 
 static void SavePermanents();
-static bool LoadPermanents();
+static void LoadPermanents();
 
 static void ManageRepositories()
 {
@@ -1973,11 +1973,6 @@ static bool LoadMultipleTags(std::vector<std::string> const& tags)
   return errCount < tags.size();
 }
 
-static std::string GetPermanentsFilePath()
-{
-  return ExpandEnvString(config.autoload);
-}
-
 static std::vector<std::string> RepositoriesToTagsPaths(std::vector<Tags::RepositoryInfo> const& repositories)
 {
   std::vector<std::string> result;
@@ -2004,18 +1999,22 @@ static void RemoveNotOf(std::vector<std::string> const& permanents)
   }
 }
 
+static std::string GetPermanentsFilePath()
+{
+  return ExpandEnvString(config.autoload);
+}
+
 static void SavePermanents()
 {
   SaveStrings(RepositoriesToTagsPaths(Storage->GetByType(Tags::RepositoryType::Permanent)), GetPermanentsFilePath());
 }
 
-static bool LoadPermanents()
+static void LoadPermanents()
 {
   auto permanents = LoadStrings(GetPermanentsFilePath());
   RemoveNotOf(permanents);
-  auto result = !permanents.empty() && LoadMultipleTags(permanents);
+  LoadMultipleTags(permanents);
   SavePermanents();
-  return result;
 }
 
 static void AddPermanent(std::string const& tagsFile)
@@ -2026,7 +2025,7 @@ static void AddPermanent(std::string const& tagsFile)
   SavePermanents();
 }
 
-static bool EnsureNonpermanentsLoaded(WideString const& fileName, bool createTempTags)
+static bool EnsureOwnersLoaded(WideString const& fileName, bool createTempTags)
 {
   auto tags = RepositoriesToTagsPaths(Storage->GetOwners(ToStdString(fileName).c_str()));
   if (!tags.empty())
@@ -2042,8 +2041,7 @@ static bool EnsureNonpermanentsLoaded(WideString const& fileName, bool createTem
 
 static bool EnsureTagsLoaded(WideString const& fileName, bool createTempTags)
 {
-  bool permanentsLoaded = LoadPermanents();
-  return EnsureNonpermanentsLoaded(fileName, createTempTags) || permanentsLoaded;
+  return EnsureOwnersLoaded(fileName, createTempTags) && (LoadPermanents(), true);
 }
 
 static WideString ReindexRepository(WideString const& fileName)
