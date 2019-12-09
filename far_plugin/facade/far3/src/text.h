@@ -37,7 +37,7 @@ enum{
   MWordChars,
   MCaseSensFilt,
   MNotFoundAsk,
-  MAddTagsToAutoload,
+  MAddPermanentRepository,
   MFailedSaveAutoload,
   MNotTagFile,
   MHistoryFile,

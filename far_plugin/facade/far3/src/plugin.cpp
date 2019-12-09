@@ -2025,6 +2025,13 @@ static void AddPermanent(std::string const& tagsFile)
   SavePermanents();
 }
 
+static void AddPermanentRepository()
+{
+  auto selected = ToStdString(SearchTagsFile(GetSelectedItem()));
+  if (!selected.empty())
+    AddPermanent(selected);
+}
+
 static bool EnsureOwnersLoaded(WideString const& fileName, bool createTempTags)
 {
   auto tags = RepositoriesToTagsPaths(Storage->GetOwners(ToStdString(fileName).c_str()));
@@ -2295,7 +2302,7 @@ HANDLE WINAPI OpenW(const struct OpenInfo *info)
     if(OpenFrom==OPEN_PLUGINSMENU)
     {
       enum {miLoadFromHistory,miLoadTagsFile,miUnloadTagsFile, miReindexRepo,
-            miCreateTagsFile,miAddTagsToAutoload, miLookupSymbol, miSearchFile,
+            miCreateTagsFile,miAddPermanentRepository, miLookupSymbol, miSearchFile,
             miPluginConfiguration, miNavigationHistory,
       };
       MenuList ml = {
@@ -2306,7 +2313,7 @@ HANDLE WINAPI OpenW(const struct OpenInfo *info)
          , MI(MLoadTagsFile, miLoadTagsFile)
          , MI(MLoadFromHistory, miLoadFromHistory, !config.history_len)
          , MI(MManageRepositories, miUnloadTagsFile)
-         , MI(MAddTagsToAutoload, miAddTagsToAutoload)
+         , MI(MAddPermanentRepository, miAddPermanentRepository)
          , MI::Separator()
          , MI(MCreateTagsFile, miCreateTagsFile)
          , MI(MReindexRepo, miReindexRepo)
@@ -2338,9 +2345,9 @@ HANDLE WINAPI OpenW(const struct OpenInfo *info)
             tagfile = JoinPath(selectedDir, DefaultTagsFilename);
           }
         }break;
-        case miAddTagsToAutoload:
+        case miAddPermanentRepository:
         {
-          SafeCall(std::bind(AddPermanent, ToStdString(GetSelectedItem())));
+          SafeCall(AddPermanentRepository);
         }break;
         case miLookupSymbol:
         {
