@@ -126,6 +126,11 @@ struct TagFileInfo{
     return filename;
   }
 
+  std::string const& GetRoot() const
+  {
+    return reporoot;
+  }
+
   std::shared_ptr<FILE> OpenTags(OffsetCont& offsets, IndexType index) const;
 
   int Load(size_t& symbolsLoaded);
@@ -1472,6 +1477,11 @@ namespace
     std::string TagsPath() const override
     {
       return Info.GetName();
+    }
+
+    std::string Root() const override
+    {
+      return Info.GetRoot();
     }
 
     std::vector<TagInfo> FindByName(const char* name) const override
