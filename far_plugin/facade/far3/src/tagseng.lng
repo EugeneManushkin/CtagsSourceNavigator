@@ -12,7 +12,7 @@
 "Tags file loaded"
 "Tags file not loaded"
 "Load tags file"
-"Select tags file to unload repository"
+"Enter - open repository root, Ctrl+Del - unload repository"
 "Index selected directory"
 "Update tags file"
 "Unable to update tags file"

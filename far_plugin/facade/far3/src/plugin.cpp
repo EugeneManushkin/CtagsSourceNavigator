@@ -1045,50 +1045,19 @@ struct MI{
 
 using MenuList = std::vector<MI>;
 
-int Menu(const wchar_t *title, MenuList const& lst, int sel = 0)
+std::pair<int, FarKey> Menu(const wchar_t *title, MenuList const& lst, int sel, std::vector<FarKey> const& stopKeys)
 {
   std::vector<FarMenuItem> menu(lst.size());
   std::transform(lst.begin(), lst.end(), menu.begin(), [sel](MI const& mi) {return mi.GetFarItem(sel);});
+  intptr_t bkey = -1;
   auto res=I.Menu(&PluginGuid, &CtagsMenuGuid, -1, -1, 0, FMENU_WRAPMODE, title, L"",
-                   L"content",NULL,NULL,&menu[0],lst.size());
-  return res == -1 ? -1 : lst.at(res).data;
+                   L"content",stopKeys.empty() ? nullptr : &stopKeys[0],&bkey,&menu[0],lst.size());
+  return std::make_pair(res == -1 ? -1 : lst.at(res).data, bkey == -1 ? FarKey() : stopKeys.at(bkey));
 }
 
-static Tags::RepositoryInfo SelectRepository()
+int Menu(const wchar_t *title, MenuList const& lst, int sel = 0)
 {
-  auto repositories = Storage->GetByType(~Tags::RepositoryType::Temporary);
-  std::sort(repositories.begin(), repositories.end(), [](Tags::RepositoryInfo const& l, Tags::RepositoryInfo const& r) { return l.Type < r.Type || (l.Type == r.Type && l.TagsPath < r.TagsPath);});
-  MenuList menuList;
-  if (repositories.empty() || repositories.front().Type == Tags::RepositoryType::Permanent)
-    menuList.push_back(MI(MNoRegularRepositories, -1, true));
-
-  int i = 0;
-  Tags::RepositoryType currentType = Tags::RepositoryType::Regular;
-  for (auto r = repositories.begin(); r != repositories.end(); ++r)
-  {
-    if (currentType != r->Type)
-      menuList.push_back(MI::Separator(r->Type == Tags::RepositoryType::Permanent ? MPermanentRepositories : -1));
-
-    menuList.push_back(MI(ToString(r->TagsPath), i++));
-    currentType = r->Type;
-  }
-
-  int selected = -1;
-  return (selected = Menu(GetMsg(MUnloadTagsFile), menuList)) == -1 ? Tags::RepositoryInfo() : std::move(repositories.at(selected));
-}
-
-static void SavePermanents();
-static void LoadPermanents();
-
-static void ManageRepositories()
-{
-  LoadPermanents();
-  auto selected = SelectRepository();
-  if (selected.TagsPath.empty())
-    return;
-
-  Storage->Remove(selected.TagsPath.c_str());
-  SavePermanents();
+  return Menu(title, lst, sel, std::vector<FarKey>()).first;
 }
 
 HKL GetAsciiLayout()
@@ -1278,6 +1247,58 @@ static LookupResult LookupTagsMenu(TagsViewer const& viewer, TagInfo& tag, Forma
     filter+=(char)key;
   }
   return LookupResult::Cancel;
+}
+
+static MenuList GetRepoMenuList(std::vector<Tags::RepositoryInfo> const& repositories)
+{
+  MenuList menuList;
+  if (repositories.empty() || repositories.front().Type == Tags::RepositoryType::Permanent)
+    menuList.push_back(MI(MNoRegularRepositories, -1, 0, true));
+
+  int i = 0;
+  Tags::RepositoryType currentType = Tags::RepositoryType::Regular;
+  for (auto r = repositories.begin(); r != repositories.end(); ++r)
+  {
+    if (currentType != r->Type)
+      menuList.push_back(MI::Separator(r->Type == Tags::RepositoryType::Permanent ? MPermanentRepositories : -1));
+
+    menuList.push_back(MI(ToString(r->Root), i++));
+    currentType = r->Type;
+  }
+
+  return std::move(menuList);
+}
+
+static void SavePermanents();
+static void LoadPermanents();
+
+static void ManageRepositories()
+{
+  std::vector<FarKey> const stopKeys = {{VK_DELETE, LEFT_CTRL_PRESSED}, {VK_DELETE, RIGHT_CTRL_PRESSED}};
+  Tags::RepositoryInfo repo;
+  int selected = 0;
+  while(repo.TagsPath.empty())
+  {
+    LoadPermanents();
+    auto repositories = Storage->GetByType(~Tags::RepositoryType::Temporary);
+    std::stable_partition(repositories.begin(), repositories.end(), [](Tags::RepositoryInfo const& repo) {return repo.Type == Tags::RepositoryType::Regular;});
+    auto res = Menu(GetMsg(MUnloadTagsFile), GetRepoMenuList(repositories), selected, stopKeys);
+    if (res.first == -1)
+      return;
+
+    if (IsCtrlDel(res.second))
+    {
+      selected = res.first - res.first == repositories.size() - 1 ? 1 : 0;
+      Storage->Remove(repositories.at(res.first).TagsPath.c_str());
+      SavePermanents();
+    }
+    else
+    {
+      repo = repositories.at(res.first);
+    }
+  }
+
+  SetPanelDir(ToString(repo.Root), PANEL_ACTIVE);
 }
 
 void WINAPI SetStartupInfoW(const struct PluginStartupInfo *Info)
