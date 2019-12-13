@@ -1009,18 +1009,22 @@ static void LoadTags(std::string const& tagsFile, bool silent)
   VisitTags(ToString(tagsFile));
 }
 
+static WideString LabelToStr(char label)
+{
+  return !label ? WideString() : label == ' ' ? WideString(L"  ") : WideString(L"&") + wchar_t(label) + L" ";
+}
+
 struct MI{
   WideString item;
   int data;
   bool Disabled;
-  char Label;
   MI()
     : data(-1)
     , Disabled(false)
   {
   }
-  MI(WideString const& str,int value):item(str),data(value),Disabled(false),Label(0){}
-  MI(int msgid,int value,bool disabled=false,char label=0):item(GetMsg(msgid)),data(value),Disabled(disabled),Label(label){}
+  MI(WideString const& str,int value):item(str),data(value),Disabled(false){}
+  MI(int msgid,int value,char label=0,bool disabled=false):item((LabelToStr(label) + GetMsg(msgid)).substr(0, MaxMenuWidth)),data(value),Disabled(disabled){}
   bool IsSeparator() const
   {
     return data == -2;
@@ -1035,49 +1039,24 @@ struct MI{
   }
 };
 
-using MenuList = std::list<MI>;
+using MenuList = std::vector<MI>;
 
-#define MF_LABELS 1
-#define MF_SHOWCOUNT 4
-
-//TODO: consider pass const& lst
-int Menu(const wchar_t *title,MenuList& lst,int sel,int flags=MF_LABELS,const void* param=NULL)
+int Menu(const wchar_t *title, MenuList const& lst, int sel = 0)
 {
   std::vector<FarMenuItem> menu(lst.size());
-  wchar_t const labels[]=L"1234567890ABCDEFGHIJKLMNOPQRSTUVWXYZ";
-  int const labelsCount=sizeof(labels)-1;
   int i = 0;
-  int curLabel = 0;
   for (auto& lstItem : lst)
   {
-    if (!lstItem.item.empty())
-    {
-      if((flags&MF_LABELS))
-      {
-        WideString buf;
-        buf = buf.empty() && !!lstItem.Label ? WideString(L"&") + wchar_t(lstItem.Label) + L" " : buf;
-        buf = buf.empty() && curLabel < labelsCount ? WideString(L"&") + labels[curLabel] + L" " : buf;
-        buf = buf.empty() ? L"  " : buf;
-        lstItem.item = buf + lstItem.item;
-        curLabel += !!lstItem.Label ? 0 : 1;
-      }
-      lstItem.item = lstItem.item.substr(0, MaxMenuWidth);
-      menu[i].Text = lstItem.item.c_str();
-      if(sel==i)menu[i].Flags |= MIF_SELECTED;
-    }
+    menu[i].Text = lstItem.item.c_str();
+    menu[i].Flags |= sel == i ? MIF_SELECTED : 0;
     menu[i].Flags |= lstItem.IsSeparator() ? MIF_SEPARATOR : 0;
     menu[i].Flags |= lstItem.IsDisabled() ? MIF_DISABLE | MIF_GRAYED : 0;
     ++i;
   }
-    WideString bottomText = flags&MF_SHOWCOUNT ? GetMsg(MItemsCount) + ToString(std::to_string(lst.size())) : L"";
-    auto res=I.Menu(&PluginGuid, &CtagsMenuGuid, -1, -1, 0, FMENU_WRAPMODE, title, bottomText.c_str(),
-                   L"content",NULL,NULL,&menu[0],lst.size());
-    if (res == -1)
-      return -1;
 
-    auto iter = lst.begin();
-    std::advance(iter, res);
-    return iter->data;
+  auto res=I.Menu(&PluginGuid, &CtagsMenuGuid, -1, -1, 0, FMENU_WRAPMODE, title, L"",
+                   L"content",NULL,NULL,&menu[0],lst.size());
+  return res == -1 ? -1 : lst.at(res).data;
 }
 
 static Tags::RepositoryInfo SelectRepository()
@@ -1100,7 +1079,7 @@ static Tags::RepositoryInfo SelectRepository()
   }
 
   int selected = -1;
-  return (selected = Menu(GetMsg(MUnloadTagsFile), menuList, 0, 0)) == -1 ? Tags::RepositoryInfo() : std::move(repositories.at(selected));
+  return (selected = Menu(GetMsg(MUnloadTagsFile), menuList)) == -1 ? Tags::RepositoryInfo() : std::move(repositories.at(selected));
 }
 
 static void SavePermanents();
@@ -1821,7 +1800,7 @@ static void NavigationHistory()
 
   auto selected = static_cast<int>(NavigatorInstance->CurrentPosition());
   selected = selected == NavigatorInstance->NumPositions() ? selected - 1 : selected;
-  auto index = Menu(GetMsg(MNavigationHistoryMenuTitle), menuList, selected, 0);
+  auto index = Menu(GetMsg(MNavigationHistoryMenuTitle), menuList, selected);
   if (index >= 0)
     NavigatorInstance->Goto(static_cast<Navigator::Index>(index));
 }
@@ -1855,7 +1834,7 @@ static WideString SelectFromHistory()
     ++i;
   }
 
-  auto rc = Menu(GetMsg(MTitleHistory), menuList, 0);
+  auto rc = Menu(GetMsg(MTitleHistory), menuList);
   if (rc < 0)
     return WideString();
 
@@ -1950,7 +1929,7 @@ static WideString SearchTagsFile(WideString const& fileName)
   for (auto const& tagsFile : foundTags)
     lst.push_back(MI(tagsFile, i++));
 
-  auto res = Menu(GetMsg(MSelectTags), lst, 0, 0);
+  auto res = Menu(GetMsg(MSelectTags), lst);
   if (res < 0)
     return WideString();
 
@@ -2207,22 +2186,22 @@ HANDLE WINAPI OpenW(const struct OpenInfo *info)
       miPluginConfiguration,miNavigationHistory,
     };
     MenuList ml = {
-        MI(MFindSymbol,miFindSymbol)
-      , MI(MCompleteSymbol,miComplete)
-      , MI(MUndoNavigation,miGoBack,!NavigatorInstance->CanGoBack())
-      , MI(MRepeatNavigation,miGoForward,!NavigatorInstance->CanGoForward(), 'F')
-      , MI(MNavigationHistory,miNavigationHistory,!NavigatorInstance->NumPositions(), 'H')
+        MI(MFindSymbol,miFindSymbol, '1')
+      , MI(MCompleteSymbol,miComplete, '2')
+      , MI(MUndoNavigation,miGoBack, '3', !NavigatorInstance->CanGoBack())
+      , MI(MRepeatNavigation,miGoForward, 'F', !NavigatorInstance->CanGoForward())
+      , MI(MNavigationHistory,miNavigationHistory, 'H', !NavigatorInstance->NumPositions())
       , MI::Separator()
-      , MI(MBrowseClass,miBrowseClass)
-      , MI(MBrowseSymbolsInFile,miBrowseFile)
-      , MI(MLookupSymbol,miLookupSymbol)
-      , MI(MSearchFile,miSearchFile)
+      , MI(MBrowseClass,miBrowseClass, '4')
+      , MI(MBrowseSymbolsInFile,miBrowseFile, '5')
+      , MI(MLookupSymbol,miLookupSymbol, '6')
+      , MI(MSearchFile,miSearchFile, '7')
       , MI::Separator()
-      , MI(MReindexRepo, miReindexRepo)
+      , MI(MReindexRepo, miReindexRepo, '8')
       , MI::Separator()
-      , MI(MPluginConfiguration, miPluginConfiguration, false, 'C')
+      , MI(MPluginConfiguration, miPluginConfiguration, 'C')
     };
-    int res=Menu(GetMsg(MPlugin),ml,0);
+    int res=Menu(GetMsg(MPlugin),ml);
     if(res==-1)return nullptr;
     if ((res == miFindSymbol
       || res == miComplete
@@ -2303,21 +2282,21 @@ HANDLE WINAPI OpenW(const struct OpenInfo *info)
             miPluginConfiguration, miNavigationHistory,
       };
       MenuList ml = {
-           MI(MLookupSymbol, miLookupSymbol)
-         , MI(MSearchFile, miSearchFile)
-         , MI(MNavigationHistory, miNavigationHistory, !NavigatorInstance->NumPositions(), 'H')
+           MI(MLookupSymbol, miLookupSymbol, '1')
+         , MI(MSearchFile, miSearchFile, '2')
+         , MI(MNavigationHistory, miNavigationHistory, 'H', !NavigatorInstance->NumPositions())
          , MI::Separator()
-         , MI(MLoadTagsFile, miLoadTagsFile)
-         , MI(MLoadFromHistory, miLoadFromHistory, !config.history_len)
-         , MI(MManageRepositories, miUnloadTagsFile)
-         , MI(MAddPermanentRepository, miAddPermanentRepository)
+         , MI(MLoadTagsFile, miLoadTagsFile, '3')
+         , MI(MLoadFromHistory, miLoadFromHistory, '4', !config.history_len)
+         , MI(MManageRepositories, miUnloadTagsFile, '5')
+         , MI(MAddPermanentRepository, miAddPermanentRepository, '6')
          , MI::Separator()
-         , MI(MCreateTagsFile, miCreateTagsFile)
-         , MI(MReindexRepo, miReindexRepo)
+         , MI(MCreateTagsFile, miCreateTagsFile, '7')
+         , MI(MReindexRepo, miReindexRepo, '8')
          , MI::Separator()
-         , MI(MPluginConfiguration, miPluginConfiguration, false, 'C')
+         , MI(MPluginConfiguration, miPluginConfiguration, 'C')
       };
-      int rc=Menu(GetMsg(MPlugin),ml,0);
+      int rc=Menu(GetMsg(MPlugin),ml);
       switch(rc)
       {
         case miLoadFromHistory:
