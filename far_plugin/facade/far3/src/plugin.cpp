@@ -1029,9 +1029,13 @@ struct MI{
   {
     return data == -2;
   }
-  bool IsDisabled() const
+  FarMenuItem GetFarItem(int selected) const
   {
-    return Disabled;
+    return
+    {
+      (IsSeparator() ? MIF_SEPARATOR : 0) | (Disabled ? MIF_DISABLE | MIF_GRAYED : 0) | (data == selected ? MIF_SELECTED : 0)
+    , item.c_str()
+    };
   }
   static MI Separator(int msgid = -1)
   {
@@ -1044,16 +1048,7 @@ using MenuList = std::vector<MI>;
 int Menu(const wchar_t *title, MenuList const& lst, int sel = 0)
 {
   std::vector<FarMenuItem> menu(lst.size());
-  int i = 0;
-  for (auto& lstItem : lst)
-  {
-    menu[i].Text = lstItem.item.c_str();
-    menu[i].Flags |= sel == i ? MIF_SELECTED : 0;
-    menu[i].Flags |= lstItem.IsSeparator() ? MIF_SEPARATOR : 0;
-    menu[i].Flags |= lstItem.IsDisabled() ? MIF_DISABLE | MIF_GRAYED : 0;
-    ++i;
-  }
-
+  std::transform(lst.begin(), lst.end(), menu.begin(), [sel](MI const& mi) {return mi.GetFarItem(sel);});
   auto res=I.Menu(&PluginGuid, &CtagsMenuGuid, -1, -1, 0, FMENU_WRAPMODE, title, L"",
                    L"content",NULL,NULL,&menu[0],lst.size());
   return res == -1 ? -1 : lst.at(res).data;
@@ -1065,7 +1060,7 @@ static Tags::RepositoryInfo SelectRepository()
   std::sort(repositories.begin(), repositories.end(), [](Tags::RepositoryInfo const& l, Tags::RepositoryInfo const& r) { return l.Type < r.Type || (l.Type == r.Type && l.TagsPath < r.TagsPath);});
   MenuList menuList;
   if (repositories.empty() || repositories.front().Type == Tags::RepositoryType::Permanent)
-    menuList.push_back(MI(MNoRegularRepositories, 0, true));
+    menuList.push_back(MI(MNoRegularRepositories, -1, true));
 
   int i = 0;
   Tags::RepositoryType currentType = Tags::RepositoryType::Regular;
@@ -2201,7 +2196,7 @@ HANDLE WINAPI OpenW(const struct OpenInfo *info)
       , MI::Separator()
       , MI(MPluginConfiguration, miPluginConfiguration, 'C')
     };
-    int res=Menu(GetMsg(MPlugin),ml);
+    int res=Menu(GetMsg(MPlugin),ml,MFindSymbol);
     if(res==-1)return nullptr;
     if ((res == miFindSymbol
       || res == miComplete
@@ -2296,7 +2291,7 @@ HANDLE WINAPI OpenW(const struct OpenInfo *info)
          , MI::Separator()
          , MI(MPluginConfiguration, miPluginConfiguration, 'C')
       };
-      int rc=Menu(GetMsg(MPlugin),ml);
+      int rc=Menu(GetMsg(MPlugin),ml,miLookupSymbol);
       switch(rc)
       {
         case miLoadFromHistory:
