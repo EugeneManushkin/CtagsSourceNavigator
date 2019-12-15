@@ -27,51 +27,44 @@ namespace
 
     std::vector<TagInfo> GetByName(const char* name) const override
     {
-      return GetSorted([&name](Repository const& repo){ return repo.FindByName(name); });
+      return ForEach([&name](Repository const& repo){ return repo.FindByName(name); });
     }
 
     std::vector<TagInfo> GetFiles(const char* path) const override
     {
-      return GetSorted([&path](Repository const& repo){ return repo.FindFiles(path); });
+      return ForEach([&path](Repository const& repo){ return repo.FindFiles(path); });
     }
 
     std::vector<TagInfo> GetClassMembers(const char* classname) const override
     {
-      return GetSorted([&classname](Repository const& repo){ return repo.FindClassMembers(classname); });
+      return ForEach([&classname](Repository const& repo){ return repo.FindClassMembers(classname); });
     }
 
     std::vector<TagInfo> GetByFile(const char* file) const override
     {
-      return GetSorted([&file](Repository const& repo){ return repo.FindByFile(file); } );
+      return ForEach([&file](Repository const& repo){ return repo.FindByFile(file); } );
     }
 
     std::vector<TagInfo> GetByPart(const char* part, bool getFiles, bool unlimited) const override
     {
-      return getFiles ? GetSorted([this, &part, unlimited](Repository const& repo){ return repo.FindFiles(part, unlimited ? 0 : Limit); })
-                      : GetSorted([this, &part, unlimited](Repository const& repo){ return repo.FindByName(part, unlimited ? 0 : Limit, CaseInsensitive); });
+      return getFiles ? ForEach([this, &part, unlimited](Repository const& repo){ return repo.FindFiles(part, unlimited ? 0 : Limit); })
+                      : ForEach([this, &part, unlimited](Repository const& repo){ return repo.FindByName(part, unlimited ? 0 : Limit, CaseInsensitive); });
     }
 
     std::vector<TagInfo> GetCachedTags(bool getFiles) const override
     {
-      std::vector<TagInfo> result;
-      for (auto repos = Repositories.begin(); repos != Repositories.end() && result.size() < Limit; ++repos)
-      {
-        auto stat = (*repos)->GetCachedTags(getFiles, Limit);
-        auto statEnd = result.size() + stat.size() > Limit ? stat.begin() + (Limit - result.size()) : stat.end();
-        std::move(stat.begin(), statEnd, std::back_inserter(result));
-      }
-
-      return std::move(result);
+      return ForEach([this, getFiles](Repository const& repo){ return repo.GetCachedTags(getFiles, Limit); }, false, false);
     }
 
   protected:
-    std::vector<TagInfo> GetSorted(std::function<std::vector<TagInfo>(Repository const&)>&& func) const
+    std::vector<TagInfo> ForEach(std::function<std::vector<TagInfo>(Repository const&)>&& func, bool unlimited = true, bool sorted = true) const
     {
       std::vector<TagInfo> result;
-      for (auto const& repos : Repositories)
+      for (auto repos = Repositories.begin(); repos != Repositories.end() && (unlimited || result.size() < Limit); ++repos)
       {
-        auto tags = SortTags(func(*repos), CurrentFile.c_str(), SortOptions);
-        std::move(tags.begin(), tags.end(), std::back_inserter(result));
+        auto tags = SortTags(func(**repos), CurrentFile.c_str(), sorted ? SortOptions : Tags::SortingOptions::DoNotSort);
+        auto tagsEnd = !unlimited && result.size() + tags.size() > Limit ? tags.begin() + (Limit - result.size()) : tags.end();
+        std::move(tags.begin(), tagsEnd, std::back_inserter(result));
       }
 
       return std::move(result);
