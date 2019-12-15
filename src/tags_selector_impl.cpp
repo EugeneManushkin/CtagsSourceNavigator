@@ -56,9 +56,9 @@ namespace
       std::vector<TagInfo> result;
       for (auto repos = Repositories.begin(); repos != Repositories.end() && result.size() < Limit; ++repos)
       {
-        auto stat = (*repos)->GetCachedTags(getFiles);
+        auto stat = (*repos)->GetCachedTags(getFiles, Limit);
         auto statEnd = result.size() + stat.size() > Limit ? stat.begin() + (Limit - result.size()) : stat.end();
-        std::transform(stat.begin(), statEnd, std::back_inserter(result), [](std::pair<TagInfo, size_t>& v) { return std::move(v.first); });
+        std::move(stat.begin(), statEnd, std::back_inserter(result));
       }
 
       return std::move(result);

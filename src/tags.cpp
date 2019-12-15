@@ -148,9 +148,9 @@ struct TagFileInfo{
     cache.Erase(tag);
   }
 
-  std::vector<std::pair<TagInfo, size_t>> GetCachedTags(bool getFiles) const
+  std::vector<TagInfo> GetCachedTags(bool getFiles, size_t limit) const
   {
-    return getFiles ? FilesCache->GetStat() : NamesCache->GetStat();
+    return getFiles ? FilesCache->Get(limit) : NamesCache->Get(limit);
   }
 
   void FlushCachedTags();
@@ -1529,9 +1529,9 @@ namespace
         Info.FlushCachedTags();
     }
 
-    std::vector<std::pair<TagInfo, size_t>> GetCachedTags(bool getFiles) const override
+    std::vector<TagInfo> GetCachedTags(bool getFiles, size_t maxCount) const override
     {
-      return Info.GetCachedTags(getFiles);
+      return Info.GetCachedTags(getFiles, maxCount);
     }
 
   private:
