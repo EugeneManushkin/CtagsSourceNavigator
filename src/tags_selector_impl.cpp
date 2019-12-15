@@ -11,6 +11,11 @@ namespace
 {
   using Tags::Internal::Repository;
 
+  bool CacheEmpty(Repository const& repo, bool getFiles)
+  {
+    return repo.GetCachedTags(getFiles, 1).empty();
+  }
+
   class SelectorImpl : public Tags::Selector
   {
   public:
@@ -47,13 +52,16 @@ namespace
 
     std::vector<TagInfo> GetByPart(const char* part, bool getFiles, bool unlimited) const override
     {
-      return getFiles ? ForEach([this, &part, unlimited](Repository const& repo){ return repo.FindFiles(part, unlimited ? 0 : Limit); })
-                      : ForEach([this, &part, unlimited](Repository const& repo){ return repo.FindByName(part, unlimited ? 0 : Limit, CaseInsensitive); });
+      bool partEmpty = !part[0];
+      return getFiles ? ForEach([this, &part, unlimited](Repository const& repo){ return repo.FindFiles(part, unlimited ? 0 : Limit); }, !partEmpty)
+                      : ForEach([this, &part, unlimited](Repository const& repo){ return repo.FindByName(part, unlimited ? 0 : Limit, CaseInsensitive); }, !partEmpty);
     }
 
     std::vector<TagInfo> GetCachedTags(bool getFiles) const override
     {
-      return ForEach([this, getFiles](Repository const& repo){ return repo.GetCachedTags(getFiles, Limit); }, false, false);
+      bool noCachedTags = Repositories.empty() || CacheEmpty(*Repositories.front(), getFiles);
+      return noCachedTags ? std::vector<TagInfo>()
+                          : ForEach([this, getFiles](Repository const& repo){ return repo.GetCachedTags(getFiles, Limit); }, false, false);
     }
 
   protected:
