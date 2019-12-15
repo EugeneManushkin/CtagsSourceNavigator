@@ -27,7 +27,7 @@ namespace Tags
       virtual std::vector<TagInfo> FindByFile(const char* file) const = 0;
       virtual void CacheTag(TagInfo const& tag, size_t cacheSize, bool flush) = 0;
       virtual void EraseCachedTag(TagInfo const& tag, bool flush) = 0;
-      virtual std::vector<std::pair<TagInfo, size_t>> GetCachedTags(bool getFiles) const = 0;
+      virtual std::vector<TagInfo> GetCachedTags(bool getFiles, size_t maxCount) const = 0;
     };
   }
 }

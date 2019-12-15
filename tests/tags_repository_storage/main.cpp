@@ -84,9 +84,9 @@ namespace
     {
     }
 
-    std::vector<std::pair<TagInfo, size_t>> GetCachedTags(bool getFiles) const override
+    std::vector<TagInfo> GetCachedTags(bool getFiles, size_t maxCount) const override
     {
-      return std::vector<std::pair<TagInfo, size_t>>();
+      return std::vector<TagInfo>();
     }
 
   private:
