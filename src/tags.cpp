@@ -440,6 +440,11 @@ static void QuoteMeta(std::string& str)
   str=dst;
 }
 
+inline bool IsSpace(char c)
+{
+  return c == ' ' || c == '\t';
+}
+
 static void ReplaceSpaces(std::string& str)
 {
   std::string dst;
@@ -447,16 +452,16 @@ static void ReplaceSpaces(std::string& str)
   size_t end = str.length() > 2 && str.back() == '$' ? str.size() - 1: str.size();
   for(size_t i = begin; i < end; ++i)
   {
-    if(isspace(str[i]))
+    if(IsSpace(str[i]))
     {
       bool optional = i == begin;
-      for (; i < end && isspace(str[i]); ++i);
+      for (; i < end && IsSpace(str[i]); ++i);
       optional = optional || i == end;
       dst+=optional ? "\\s*" : "\\s+";
     }
     dst+=str[i];
   }
-  str=dst;
+  str=std::move(dst);
 }
 
 static std::string MakeFilename(std::string const& str)
