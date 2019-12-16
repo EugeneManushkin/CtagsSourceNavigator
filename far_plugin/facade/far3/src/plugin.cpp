@@ -653,6 +653,18 @@ static bool InteractiveWaitProcess(void* hProcess, WideString const& message)
   return false;
 }
 
+std::string GetErrorText(DWORD error)
+{
+  char* buffer = 0;
+  size_t sz = FormatMessageA(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS, nullptr, error, 
+                             MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), reinterpret_cast<char*>(&buffer), 0, nullptr);
+  std::string result(buffer, sz);
+  LocalFree(buffer);
+  result.erase(std::remove(result.begin(), result.end(), '\r'));
+  for (; !result.empty() && result.back() == '\n'; result.erase(--result.end()));
+  return std::move(result);
+}
+
 static void ExecuteScript(WideString const& script, WideString const& args, WideString workingDirectory, WideString const& message = WideString())
 {
   SHELLEXECUTEINFOW ShExecInfo = {};
@@ -666,7 +678,7 @@ static void ExecuteScript(WideString const& script, WideString const& args, Wide
   ShExecInfo.nShow = 0;
   ShExecInfo.hInstApp = nullptr;
   if (!::ShellExecuteExW(&ShExecInfo))
-    throw std::runtime_error("Failed to run external utility: " + std::to_string(GetLastError()));
+    throw std::runtime_error("Failed to run external utility: " + GetErrorText(GetLastError()));
 
   DWORD exitCode = 0;
   if (InteractiveWaitProcess(ShExecInfo.hProcess, message.empty() ? L"Running: " + script + L"\nArgs: " + args : message))
@@ -677,7 +689,7 @@ static void ExecuteScript(WideString const& script, WideString const& args, Wide
   }
 
   if (!GetExitCodeProcess(ShExecInfo.hProcess, &exitCode))
-    throw std::runtime_error("Failed to get exit code of process: " + std::to_string(GetLastError()));
+    throw std::runtime_error("Failed to get exit code of process: " + GetErrorText(GetLastError()));
 
   if (exitCode == ERROR_CANCELLED)
     throw Error(MCanceled);
@@ -734,14 +746,14 @@ static void RenameFile(WideString const& originalFile, WideString const& newFile
   if (!::MoveFileExW(originalFile.c_str(), newFile.c_str(), MOVEFILE_REPLACE_EXISTING))
     throw std::runtime_error("Failed to rename file:\n" + ToStdString(originalFile) + 
                              "\nto file:\n" + ToStdString(newFile) + 
-                             "\nwith error: " + std::to_string(GetLastError()));
+                             "\nwith error: " + GetErrorText(GetLastError()));
 }
 
 static void RemoveFile(WideString const& file)
 {
   if (!::DeleteFileW(file.c_str()))
     throw std::runtime_error("Failed to delete file:\n" + ToStdString(file) +
-                             "\nwith error: " + std::to_string(GetLastError()));
+                             "\nwith error: " + GetErrorText(GetLastError()));
 }
 
 static void RemoveDirWithFiles(WideString const& dir)
@@ -761,14 +773,14 @@ static void RemoveDirWithFiles(WideString const& dir)
 
   if (!::RemoveDirectoryW(dir.c_str()))
     throw std::runtime_error("Failed to remove directory:\n" + ToStdString(dir) +
-                             "\nwith error: " + std::to_string(GetLastError()));
+                             "\nwith error: " + GetErrorText(GetLastError()));
 }
 
 static void MkDir(WideString const& dir)
 {
   if (!::CreateDirectoryW(dir.c_str(), nullptr))
     throw std::runtime_error("Failed to create directory:\n" + ToStdString(dir) +
-                             "\nwith error: " + std::to_string(GetLastError()));
+                             "\nwith error: " + GetErrorText(GetLastError()));
 }
 
 static WideString RenameToTempFilename(WideString const& originalFile)
