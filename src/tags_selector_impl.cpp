@@ -11,11 +11,6 @@ namespace
 {
   using Tags::Internal::Repository;
 
-  bool CacheEmpty(Repository const& repo, bool getFiles)
-  {
-    return repo.GetCachedTags(getFiles, 1).empty();
-  }
-
   class SelectorImpl : public Tags::Selector
   {
   public:
@@ -52,16 +47,12 @@ namespace
 
     std::vector<TagInfo> GetByPart(const char* part, bool getFiles, bool unlimited) const override
     {
-      bool partEmpty = !part[0];
-      return getFiles ? ForEach([this, &part, unlimited](Repository const& repo){ return repo.FindFiles(part, unlimited ? 0 : Limit); }, !partEmpty)
-                      : ForEach([this, &part, unlimited](Repository const& repo){ return repo.FindByName(part, unlimited ? 0 : Limit, CaseInsensitive); }, !partEmpty);
+      return ForEach([this, part, getFiles, unlimited](Repository const& repo) { return GetByPart(repo, getFiles, part, unlimited); });
     }
 
     std::vector<TagInfo> GetCachedTags(bool getFiles) const override
     {
-      bool noCachedTags = Repositories.empty() || CacheEmpty(*Repositories.front(), getFiles);
-      return noCachedTags ? std::vector<TagInfo>()
-                          : ForEach([this, getFiles](Repository const& repo){ return repo.GetCachedTags(getFiles, Limit); }, false, false);
+      return ForEach([this, getFiles](Repository const& repo){ return GetCachedTags(repo, getFiles); }, false, false);
     }
 
   protected:
@@ -76,6 +67,18 @@ namespace
       }
 
       return std::move(result);
+    }
+
+    std::vector<TagInfo> GetByPart(Repository const& repo, bool getFiles, const char* part, bool unlimited) const
+    {
+      size_t limit = unlimited ? 0 : Limit;
+      return getFiles ? repo.FindFiles(part, limit) : repo.FindByName(part, limit, CaseInsensitive);
+    }
+
+    std::vector<TagInfo> GetCachedTags(Repository const& repo, bool getFiles) const
+    {
+      auto tags = repo.GetCachedTags(getFiles, Limit);
+      return tags.empty() ? GetByPart(repo, getFiles, "", false) : std::move(tags);
     }
 
     std::vector<Repository const*> Repositories;
