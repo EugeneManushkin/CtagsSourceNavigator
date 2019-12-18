@@ -539,6 +539,29 @@ static bool FindFarWindow(WideString const& file, intptr_t id, WindowInfo& info)
   return true;
 }
 
+//TODO: refactor duplications
+static int CountEditors(WideString const& file)
+{
+  int result = 0;
+  auto i = I.AdvControl(&PluginGuid, ACTL_GETWINDOWCOUNT, 0, nullptr);
+  WindowInfo wi = {sizeof(WindowInfo)};
+  for (; i > 0; --i)
+  {
+    wi = {sizeof(WindowInfo)};
+    wi.Pos = i - 1;
+    I.AdvControl(&PluginGuid, ACTL_GETWINDOWINFO, 0, &wi);
+    if (wi.Type != WTYPE_EDITOR)
+      continue;
+
+    std::vector<wchar_t> name(wi.NameSize);
+    wi.Name = &name[0];
+    I.AdvControl(&PluginGuid, ACTL_GETWINDOWINFO, 0, &wi);
+    result += wi.Name == file ? 1 : 0;
+  }
+
+  return result;
+}
+
 static intptr_t FindEditorID(WideString const& file)
 {
   WindowInfo found = {sizeof(WindowInfo)};
@@ -2634,7 +2657,10 @@ intptr_t WINAPI ProcessEditorEventW(const struct ProcessEditorEventInfo *info)
   }
   else if (info->Event == EE_CLOSE)
   {
-    SafeCall(std::bind(ClearTemporaryTagsByFile, GetFileNameFromEditor(info->EditorID)));
+    auto file = GetFileNameFromEditor(info->EditorID);
+    if (CountEditors(file) == 1)
+      SafeCall(std::bind(ClearTemporaryTagsByFile, file));
+
     if (IsModalMode() && SafeCall(OnCloseModalWindow, false) == false)
       NavigatorInstance.reset(new InvalidNavigator);
   }
