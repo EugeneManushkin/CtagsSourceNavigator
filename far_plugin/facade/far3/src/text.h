@@ -18,7 +18,6 @@ enum{
   MUpdateTagsFile,
   MUnableToUpdate,
   MCompleteSymbol,
-  MNothingFound,
   MAll,
   MFailedToWriteIndex,
   MBrowseSymbolsInFile,

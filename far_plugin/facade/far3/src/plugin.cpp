@@ -2113,11 +2113,8 @@ static void Lookup(WideString const& file, bool getFiles, bool setPanelDir, bool
 
 static void NavigateToTag(std::vector<TagInfo>&& ta, intptr_t separatorPos, FormatTagFlag formatFlag = FormatTagFlag::Default)
 {
-  if (ta.empty())
-    throw Error(MNothingFound);
-
   TagInfo tag;
-  if (LookupTagsMenu(*Tags::GetFilterTagsViewer(Tags::TagsView(std::move(ta)), !config.casesens), tag, formatFlag, separatorPos) == LookupResult::Ok)
+  if (!ta.empty() && LookupTagsMenu(*Tags::GetFilterTagsViewer(Tags::TagsView(std::move(ta)), !config.casesens), tag, formatFlag, separatorPos) == LookupResult::Ok)
     NavigateTo(&tag);
 }
 
@@ -2185,7 +2182,7 @@ static void CompleteName(char const* fileName, EditorInfo const& ei)
 
   auto tags = GetSelector(fileName)->GetByPart(word.c_str(), false, true);
   if(tags.empty())
-    throw Error(MNothingFound);
+    return;
 
   std::sort(tags.begin(), tags.end(), [](TagInfo const& left, TagInfo const& right) {return left.name < right.name;});
   tags.erase(std::unique(tags.begin(), tags.end(), [](TagInfo const& left, TagInfo const& right) {return left.name == right.name;}), tags.end());
