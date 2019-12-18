@@ -19,7 +19,7 @@ This is a [Far Manager](https://www.farmanager.com/) plugin for browsing source 
 + Reindexing repository.
 + Hotkeys macro
 ## What's new 
-### 2.1.0.51
+### 2.1.0.52
 + Supported permanent repositories which are available for navigation and name lookup in any other repository or not indexed source file (#53).
 + Improved repository management: you may navigate to the root of a loaded repository in 'Manage repositories' menu (#57).
 + Improved platform error reporting
