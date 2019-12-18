@@ -93,13 +93,13 @@ namespace
 
     std::unique_ptr<Tags::Selector> GetSelector(char const* currentFile, bool caseInsensitive, Tags::SortingOptions sortOptions, size_t limit) override
     {
-      std::vector<Tags::Internal::Repository const*> repositories;
-      std::vector<Tags::Internal::Repository const*> permanents;
+      std::vector<RepositoryPtr> repositories;
+      std::vector<RepositoryPtr> permanents;
       for (auto const& info : Repositories)
         if (info.Repository->Belongs(currentFile))
-          repositories.push_back(&*info.Repository);
+          repositories.push_back(info.Repository);
         else if (info.Type == RepositoryType::Permanent)
-          permanents.push_back(&*info.Repository);
+          permanents.push_back(info.Repository);
 
       if (!repositories.empty())
         std::copy(permanents.begin(), permanents.end(), std::back_inserter(repositories));

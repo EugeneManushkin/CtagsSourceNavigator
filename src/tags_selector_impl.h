@@ -13,6 +13,6 @@ namespace Tags
   {
     class Repository;
 
-    std::unique_ptr<Selector> CreateSelector(std::vector<Repository const*>&& repositories, char const* currentFile, bool caseInsensitive, SortingOptions sortOptions, size_t limit);
+    std::unique_ptr<Selector> CreateSelector(std::vector<std::shared_ptr<Repository> >&& repositories, char const* currentFile, bool caseInsensitive, SortingOptions sortOptions, size_t limit);
   }
 }

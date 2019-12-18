@@ -10,11 +10,12 @@
 namespace
 {
   using Tags::Internal::Repository;
+  using RepositoryPtr = std::shared_ptr<Repository>;
 
   class SelectorImpl : public Tags::Selector
   {
   public:
-    SelectorImpl(std::vector<Repository const*>&& repositories, char const* currentFile, bool caseInsensitive, Tags::SortingOptions sortOptions, size_t limit)
+    SelectorImpl(std::vector<RepositoryPtr>&& repositories, char const* currentFile, bool caseInsensitive, Tags::SortingOptions sortOptions, size_t limit)
       : Repositories(std::move(repositories))
       , CurrentFile(currentFile)
       , CaseInsensitive(caseInsensitive)
@@ -81,7 +82,7 @@ namespace
       return tags.empty() ? GetByPart(repo, getFiles, "", false) : std::move(tags);
     }
 
-    std::vector<Repository const*> Repositories;
+    std::vector<RepositoryPtr> Repositories;
     std::string CurrentFile;
     bool CaseInsensitive;
     Tags::SortingOptions SortOptions;
@@ -93,7 +94,7 @@ namespace Tags
 {
   namespace Internal
   {
-    std::unique_ptr<Selector> CreateSelector(std::vector<Repository const*>&& repositories, char const* currentFile, bool caseInsensitive, SortingOptions sortOptions, size_t limit)
+    std::unique_ptr<Selector> CreateSelector(std::vector<RepositoryPtr>&& repositories, char const* currentFile, bool caseInsensitive, SortingOptions sortOptions, size_t limit)
     {
       return std::unique_ptr<Selector>(new SelectorImpl(std::move(repositories), currentFile, caseInsensitive, sortOptions, limit));
     }
