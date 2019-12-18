@@ -2031,7 +2031,7 @@ static void AddPermanent(std::string const& tagsFile)
 
 static void AddPermanentRepository()
 {
-  auto selected = ToStdString(SearchTagsFile(GetSelectedItem()));
+  auto selected = ToStdString(SearchTagsFile(JoinPath(GetSelectedItem(WideString()), L".")));
   if (!selected.empty())
     AddPermanent(selected);
 }
