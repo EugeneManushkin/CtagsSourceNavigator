@@ -2111,16 +2111,6 @@ static void Lookup(WideString const& file, bool getFiles, bool setPanelDir, bool
     NavigateTo(&selectedTag, setPanelDir);
 }
 
-static void LookupSymbol(WideString const& file, bool setPanelDir, bool createTempTags)
-{
-  Lookup(file, false, setPanelDir, createTempTags);
-}
-
-static void LookupFile(WideString const& file, bool setPanelDir)
-{
-  Lookup(file, true, setPanelDir, false);
-}
-
 static void NavigateToTag(std::vector<TagInfo>&& ta, intptr_t separatorPos, FormatTagFlag formatFlag = FormatTagFlag::Default)
 {
   if (ta.empty())
@@ -2308,11 +2298,11 @@ HANDLE WINAPI OpenW(const struct OpenInfo *info)
       }break;
       case miLookupSymbol:
       {
-        SafeCall(std::bind(LookupSymbol, fileName, false, config.index_edited_file));
+        SafeCall(std::bind(Lookup, fileName, false, false, config.index_edited_file));
       }break;
       case miSearchFile:
       {
-        SafeCall(std::bind(LookupFile, fileName, false));
+        SafeCall(std::bind(Lookup, fileName, true, false, config.index_edited_file));
       }break;
       case miReindexRepo:
       {
@@ -2378,11 +2368,11 @@ HANDLE WINAPI OpenW(const struct OpenInfo *info)
         }break;
         case miLookupSymbol:
         {
-          SafeCall(std::bind(LookupSymbol, GetSelectedItem(), true, false));
+          SafeCall(std::bind(Lookup, GetSelectedItem(), false, true, false));
         }break;
         case miSearchFile:
         {
-          SafeCall(std::bind(LookupFile, GetSelectedItem(), true));
+          SafeCall(std::bind(Lookup, GetSelectedItem(), true, true, false));
         }break;
         case miNavigationHistory:
         {
