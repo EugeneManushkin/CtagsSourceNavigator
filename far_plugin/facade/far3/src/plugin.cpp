@@ -2144,7 +2144,7 @@ static void GotoDeclaration(char const* fileName, std::string word)
 {
   auto tags = GetSelector(fileName)->GetByName(word.c_str());
   if (tags.empty())
-    throw Error(MNotFound);
+    return;
 
   auto border = AdjustToContext(tags, fileName);
   if (tags.empty())

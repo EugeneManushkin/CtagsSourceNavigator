@@ -6,7 +6,6 @@ enum{
   MEFailedToOpen,
   MFindSymbol,
   MReloadTags,
-  MNotFound,
   MSelectSymbol,
   MUndoNavigation,
   MRepeatNavigation,
