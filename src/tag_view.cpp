@@ -77,6 +77,18 @@ namespace
                                    : text.substr(text.length() - maxLength);
   }
 
+  size_t ShrinkEqualParts(std::vector<size_t>::iterator begin, std::vector<size_t>::iterator end, size_t separatorLength, size_t width)
+  {
+    auto colCount = std::distance(begin, end);
+    width = width / colCount;
+    width -= width > separatorLength ? separatorLength : width;
+    size_t result = 0;
+    for (; begin != end; result += *begin + separatorLength, ++begin)
+      *begin = std::min(*begin, width);
+
+    return result;
+  }
+
   std::string AdjustToLength(std::string const& text, size_t colLength, bool shrinkToLeft)
   {
     return text.length() > colLength ? Shrink(text, colLength, shrinkToLeft) : text + std::string(colLength - text.length(), ' ');
@@ -165,19 +177,25 @@ namespace Tags
 
   std::vector<size_t> ShrinkColumnLengths(std::vector<size_t>&& colLengths, size_t separatorLength, size_t width)
   {
-    auto maxRawLen = std::accumulate(colLengths.begin(), colLengths.end(), size_t(0)) + (colLengths.size() - 1) * separatorLength;
-    if (maxRawLen <= width)
-      return std::move(colLengths);
-
     if (colLengths.size() <= 1)
       return {width};
 
+    size_t const separators = (colLengths.size() - 1) * separatorLength;
+    if (colLengths.size() + separators > width)
+      return std::vector<size_t>(colLengths.size(), 1);
+
+    auto maxRawLen = std::accumulate(colLengths.begin(), colLengths.end(), size_t(0)) + separators;
+    if (maxRawLen <= width)
+      return std::move(colLengths);
+
+    auto fixedColsEnd = colLengths.end() - 2;
+    auto larger = fixedColsEnd;
     auto smaller = colLengths.end() - 1;
-    auto larger = colLengths.end() - 2;
     if (*smaller > *larger)
       std::swap(smaller, larger);
 
-    auto fixedSize = maxRawLen - *smaller - *larger - separatorLength;
+    size_t const fixedSizeMax = (colLengths.size() - 2) * ((width - separators) / colLengths.size() + separatorLength);
+    auto fixedSize = ShrinkEqualParts(colLengths.begin(), fixedColsEnd, separatorLength, fixedSizeMax);
     auto remains = width <= fixedSize ? separatorLength + 2 : width - fixedSize;
     *smaller = std::min(*smaller, remains/2);
     *larger = remains - *smaller - separatorLength;

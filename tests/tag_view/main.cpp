@@ -107,21 +107,18 @@ namespace Tags
       EXPECT_EQ(expectedLength, ShrinkColumnLengths({LongColumnLength}, Separator.length(), expectedLength).back());
     }
 
-    TEST(ShrinkColumnLengths, ShrinksLastTwoColumns)
+    TEST(ShrinkColumnLengths, ShrinksColumns)
     {
       size_t const separatorLength = Separator.length();
-      size_t const fixedSize = (DefaultColumnCount - 2) * (LongColumnLength + separatorLength);
-      size_t const expectedLength = fixedSize + LongColumnLength;
-      auto colLengths = std::vector<size_t>(DefaultColumnCount, LongColumnLength);
-      auto shrinkedLengths = ShrinkColumnLengths(std::move(colLengths), separatorLength, expectedLength);
+      size_t const expectedLength = (DefaultColumnCount * LongColumnLength / 2) - 1;
+      auto shrinkedLengths = ShrinkColumnLengths(std::vector<size_t>(DefaultColumnCount, LongColumnLength), separatorLength, expectedLength);
       EXPECT_EQ(expectedLength, std::accumulate(shrinkedLengths.begin(), shrinkedLengths.end(), size_t(0)) + (shrinkedLengths.size() - 1) * separatorLength);
     }
 
     TEST(ShrinkColumnLengths, ShrinksLastButOneColumn)
     {
       size_t const separatorLength = Separator.length();
-      size_t const fixedSize = (DefaultColumnCount - 2) * (LongColumnLength + separatorLength);
-      size_t const expectedLength = fixedSize + LongColumnLength;
+      size_t const expectedLength = (DefaultColumnCount * LongColumnLength / 2) - 1;
       size_t const expectedColLen = LongColumnLength / 4;
       auto colLengths = std::vector<size_t>(DefaultColumnCount, LongColumnLength);
       colLengths.back() = expectedColLen;
@@ -133,14 +130,23 @@ namespace Tags
     TEST(ShrinkColumnLengths, ShrinksLastColumn)
     {
       size_t const separatorLength = Separator.length();
-      size_t const fixedSize = (DefaultColumnCount - 2) * (LongColumnLength + separatorLength);
-      size_t const expectedLength = fixedSize + LongColumnLength;
+      size_t const expectedLength = (DefaultColumnCount * LongColumnLength / 2) - 1;
       size_t const expectedColLen = LongColumnLength / 4;
       auto colLengths = std::vector<size_t>(DefaultColumnCount, LongColumnLength);
       *(colLengths.end() - 2) = expectedColLen;
       auto shrinkedLengths = ShrinkColumnLengths(std::move(colLengths), separatorLength, expectedLength);
       EXPECT_EQ(expectedLength, std::accumulate(shrinkedLengths.begin(), shrinkedLengths.end(), size_t(0)) + (shrinkedLengths.size() - 1) * separatorLength);
       EXPECT_EQ(expectedColLen, *(shrinkedLengths.end() - 2));
+    }
+
+    TEST(ShrinkColumnLengths, ShrinksFirstColumn)
+    {
+      size_t const separatorLength = Separator.length();
+      size_t const expectedLength = (DefaultColumnCount * LongColumnLength / 2) - 1;
+      size_t const expectedColLen = (expectedLength - (separatorLength * (DefaultColumnCount - 1))) / DefaultColumnCount;
+      auto shrinkedLengths = ShrinkColumnLengths(std::vector<size_t>(DefaultColumnCount, LongColumnLength), separatorLength, expectedLength);
+      EXPECT_EQ(expectedLength, std::accumulate(shrinkedLengths.begin(), shrinkedLengths.end(), size_t(0)) + (shrinkedLengths.size() - 1) * separatorLength);
+      EXPECT_EQ(expectedColLen, shrinkedLengths.front());
     }
   }
 }
