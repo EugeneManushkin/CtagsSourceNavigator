@@ -8,6 +8,7 @@
 
 #include <algorithm>
 #include <chrono>
+#include <stdexcept>
 
 using Facade::Internal::FarAPI;
 using Facade::Internal::GetMsg;
