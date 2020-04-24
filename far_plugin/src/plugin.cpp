@@ -89,7 +89,7 @@ namespace
 
     bool CanOpenFile(char const* file) override
     {
-      return IsTagFile(file);
+      return Tags::IsTagFile(file);
     }
 
     void OpenFile(char const* file) override
