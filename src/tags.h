@@ -29,6 +29,7 @@
 
 namespace Tags
 {
+TagInfo MakeFileTag(TagInfo&& tag, int lineNum = -1);
 bool IsTagFile(const char* file);
 std::vector<TagInfo>::const_iterator FindContextTag(std::vector<TagInfo> const& tags, char const* fileName, int lineNumber, char const* lineText);
 std::vector<TagInfo>::const_iterator Reorder(TagInfo const& context, std::vector<TagInfo>& tags);
