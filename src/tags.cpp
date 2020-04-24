@@ -80,24 +80,19 @@ enum class IndexType
   EndOfEnum,
 };
 
-struct MakeFileTag
+namespace Tags
 {
-  MakeFileTag(int lineNum)
-    : LineNum(lineNum)
-  {
-  }
-
-  TagInfo operator()(TagInfo&& tag) const
+  TagInfo MakeFileTag(TagInfo&& tag, int lineNum)
   {
     TagInfo temp;
     temp.Owner = std::move(tag.Owner);
     temp.file = std::move(tag.file);
-    temp.lineno = LineNum;
+    temp.lineno = lineNum;
     return std::move(temp);
   }
+}
 
-  int LineNum;
-};
+using Tags::MakeFileTag;
 
 struct TagFileInfo{
   TagFileInfo(char const* fname, bool singleFileRepos)
@@ -139,7 +134,7 @@ struct TagFileInfo{
   {
     Tags::Internal::TagsCache& cache = tag.name.empty() ? *FilesCache : *NamesCache;
     cache.SetCapacity(cacheSize);
-    cache.Insert(tag.name.empty() ? MakeFileTag(-1)(TagInfo(tag)) : tag);
+    cache.Insert(tag.name.empty() ? MakeFileTag(TagInfo(tag)) : tag);
   }
 
   void EraseCachedTag(TagInfo const& tag)
@@ -1447,7 +1442,7 @@ static std::vector<std::pair<TagInfo, size_t>> RefreshFilesCache(TagFileInfo* fi
     auto visitor = FilenameMatch(std::move(std::get<0>(namePathLine)), std::move(std::get<1>(namePathLine)), FullCompare);
     auto foundTags = GetMatchedTags(fi, f, offsets, visitor, 0);
     if (!foundTags.empty())
-      (cur++)->first = MakeFileTag(-1)(std::move(foundTags.back()));
+      (cur++)->first = MakeFileTag(std::move(foundTags.back()));
   }
 
   tagsWithFreq.erase(cur, tagsWithFreq.end());
@@ -1544,7 +1539,8 @@ namespace
     {
       auto namePathLine = GetNamePathLine(part);
       auto tags = GetMatchedTags(&Info, IndexType::Filenames, FilenameMatch(std::move(std::get<0>(namePathLine)), std::move(std::get<1>(namePathLine)), comparationType), maxCount);
-      std::transform(std::make_move_iterator(tags.begin()), std::make_move_iterator(tags.end()), tags.begin(), MakeFileTag(std::get<2>(namePathLine)));
+      auto lineNum = std::get<2>(namePathLine);
+      std::transform(std::make_move_iterator(tags.begin()), std::make_move_iterator(tags.end()), tags.begin(), [lineNum](TagInfo&& tag){ return MakeFileTag(std::move(tag), lineNum); });
       return std::move(tags);
     }
 
