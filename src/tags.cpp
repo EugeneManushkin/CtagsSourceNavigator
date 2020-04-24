@@ -1306,7 +1306,7 @@ private:
   SortingOptions const Options;
 };
 
-std::vector<TagInfo> SortTags(std::vector<TagInfo>&& tags, char const* file, SortingOptions sortOptions)
+std::vector<TagInfo> Tags::SortTags(std::vector<TagInfo>&& tags, char const* file, SortingOptions sortOptions)
 {
   if (sortOptions != SortingOptions::DoNotSort)
     std::sort(tags.begin(), tags.end(), TagsLess(file, sortOptions));
@@ -1337,7 +1337,7 @@ static std::tuple<std::string, std::string, int> GetNamePathLine(char const* pat
   return std::make_tuple(std::move(name), std::string(path, nameBegin + 1), lineNum);
 }
 
-bool IsTagFile(const char* file)
+bool Tags::IsTagFile(const char* file)
 {
   FILE *f = fopen(file, "rt");
   if (!f)
@@ -1350,7 +1350,7 @@ bool IsTagFile(const char* file)
   return result && !pattern.compare(0, std::string::npos, result, pattern.length());
 };
 
-std::vector<TagInfo>::const_iterator FindContextTag(std::vector<TagInfo> const& tags, char const* fileName, int lineNumber, char const* lineText)
+std::vector<TagInfo>::const_iterator Tags::FindContextTag(std::vector<TagInfo> const& tags, char const* fileName, int lineNumber, char const* lineText)
 {
   auto possibleContext = tags.end();
   bool possibleContextUniq = true;
@@ -1395,7 +1395,7 @@ inline bool TagsOpposite(TagInfo const& left, TagInfo const& right)
   return tagsNotEqual && TypesOpposite(left.type, right.type) && InfoEqual(left.info, right.info);
 }
 
-std::vector<TagInfo>::const_iterator Reorder(TagInfo const& context, std::vector<TagInfo>& tags)
+std::vector<TagInfo>::const_iterator Tags::Reorder(TagInfo const& context, std::vector<TagInfo>& tags)
 {
   return std::stable_partition(tags.begin(), tags.end(), [&](TagInfo const& tag) { return TagsOpposite(tag, context); });
 }
