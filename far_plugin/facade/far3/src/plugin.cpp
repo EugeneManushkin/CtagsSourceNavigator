@@ -1640,6 +1640,7 @@ private:
   bool GetPosition(Position& pos) const;
   void SavePosition(Position&& pos);
   void Move(WideString const& file, int line, bool setPanelDir);
+  void CacheTag(TagInfo const& tag);
 
   std::deque<Position> Stack;
   Index Current;
@@ -1663,7 +1664,7 @@ void PlainNavigator::Goto(TagInfo const& tag, bool setPanelDir)
       return;
   }
 
-  Storage->CacheTag(tag, config.max_results, FlushTagsCache);
+  CacheTag(tag);
   Move(ToString(tag.file), line, setPanelDir);
 }
 
@@ -1749,6 +1750,14 @@ void PlainNavigator::Move(WideString const& file, int line, bool setPanelDir)
 
   if (havePosition)
     SavePosition(std::move(position));
+}
+
+void PlainNavigator::CacheTag(TagInfo const& tag)
+{
+  if (!tag.name.empty())
+    Storage->CacheTag(Tags::MakeFileTag(TagInfo(tag)), config.max_results, FlushTagsCache);
+
+  Storage->CacheTag(tag, config.max_results, FlushTagsCache);
 }
 
 class NavigatorImpl : public Navigator
