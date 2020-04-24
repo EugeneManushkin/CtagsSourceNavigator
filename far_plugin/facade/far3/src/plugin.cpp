@@ -868,7 +868,7 @@ static void LoadHistory(std::string const& fileName)
   std::string buf;
   while (std::getline(file, buf))
   {
-    if (IsTagFile(buf.c_str()))
+    if (Tags::IsTagFile(buf.c_str()))
       VisitedTags.Access(ToString(buf));
   }
 }
@@ -1985,7 +1985,7 @@ static WideString SearchTagsFile(WideString const& fileName)
     return WideString();
 
   auto const& tagsFile = foundTags[res];
-  if (!IsTagFile(ToStdString(tagsFile).c_str()))
+  if (!Tags::IsTagFile(ToStdString(tagsFile).c_str()))
     throw Error(MNotTagFile);
 
   return tagsFile;
@@ -2131,13 +2131,13 @@ static std::vector<TagInfo>::const_iterator AdjustToContext(std::vector<TagInfo>
   if (!I.EditorControl(ei.EditorID, ECTL_GETSTRING, 0, &egs))
     return tags.cbegin();
 
-  auto iter = FindContextTag(tags, fileName, static_cast<int>(ei.CurLine), ToStdString(egs.StringText).c_str());
+  auto iter = Tags::FindContextTag(tags, fileName, static_cast<int>(ei.CurLine), ToStdString(egs.StringText).c_str());
   if (iter == tags.end())
     return tags.cbegin();
 
   auto context = *iter;
   tags.erase(iter);
-  return Reorder(context, tags);
+  return Tags::Reorder(context, tags);
 }
 
 static void GotoDeclaration(char const* fileName, std::string word)
@@ -2422,7 +2422,7 @@ HANDLE WINAPI AnalyseW(const AnalyseInfo* info)
 {
   return info->FileName &&
          FSF.ProcessName(ToString(config.tagsmask).c_str(), const_cast<wchar_t*>(info->FileName), 0, PN_CMPNAMELIST | PN_SKIPPATH) != 0 &&
-         IsTagFile(ToStdString(info->FileName).c_str()) ? INVALID_HANDLE_VALUE : nullptr;
+         Tags::IsTagFile(ToStdString(info->FileName).c_str()) ? INVALID_HANDLE_VALUE : nullptr;
 }
 
 void WINAPI GetPluginInfoW(struct PluginInfo *pi)
