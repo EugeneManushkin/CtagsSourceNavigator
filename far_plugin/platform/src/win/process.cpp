@@ -5,6 +5,7 @@
 #include <windows.h>
 
 #include <algorithm>
+#include <stdexcept>
 
 using Platform::ToString;
 using Platform::WideString;
