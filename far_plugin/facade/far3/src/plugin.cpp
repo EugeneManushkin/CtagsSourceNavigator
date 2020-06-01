@@ -133,70 +133,6 @@ Config config;
 
 using WideString = std::basic_string<wchar_t>;
 
-struct VisitedTagsLru
-{
-  VisitedTagsLru(size_t max)
-    : MaxVisited(max)
-  {
-  }
-
-  using PathList = std::list<WideString>;
-  PathList::const_iterator begin() const
-  {
-    return OrderedTagPaths.begin();
-  }
-
-  PathList::const_iterator end() const
-  {
-    return OrderedTagPaths.end();
-  }
-
-  PathList::const_reverse_iterator rbegin() const
-  {
-    return OrderedTagPaths.rbegin();
-  }
-
-  PathList::const_reverse_iterator rend() const
-  {
-    return OrderedTagPaths.rend();
-  }
-
-  void Access(WideString const& str)
-  {
-    if (!MaxVisited)
-      return;
-
-    auto i = Index.find(str);
-    if (i == Index.end())
-    {
-      Add(str);
-    }
-    else
-    {
-      OrderedTagPaths.splice(OrderedTagPaths.begin(), OrderedTagPaths, i->second);
-    }
-  }
-
-private:
-  void Add(WideString const& str)
-  {
-    if (OrderedTagPaths.size() == MaxVisited)
-    {
-      Index.erase(OrderedTagPaths.back());
-      OrderedTagPaths.pop_back();
-    }
-
-    OrderedTagPaths.push_front(str);
-    Index[str] = OrderedTagPaths.begin();
-  }
-
-  size_t MaxVisited;
-  PathList OrderedTagPaths;
-  std::unordered_map<WideString, PathList::iterator> Index;
-};
-
-VisitedTagsLru VisitedTags(0);
-
 static const wchar_t* GetMsg(int MsgId);
 WideString ToString(std::string const& str);
 //TODO: Make additional fields, replace throw std::exception with throw Error(code)
@@ -859,8 +795,9 @@ static FarKey ToFarKey(WORD virtualKey)
   return {key, ToFarControlState(controlState)};
 }
 
-static void LoadHistory(std::string const& fileName)
+static std::deque<std::string> LoadHistory(std::string const& fileName, size_t count)
 {
+  std::deque<std::string> result;
   std::ifstream file;
   file.exceptions(std::ifstream::goodbit);
   file.open(fileName);
@@ -869,34 +806,32 @@ static void LoadHistory(std::string const& fileName)
   while (std::getline(file, buf))
   {
     if (Tags::IsTagFile(buf.c_str()))
-      VisitedTags.Access(ToString(buf));
+      result.push_front(buf);
   }
+
+  result.resize(std::min(count, result.size()));
+  return std::move(result);
 }
 
-static void SaveHistory(std::string const& fileName)
+static void SaveHistory(std::deque<std::string> const& history, std::string const& fileName)
 {
   std::ofstream file;
   file.exceptions(std::ifstream::goodbit);
   file.open(fileName);
   std::shared_ptr<void> fileCloser(0, [&](void*) { file.close(); });
-  for (auto i = VisitedTags.rbegin(); i != VisitedTags.rend(); ++i)
+  for (auto i = history.rbegin(); i != history.rend(); ++i)
   {
-    file << ToStdString(*i) << std::endl;
+    file << *i << std::endl;
   }
 }
 
-static void SynchronizeTagsHistory(bool force)
+static void VisitTags(std::string const& tagsFile)
 {
-  static FileSynchronizer historySynchronizer("", &LoadHistory);
-  if (config.history_len > 0)
-    historySynchronizer.Synchronize(ExpandEnvString(config.history_file), force);
-}
-
-static void VisitTags(WideString const& tagsFile)
-{
-  SynchronizeTagsHistory(false);
-  VisitedTags.Access(tagsFile);
-  SaveHistory(ExpandEnvString(config.history_file));
+  auto history = LoadHistory(ExpandEnvString(config.history_file), config.history_len);
+  history.erase(std::remove(history.begin(), history.end(), tagsFile), history.end());
+  history.push_front(tagsFile);
+  history.resize(std::min(config.history_len, history.size()));
+  SaveHistory(history, ExpandEnvString(config.history_file));
 }
 
 static void LoadConfig(std::string const& fileName)
@@ -974,8 +909,6 @@ static void LoadConfig(std::string const& fileName)
   }
 
   config.history_len = config.history_file.empty() ? 0 : config.history_len;
-  VisitedTags = VisitedTagsLru(config.history_len);
-  SynchronizeTagsHistory(true);
 }
 
 static void SynchronizeConfig()
@@ -1041,7 +974,7 @@ static void LoadTags(std::string const& tagsFile, bool silent)
   if (!silent)
     InfoMessage(GetMsg(MLoadOk) + WideString(L":") + ToString(std::to_string(symbolsLoaded)));
 
-  VisitTags(ToString(tagsFile));
+  VisitTags(tagsFile);
 }
 
 static WideString LabelToStr(char label)
@@ -1879,8 +1812,8 @@ bool OnCloseModalWindow()
 
 static WideString SelectFromHistory()
 {
-  SynchronizeTagsHistory(false);
-  if (VisitedTags.begin() == VisitedTags.end())
+  auto history = LoadHistory(ExpandEnvString(config.history_file), config.history_len);
+  if (history.empty())
   {
     InfoMessage(GetMsg(MHistoryEmpty));
     return WideString();
@@ -1888,19 +1821,14 @@ static WideString SelectFromHistory()
 
   int i = 0;
   MenuList menuList;
-  for (auto const& file : VisitedTags)
+  for (auto const& file : history)
   {
-    menuList.push_back(MI(file, i));
+    menuList.push_back(MI(ToString(file), i));
     ++i;
   }
 
   auto rc = Menu(GetMsg(MTitleHistory), menuList);
-  if (rc < 0)
-    return WideString();
-
-  auto selected = VisitedTags.begin();
-  std::advance(selected, rc);
-  return *selected;
+  return rc < 0 ? WideString() : ToString(history.at(rc));
 }
 
 static std::string RemoveFileMask(std::string const& args)
