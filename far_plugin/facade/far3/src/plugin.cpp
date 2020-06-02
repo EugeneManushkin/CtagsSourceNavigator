@@ -619,7 +619,7 @@ std::string GetErrorText(DWORD error)
                              MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), reinterpret_cast<char*>(&buffer), 0, nullptr);
   std::string result(buffer, sz);
   LocalFree(buffer);
-  result.erase(std::remove(result.begin(), result.end(), '\r'));
+  result.erase(std::remove(result.begin(), result.end(), '\r'), result.end());
   for (; !result.empty() && result.back() == '\n'; result.erase(--result.end()));
   return std::move(result);
 }
