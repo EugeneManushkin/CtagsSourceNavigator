@@ -795,9 +795,21 @@ static FarKey ToFarKey(WORD virtualKey)
   return {key, ToFarControlState(controlState)};
 }
 
-static std::deque<std::string> LoadHistory(std::string const& fileName, size_t count)
+using Strings = std::deque<std::string>;
+
+static void SaveStrings(Strings const& strings, std::string const& fileName)
 {
-  std::deque<std::string> result;
+  std::ofstream file;
+  file.exceptions(std::ifstream::goodbit);
+  file.open(fileName);
+  std::shared_ptr<void> fileCloser(0, [&](void*) { file.close(); });
+  for (auto const& str : strings)
+    file << str << std::endl;
+}
+
+static Strings LoadStrings(std::string const& fileName)
+{
+  Strings result;
   std::ifstream file;
   file.exceptions(std::ifstream::goodbit);
   file.open(fileName);
@@ -805,33 +817,32 @@ static std::deque<std::string> LoadHistory(std::string const& fileName, size_t c
   std::string buf;
   while (std::getline(file, buf))
   {
-    if (Tags::IsTagFile(buf.c_str()))
-      result.push_front(buf);
+    if (!buf.empty())
+      result.push_back(buf);
   }
 
-  result.resize(std::min(count, result.size()));
   return std::move(result);
 }
 
-static void SaveHistory(std::deque<std::string> const& history, std::string const& fileName)
+static Strings LoadHistory()
 {
-  std::ofstream file;
-  file.exceptions(std::ifstream::goodbit);
-  file.open(fileName);
-  std::shared_ptr<void> fileCloser(0, [&](void*) { file.close(); });
-  for (auto i = history.rbegin(); i != history.rend(); ++i)
-  {
-    file << *i << std::endl;
-  }
+  auto result = config.history_len > 0 ? LoadStrings(ExpandEnvString(config.history_file)) : Strings();
+  for(; result.size() > config.history_len; result.pop_front());
+  return std::move(result);
+}
+
+static void SaveHistory(Strings const& history)
+{
+  SaveStrings(history, ExpandEnvString(config.history_file));
 }
 
 static void VisitTags(std::string const& tagsFile)
 {
-  auto history = LoadHistory(ExpandEnvString(config.history_file), config.history_len);
+  auto history = LoadHistory();
   history.erase(std::remove(history.begin(), history.end(), tagsFile), history.end());
-  history.push_front(tagsFile);
-  history.resize(std::min(config.history_len, history.size()));
-  SaveHistory(history, ExpandEnvString(config.history_file));
+  history.push_back(tagsFile);
+  for(; history.size() > config.history_len; history.pop_front());
+  SaveHistory(history);
 }
 
 static void LoadConfig(std::string const& fileName)
@@ -915,33 +926,6 @@ static void SynchronizeConfig()
 {
   static FileSynchronizer configSynchronizer(ToStdString(GetConfigFilePath()), &LoadConfig);
   configSynchronizer.Synchronize();
-}
-
-static void SaveStrings(std::vector<std::string> const& strings, std::string const& fileName)
-{
-  std::ofstream file;
-  file.exceptions(std::ifstream::goodbit);
-  file.open(fileName);
-  std::shared_ptr<void> fileCloser(0, [&](void*) { file.close(); });
-  for (auto const& str : strings)
-    file << str << std::endl;
-}
-
-static std::vector<std::string> LoadStrings(std::string const& fileName)
-{
-  std::ifstream file;
-  file.exceptions(std::ifstream::goodbit);
-  file.open(fileName);
-  std::shared_ptr<void> fileCloser(0, [&](void*) { file.close(); });
-  std::string buf;
-  std::vector<std::string> result;
-  while (std::getline(file, buf))
-  {
-    if (!buf.empty())
-      result.push_back(buf);
-  }
-
-  return result;
 }
 
 static auto Storage = Tags::RepositoryStorage::Create();
@@ -1812,7 +1796,7 @@ bool OnCloseModalWindow()
 
 static WideString SelectFromHistory()
 {
-  auto history = LoadHistory(ExpandEnvString(config.history_file), config.history_len);
+  auto history = LoadHistory();
   if (history.empty())
   {
     InfoMessage(GetMsg(MHistoryEmpty));
@@ -1821,14 +1805,11 @@ static WideString SelectFromHistory()
 
   int i = 0;
   MenuList menuList;
-  for (auto const& file : history)
-  {
-    menuList.push_back(MI(ToString(file), i));
-    ++i;
-  }
+  for (auto file = history.rbegin(); file != history.rend(); ++file)
+    menuList.push_back(MI(ToString(*file), ++i));
 
   auto rc = Menu(GetMsg(MTitleHistory), menuList);
-  return rc < 0 ? WideString() : ToString(history.at(rc));
+  return rc < 0 ? WideString() : ToString(history.at(history.size() - rc));
 }
 
 static std::string RemoveFileMask(std::string const& args)
@@ -1928,7 +1909,7 @@ static WideString SearchTagsFile(WideString const& fileName)
   return tagsFile;
 }
 
-static bool LoadMultipleTags(std::vector<std::string> const& tags, Tags::RepositoryType type = Tags::RepositoryType::Regular)
+static bool LoadMultipleTags(Strings const& tags, Tags::RepositoryType type = Tags::RepositoryType::Regular)
 {
   auto errCount = static_cast<size_t>(0);
   for (auto const& tag : tags)
@@ -1937,14 +1918,14 @@ static bool LoadMultipleTags(std::vector<std::string> const& tags, Tags::Reposit
   return errCount < tags.size();
 }
 
-static std::vector<std::string> RepositoriesToTagsPaths(std::vector<Tags::RepositoryInfo> const& repositories)
+static Strings RepositoriesToTagsPaths(std::vector<Tags::RepositoryInfo> const& repositories)
 {
-  std::vector<std::string> result;
+  Strings result;
   std::transform(repositories.begin(), repositories.end(), std::back_inserter(result), [](Tags::RepositoryInfo const& r){ return r.TagsPath; });
   return std::move(result);
 }
 
-static void RemoveNotOf(std::vector<std::string> const& permanents)
+static void RemoveNotOf(Strings const& permanents)
 {
   std::unordered_set<std::string> loaded;
   for (auto const& r : permanents)
