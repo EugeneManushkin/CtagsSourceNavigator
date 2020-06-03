@@ -766,7 +766,7 @@ static void SaveStrings(Strings const& strings, std::string const& fileName, std
   std::ofstream file;
   file.exceptions(exceptions);
   file.open(fileName);
-  std::shared_ptr<void> fileCloser(0, [&](void*) { file.close(); });
+  std::shared_ptr<void> fileCloser(0, [&](void*) { if (file.good()) file.close(); });
   for (auto const& str : strings)
     file << str << std::endl;
 }
