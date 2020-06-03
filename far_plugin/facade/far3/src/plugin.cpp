@@ -156,42 +156,6 @@ private:
   std::pair<std::string, std::string> Field;
 };
 
-//TODO: Synchronization must be reworked
-class FileSynchronizer
-{
-public:
-  using CallbackType = std::function<void(std::string const&)>;
-
-  FileSynchronizer(std::string const& fname, CallbackType cb)
-    : FileName(fname)
-    , ModTime(0)
-    , Callback(cb)
-  {
-  }
-
-  void Synchronize()
-  {
-    struct stat st;
-    if (stat(FileName.c_str(), &st) != -1 && ModTime != st.st_mtime)
-      Callback(FileName);
-
-    ModTime = st.st_mtime;
-  }
-
-  //TODO: rework force synchronization
-  void Synchronize(std::string const& fileName, bool force)
-  {
-    ModTime = force || fileName != FileName ? 0 : ModTime;
-    FileName = fileName;
-    Synchronize();
-  }
-
-private:
-  std::string FileName;
-  time_t ModTime;
-  CallbackType Callback;
-};
-
 GUID StringToGuid(const std::string& str)
 {
   GUID guid;
@@ -797,10 +761,10 @@ static FarKey ToFarKey(WORD virtualKey)
 
 using Strings = std::deque<std::string>;
 
-static void SaveStrings(Strings const& strings, std::string const& fileName)
+static void SaveStrings(Strings const& strings, std::string const& fileName, std::ios_base::iostate exceptions = std::ifstream::goodbit)
 {
   std::ofstream file;
-  file.exceptions(std::ifstream::goodbit);
+  file.exceptions(exceptions);
   file.open(fileName);
   std::shared_ptr<void> fileCloser(0, [&](void*) { file.close(); });
   for (auto const& str : strings)
@@ -845,15 +809,10 @@ static void VisitTags(std::string const& tagsFile)
   SaveHistory(history);
 }
 
-static void LoadConfig(std::string const& fileName)
+static Config LoadConfig(std::string const& fileName)
 {
-  SetDefaultConfig();
-  std::ifstream file;
-  file.exceptions(std::ifstream::goodbit);
-  file.open(fileName);
-  std::shared_ptr<void> fileCloser(0, [&](void*) { file.close(); });
-  std::string buf;
-  while (std::getline(file, buf))
+  Config config;
+  for (auto const& buf : LoadStrings(fileName))
   {
     auto pos = buf.find('=');
     if (pos == std::string::npos)
@@ -920,12 +879,7 @@ static void LoadConfig(std::string const& fileName)
   }
 
   config.history_len = config.history_file.empty() ? 0 : config.history_len;
-}
-
-static void SynchronizeConfig()
-{
-  static FileSynchronizer configSynchronizer(ToStdString(GetConfigFilePath()), &LoadConfig);
-  configSynchronizer.Synchronize();
+  return std::move(config);
 }
 
 static auto Storage = Tags::RepositoryStorage::Create();
@@ -1258,7 +1212,7 @@ void WINAPI SetStartupInfoW(const struct PluginStartupInfo *Info)
   I=*Info;
   FSF = *Info->FSF;
   I.FSF = &FSF;
-  SynchronizeConfig();
+  config = LoadConfig(ToStdString(GetConfigFilePath()));
 }
 
 inline int isident(int chr)
@@ -2131,7 +2085,7 @@ HANDLE WINAPI OpenW(const struct OpenInfo *info)
 {
   OPENFROM OpenFrom = info->OpenFrom;
   WideString tagfile;
-  SynchronizeConfig();
+  config = LoadConfig(ToStdString(GetConfigFilePath()));
   if(OpenFrom==OPEN_EDITOR)
   {
     auto ei = GetCurrentEditorInfo();
@@ -2406,25 +2360,15 @@ std::string SelectedToString(intptr_t selected)
 
 static bool SaveConfig(InitDialogItem const* dlgItems, size_t count)
 {
-  try
+  Strings strings;
+  for (size_t i = 0; i < count; ++i)
   {
-    std::ofstream file;
-    file.exceptions(std::ifstream::failbit | std::ifstream::badbit);
-    file.open(ToStdString(GetConfigFilePath()));
-    std::shared_ptr<void> fileCloser(0, [&](void*) { file.close(); });
-    for (size_t i = 0; i < count; ++i)
-    {
-      auto const& item = dlgItems[i];
-      if (!item.Save.KeyName.empty() && (!item.Save.NotNull || !item.MessageText.empty()))
-        file << item.Save.KeyName << "=" << (item.Save.IsCheckbox ? SelectedToString(item.Selected) : ToStdString(item.MessageText)) << std::endl;
-    }
-  }
-  catch(std::exception const&)
-  {
-    Msg((L"Failed to save configuration to file: " + GetConfigFilePath()).c_str());
-    return false;
+    auto const& item = dlgItems[i];
+    if (!item.Save.KeyName.empty() && (!item.Save.NotNull || !item.MessageText.empty()))
+      strings.push_back(item.Save.KeyName + "=" + (item.Save.IsCheckbox ? SelectedToString(item.Selected) : ToStdString(item.MessageText)));
   }
 
+  SaveStrings(strings, ToStdString(GetConfigFilePath()), std::ifstream::badbit);
   return true;
 }
 
@@ -2473,7 +2417,7 @@ intptr_t WINAPI ConfigureDlgProc(
 
 static intptr_t ConfigurePlugin()
 {
-  SynchronizeConfig();
+  config = LoadConfig(ToStdString(GetConfigFilePath()));
   unsigned char y = 0;
   WideString menuTitle = WideString(GetMsg(MPlugin)) + L" " + PluginVersionString();
   struct InitDialogItem initItems[]={
@@ -2531,8 +2475,8 @@ static intptr_t ConfigurePlugin()
   std::shared_ptr<void> handleHolder(handle, [](void* h){I.DialogFree(h);});
   auto ExitCode = I.DialogRun(handle);
   if(ExitCode!=itemsCount-2)return FALSE;
-  if (SaveConfig(initItems, itemsCount))
-    SynchronizeConfig();
+  if (SafeCall(std::bind(SaveConfig, initItems, itemsCount), false))
+    config = LoadConfig(ToStdString(GetConfigFilePath()));
 
   return TRUE;
 }
