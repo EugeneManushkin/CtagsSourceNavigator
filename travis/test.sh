@@ -10,3 +10,4 @@ tests/tags_tests --CheckIdxFiles
 tests/tag_view_tests
 tests/tags_cache_tests
 tests/tags_repository_storage_tests
+tests/safe_call_tests
