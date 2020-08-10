@@ -39,6 +39,7 @@ namespace
   std::string NonvoidNotThrows() { return "test value"; };
   std::string NonvoidArgsThrows(MockArgument const& a, MockArgument const& b) { throw ExceptionClass(); };
   std::string NonvoidArgsNotThrows(MockArgument const& a, MockArgument const& b) { return "test value"; };
+  bool BoolThrows() { throw ExceptionClass(); };
 }
 
 namespace Tests
@@ -126,6 +127,12 @@ namespace Tests
     MockArgument arg;
     auto result = Facade::SafeCall([](MockArgument arg){ return arg.CopyCount(); }, Handler(), std::move(arg));
     ASSERT_EQ(std::make_pair(true, CopiedZeroTimes), result);
+  }
+
+  TEST_F(SafeCall, InitializesBoolWithFalse)
+  {
+    ASSERT_EQ(std::make_pair(false, false), Facade::SafeCall(BoolThrows, Handler()));
+    ASSERT_THROW(Called(), ExceptionClass);
   }
 }
 
