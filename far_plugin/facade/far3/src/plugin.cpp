@@ -2090,7 +2090,7 @@ HANDLE WINAPI OpenW(const struct OpenInfo *info)
       || res == miComplete
       || res == miBrowseClass
       || res == miBrowseFile
-        ) && SafeCall(EnsureTagsLoaded, Err, fileName, config.index_edited_file).second)
+        ) && !SafeCall(EnsureTagsLoaded, Err, fileName, config.index_edited_file).second)
     {
       return nullptr;
     }
