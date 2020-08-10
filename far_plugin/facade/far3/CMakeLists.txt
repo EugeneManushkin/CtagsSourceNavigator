@@ -1,6 +1,7 @@
 include_directories(
     include
     ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_SOURCE_DIR}/far_plugin/facade/include
 )
 
 file(GLOB SOURCES

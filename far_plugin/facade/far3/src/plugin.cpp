@@ -36,6 +36,7 @@
 #define FARAPI(type) extern "C" type __declspec(dllexport) WINAPI
 #pragma comment(lib,"user32.lib")
 #define _FAR_NO_NAMELESS_UNIONS
+#include <facade/safe_call.h>
 #include <plugin_sdk/plugin.hpp>
 #include "tags.h"
 #include "tags_repository_storage.h"
@@ -231,20 +232,10 @@ YesNoCancel YesNoCalncelDialog(WideString const& what)
   return static_cast<YesNoCancel>(result);
 }
 
-int Msg(wchar_t const* err)
+void ErrorMessage(WideString const& str)
 {
-  WideString msg = WideString(APPNAME) + L"\n";
-  if(!err)
-  {
-    msg += L"Wrong argument!\nMsg\n";
-  }
-  else
-  {
-    msg += err;
-  }
-  msg += L"\nOk";
-  I.Message(&PluginGuid, &ErrorMessageGuid, FMSG_WARNING | FMSG_ALLINONE, nullptr, reinterpret_cast<const wchar_t* const*>(msg.c_str()), 0, 1);
-  return 0;
+  WideString msg = WideString(APPNAME) + L"\n" + str;
+  I.Message(&PluginGuid, &ErrorMessageGuid, FMSG_WARNING | FMSG_MB_OK | FMSG_ALLINONE, nullptr, reinterpret_cast<const wchar_t* const*>(msg.c_str()), 0, 1);
 }
 
 void InfoMessage(WideString const& str)
@@ -259,36 +250,21 @@ GetMsg(int MsgId)
   return I.GetMsg(&PluginGuid, MsgId);
 }
 
-int Msg(int msgid)
+void Err(std::exception_ptr e)
+try
 {
-  Msg(GetMsg(msgid));
-  return 0;
+  std::rethrow_exception(e);
+}
+catch (std::exception const& e)
+{
+  ErrorMessage(ToString(e.what()));
+}
+catch(Error const& err)
+{
+  ErrorMessage(err.What());
 }
 
-template <typename CallType>
-auto SafeCall(CallType call, decltype(call()) errorResult) ->decltype(call())
-{
-  try
-  {
-    return call();
-  }
-  catch (std::exception const& e)
-  {
-    Msg(ToString(e.what()).c_str());
-  }
-  catch(Error const& err)
-  {
-    Msg(err.What().c_str());
-  }
-
-  return errorResult;
-}
-
-template <typename CallType>
-void SafeCall(CallType call)
-{
-  SafeCall([call]() { call(); return 0; }, 0);
-}
+using Facade::SafeCall;
 
 std::shared_ptr<void> LongOperationMessage(WideString const& msg)
 {
@@ -629,13 +605,12 @@ static WideString GetSelectedItem(WideString const& DotDotSubst = L".")
 
 static WideString GetCtagsUtilityPath();
 
-int TagDirectory(WideString const& dir)
+void TagDirectory(WideString const& dir)
 {
   if (!(GetFileAttributesW(dir.c_str()) & FILE_ATTRIBUTE_DIRECTORY))
     throw std::runtime_error("Selected item is not a direcory");
 
   ExecuteScript(GetCtagsUtilityPath(), ToString(config.opt), dir, WideString(GetMsg(MTagingCurrentDirectory)) + L"\n" + dir);
-  return 1;
 }
 
 static WideString GenerateTempPath()
@@ -1380,7 +1355,8 @@ int EnsureLine(int line, std::string const& file, std::string const& regex)
 
 static void OpenInNewWindow(TagInfo const& tag)
 {
-  int line = tag.name.empty() ? -1 : SafeCall(std::bind(EnsureLine, tag.lineno, tag.file, tag.re), -1);
+  auto ensured = tag.name.empty() ? std::make_pair(true, -1) : SafeCall(EnsureLine, Err, tag.lineno, tag.file, tag.re);
+  auto line = ensured.first ? ensured.second : -1;
   if (!tag.name.empty() && line < 0)
     return;
 
@@ -1736,16 +1712,14 @@ static void NavigationHistory()
     NavigatorInstance->Goto(static_cast<Navigator::Index>(index));
 }
 
-bool OnNewModalWindow()
+void OnNewModalWindow()
 {
   NavigatorInstance->OnNewModalWindow();
-  return true;
 }
 
-bool OnCloseModalWindow()
+void OnCloseModalWindow()
 {
   NavigatorInstance->OnCloseModalWindow();
-  return true;
 }
 
 static WideString SelectFromHistory()
@@ -1790,7 +1764,7 @@ static bool CreateTemporaryTags(WideString const& fileFullPath)
 {
   auto tempDirPath = GenerateTempPath();
   MkDir(tempDirPath);
-  if (SafeCall(std::bind(IndexSingleFile, fileFullPath, tempDirPath), false))
+  if (SafeCall(IndexSingleFile, Err, fileFullPath, tempDirPath).second)
     return true;
 
   RemoveDirWithFiles(tempDirPath);
@@ -1804,7 +1778,7 @@ static void ClearTemporaryTagsByFile(WideString const& file)
     if (owner.Type == Tags::RepositoryType::Temporary)
     {
       Storage->Remove(owner.TagsPath.c_str());
-      SafeCall(std::bind(RemoveDirWithFiles, GetDirOfFile(ToString(owner.TagsPath))));
+      SafeCall(RemoveDirWithFiles, Err, GetDirOfFile(ToString(owner.TagsPath)));
     }
   }
 }
@@ -1867,7 +1841,7 @@ static bool LoadMultipleTags(Strings const& tags, Tags::RepositoryType type = Ta
 {
   auto errCount = static_cast<size_t>(0);
   for (auto const& tag : tags)
-    errCount += SafeCall([&tag, type]() { LoadTagsImpl(tag, type); return 0; }, 1);
+    errCount += SafeCall(LoadTagsImpl, Err, tag, type).first ? 0 : 1;
 
   return errCount < tags.size();
 }
@@ -1964,11 +1938,10 @@ static WideString ReindexRepository(WideString const& fileName)
     return WideString();
 
   auto tempName = RenameToTempFilename(tagsFile);
-  auto res = SafeCall(std::bind(TagDirectory, reposDir), 0);
-  if (!res)
+  if (!SafeCall(TagDirectory, Err, reposDir).first)
     RenameFile(tempName, tagsFile);
   else
-    SafeCall(std::bind(RemoveFile, tempName));
+    SafeCall(RemoveFile, Err, tempName);
 
   return tagsFile;
 }
@@ -2117,7 +2090,7 @@ HANDLE WINAPI OpenW(const struct OpenInfo *info)
       || res == miComplete
       || res == miBrowseClass
       || res == miBrowseFile
-        ) && !SafeCall(std::bind(EnsureTagsLoaded, fileName, config.index_edited_file), false))
+        ) && SafeCall(EnsureTagsLoaded, Err, fileName, config.index_edited_file).second)
     {
       return nullptr;
     }
@@ -2126,27 +2099,27 @@ HANDLE WINAPI OpenW(const struct OpenInfo *info)
     {
       case miFindSymbol:
       {
-        SafeCall(std::bind(FindSymbol, ToStdString(fileName).c_str()));
+        SafeCall(FindSymbol, Err, ToStdString(fileName).c_str());
       }break;
       case miGoBack:
       {
-        SafeCall(NavigateBack);
+        SafeCall(NavigateBack, Err);
       }break;
       case miGoForward:
       {
-        SafeCall(NavigateForward);
+        SafeCall(NavigateForward, Err);
       }break;
       case miNavigationHistory:
       {
-        SafeCall(NavigationHistory);
+        SafeCall(NavigationHistory, Err);
       }break;
       case miComplete:
       {
-        SafeCall(std::bind(CompleteName, ToStdString(fileName).c_str(), std::cref(ei)));
+        SafeCall(CompleteName, Err, ToStdString(fileName).c_str(), ei);
       }break;
       case miBrowseFile:
       {
-        SafeCall([&]{ NavigateToTag(GetSelector(ToStdString(fileName).c_str())->GetByFile(ToStdString(fileName).c_str()), FormatTagFlag::NotDisplayFile); });
+        SafeCall([&fileName]{ NavigateToTag(GetSelector(ToStdString(fileName).c_str())->GetByFile(ToStdString(fileName).c_str()), FormatTagFlag::NotDisplayFile); }, Err);
       }break;
       case miBrowseClass:
       {
@@ -2163,23 +2136,23 @@ HANDLE WINAPI OpenW(const struct OpenInfo *info)
         }
         auto options = GetSortOptions(config) & static_cast<SortingOptions>(~static_cast<int>(SortingOptions::SortByName));
         options = options | (config.sort_class_members_by_name ? SortingOptions::SortByName : SortingOptions::Default);
-        SafeCall([&]{ NavigateToTag(GetSelector(ToStdString(fileName).c_str())->GetClassMembers(word.c_str()), FormatTagFlag::Default); });
+        SafeCall([&fileName, &word]{ NavigateToTag(GetSelector(ToStdString(fileName).c_str())->GetClassMembers(word.c_str()), FormatTagFlag::Default); }, Err);
       }break;
       case miLookupSymbol:
       {
-        SafeCall(std::bind(Lookup, fileName, false, false, config.index_edited_file));
+        SafeCall(Lookup, Err, fileName, false, false, config.index_edited_file);
       }break;
       case miSearchFile:
       {
-        SafeCall(std::bind(Lookup, fileName, true, false, config.index_edited_file));
+        SafeCall(Lookup, Err, fileName, true, false, config.index_edited_file);
       }break;
       case miReindexRepo:
       {
-        tagfile = SafeCall(std::bind(ReindexRepository, fileName), WideString());
+        tagfile = SafeCall(ReindexRepository, Err, fileName).second;
       }break;
       case miPluginConfiguration:
       {
-        SafeCall(ConfigurePlugin);
+        SafeCall(ConfigurePlugin, Err);
       }break;
     }
   }
@@ -2219,13 +2192,12 @@ HANDLE WINAPI OpenW(const struct OpenInfo *info)
         }break;
         case miUnloadTagsFile:
         {
-          SafeCall(ManageRepositories);
+          SafeCall(ManageRepositories, Err);
         }break;
         case miCreateTagsFile:
         {
           WideString selectedDir = GetSelectedItem(WideString());
-          int rc = SafeCall(std::bind(TagDirectory, selectedDir), 0);
-          if (rc)
+          if (SafeCall(TagDirectory, Err, selectedDir).first)
           {
 //TODO: handle '-f tagfile' ctags flag
             tagfile = JoinPath(selectedDir, DefaultTagsFilename);
@@ -2233,27 +2205,27 @@ HANDLE WINAPI OpenW(const struct OpenInfo *info)
         }break;
         case miAddPermanentRepository:
         {
-          SafeCall(AddPermanentRepository);
+          SafeCall(AddPermanentRepository, Err);
         }break;
         case miLookupSymbol:
         {
-          SafeCall(std::bind(Lookup, GetSelectedItem(), false, true, false));
+          SafeCall(Lookup, Err, GetSelectedItem(), false, true, false);
         }break;
         case miSearchFile:
         {
-          SafeCall(std::bind(Lookup, GetSelectedItem(), true, true, false));
+          SafeCall(Lookup, Err, GetSelectedItem(), true, true, false);
         }break;
         case miNavigationHistory:
         {
-          SafeCall(NavigationHistory);
+          SafeCall(NavigationHistory, Err);
         }break;
         case miReindexRepo:
         {
-          tagfile = SafeCall(std::bind(ReindexRepository, GetSelectedItem()), WideString());
+          tagfile = SafeCall(ReindexRepository, Err, GetSelectedItem()).second;
         }break;
         case miPluginConfiguration:
         {
-          SafeCall(ConfigurePlugin);
+          SafeCall(ConfigurePlugin, Err);
         }break;
       }
     }
@@ -2283,7 +2255,7 @@ HANDLE WINAPI OpenW(const struct OpenInfo *info)
 
   if(!tagfile.empty())
   {
-    SafeCall(std::bind(LoadTags, ToStdString(tagfile), false));
+    SafeCall(LoadTags, Err, ToStdString(tagfile), false);
     return OpenFrom == OPEN_ANALYSE ? PANEL_STOP : nullptr;
   }
 
@@ -2358,7 +2330,7 @@ std::string SelectedToString(intptr_t selected)
   return !!selected ? "true" : "false";
 }
 
-static bool SaveConfig(InitDialogItem const* dlgItems, size_t count)
+static void SaveConfig(InitDialogItem const* dlgItems, size_t count)
 {
   Strings strings;
   for (size_t i = 0; i < count; ++i)
@@ -2369,7 +2341,6 @@ static bool SaveConfig(InitDialogItem const* dlgItems, size_t count)
   }
 
   SaveStrings(strings, ToStdString(GetConfigFilePath()), std::ifstream::badbit);
-  return true;
 }
 
 static WideString PluginVersionString()
@@ -2475,7 +2446,7 @@ static intptr_t ConfigurePlugin()
   std::shared_ptr<void> handleHolder(handle, [](void* h){I.DialogFree(h);});
   auto ExitCode = I.DialogRun(handle);
   if(ExitCode!=itemsCount-2)return FALSE;
-  if (SafeCall(std::bind(SaveConfig, initItems, itemsCount), false))
+  if (SafeCall(SaveConfig, Err, initItems, itemsCount).first)
     config = LoadConfig(ToStdString(GetConfigFilePath()));
 
   return TRUE;
@@ -2483,7 +2454,7 @@ static intptr_t ConfigurePlugin()
 
 intptr_t WINAPI ConfigureW(const struct ConfigureInfo *)
 {
-    return SafeCall(ConfigurePlugin, FALSE);
+    return SafeCall(ConfigurePlugin, Err).second;
 }
 
 void WINAPI GetGlobalInfoW(struct GlobalInfo *info)
@@ -2501,16 +2472,16 @@ intptr_t WINAPI ProcessEditorEventW(const struct ProcessEditorEventInfo *info)
 {
   if (info->Event == EE_READ)
   {
-    if (IsModalMode() && SafeCall(OnNewModalWindow, false) == false)
+    if (IsModalMode() && !SafeCall(OnNewModalWindow, Err).first)
       NavigatorInstance.reset(new InvalidNavigator);
   }
   else if (info->Event == EE_CLOSE)
   {
     auto file = GetFileNameFromEditor(info->EditorID);
     if (CountEditors(file) == 1)
-      SafeCall(std::bind(ClearTemporaryTagsByFile, file));
+      SafeCall(ClearTemporaryTagsByFile, Err, file);
 
-    if (IsModalMode() && SafeCall(OnCloseModalWindow, false) == false)
+    if (IsModalMode() && !SafeCall(OnCloseModalWindow, Err).first)
       NavigatorInstance.reset(new InvalidNavigator);
   }
 
