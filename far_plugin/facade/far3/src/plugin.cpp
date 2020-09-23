@@ -1783,44 +1783,41 @@ static void ClearTemporaryTagsByFile(WideString const& file)
   }
 }
 
-static std::vector<WideString> GetDirectoryTags(WideString const& dir)
+using SearchPattern = std::pair<DWORD, WideString>;
+using SearchResults = std::unordered_map<size_t, std::vector<WideString>>;
+
+static bool FilenameMatches(WideString const& filename, SearchPattern const& pattern)
+{
+  auto filenameOffset = filename.find_last_of(L"\\/") + 1; // std::string::npos == (size_t)-1 => std::string::npos + 1 == 0
+  return !!(GetFileAttributesW(filename.c_str()) & pattern.first) && !!FSF.ProcessName(pattern.second.c_str(), const_cast<WideString::value_type*>(filename.c_str() + filenameOffset), 0, PN_CMPNAMELIST);
+}
+
+static void SearchInDirectory(WideString const& dir, std::vector<SearchPattern> const& patterns, SearchResults& results)
 {
   std::vector<WideString> result;
   WIN32_FIND_DATAW fileData;
   auto pattern = JoinPath(dir, L"*");
   std::shared_ptr<void> handle(::FindFirstFileW(pattern.c_str(), &fileData), ::FindClose);
-  if (handle.get() == INVALID_HANDLE_VALUE)
-    return result;
-
-  auto tagsMask = ToString(config.tagsmask);
-  while (FindNextFileW(handle.get(), &fileData))
+  while (handle.get() != INVALID_HANDLE_VALUE && FindNextFileW(handle.get(), &fileData))
   {
     auto curFile = JoinPath(dir, fileData.cFileName);
-    auto atts = GetFileAttributesW(curFile.c_str());
-    if (!(GetFileAttributesW(curFile.c_str()) & FILE_ATTRIBUTE_DIRECTORY) && !!FSF.ProcessName(tagsMask.c_str(), fileData.cFileName, 0, PN_CMPNAMELIST))
-      result.push_back(curFile);
+    auto found = std::find_if(patterns.begin(), patterns.end(), [&curFile](SearchPattern const& p){return FilenameMatches(curFile.c_str(), p);});
+    if (found != patterns.end())
+      results[found - patterns.begin()].push_back(curFile);
   }
-
-  return result;
 }
 
-static WideString SearchTagsFile(WideString const& fileName)
+static SearchResults SearchInParents(WideString const& fileName, std::vector<SearchPattern> const& patterns)
 {
-  auto str = fileName;
-  std::vector<WideString> foundTags;
-  while(!str.empty())
-  {
-    str = GetDirOfFile(str);
-    if (str.empty())
-      break;
+  SearchResults results;
+  for (auto dir = GetDirOfFile(fileName); !dir.empty(); dir = GetDirOfFile(dir))
+    SearchInDirectory(dir, patterns, results);
 
-    auto tags = GetDirectoryTags(str);
-    foundTags.insert(foundTags.end(), tags.begin(), tags.end());
-  }
+  return std::move(results);
+}
 
-  if (foundTags.empty())
-    return WideString();
-
+static WideString SelectTags(std::vector<WideString> const& foundTags)
+{
   MenuList lst;
   int i = 0;
   for (auto const& tagsFile : foundTags)
@@ -1835,6 +1832,35 @@ static WideString SearchTagsFile(WideString const& fileName)
     throw Error(MNotTagFile);
 
   return tagsFile;
+}
+
+static WideString IndexSelectedRepository(std::vector<WideString> const& repositories)
+{
+  MenuList lst;
+  int i = 0;
+  for (auto const& str : repositories)
+    lst.push_back(MI(str, i++));
+
+  auto res = Menu(GetMsg(MAskIndexFoundRepositories), lst);
+  if (res < 0)
+    return WideString();
+
+  auto dir = GetDirOfFile(repositories.at(res));
+  TagDirectory(dir);
+//TODO: handle '-f tagfile' ctags flag
+  return JoinPath(dir, DefaultTagsFilename);
+}
+
+static std::pair<WideString, bool> SearchTagsFile(WideString const& fileName)
+{
+  auto found = SearchInParents(fileName, {{~FILE_ATTRIBUTE_DIRECTORY, ToString(config.tagsmask)}, {FILE_ATTRIBUTE_DIRECTORY, L".git,.svn"}});
+  if (found.count(0) > 0)
+    return std::make_pair(SelectTags(found[0]), false);
+
+  if (found.count(1) > 0)
+    return std::make_pair(IndexSelectedRepository(found[1]), true);
+
+  return std::make_pair(WideString(), false);
 }
 
 static bool LoadMultipleTags(Strings const& tags, Tags::RepositoryType type = Tags::RepositoryType::Regular)
@@ -1900,7 +1926,7 @@ static void AddPermanent(std::string const& tagsFile)
 
 static void AddPermanentRepository()
 {
-  auto selected = ToStdString(SearchTagsFile(JoinPath(GetSelectedItem(WideString()), L".")));
+  auto selected = ToStdString(SearchTagsFile(JoinPath(GetSelectedItem(WideString()), L".")).first);
   if (!selected.empty())
     AddPermanent(selected);
 }
@@ -1911,11 +1937,11 @@ static bool EnsureOwnersLoaded(WideString const& fileName, bool createTempTags)
   if (!tags.empty())
     return LoadMultipleTags(tags);
 
-  auto tagsFile = IsInTempDirectory(fileName) ? WideString() : SearchTagsFile(fileName);
-  if (tagsFile.empty())
+  auto found = IsInTempDirectory(fileName) ? std::make_pair(WideString(), false) : SearchTagsFile(fileName);
+  if (found.first.empty())
     return createTempTags && CreateTemporaryTags(fileName);
 
-  LoadTags(ToStdString(tagsFile).c_str(), true);
+  LoadTags(ToStdString(found.first).c_str(), !found.second);
   return true;
 }
 
@@ -1926,9 +1952,13 @@ static bool EnsureTagsLoaded(WideString const& fileName, bool createTempTags)
 
 static WideString ReindexRepository(WideString const& fileName)
 {
-  auto tagsFile = SearchTagsFile(fileName);
+  auto found = SearchTagsFile(fileName);
+  auto const& tagsFile = found.first;
   if (tagsFile.empty())
     return WideString();
+
+  if (found.second)
+    return tagsFile;
 
   auto reposDir = GetDirOfFile(tagsFile);
   if (reposDir.empty())

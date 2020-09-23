@@ -69,4 +69,5 @@ enum{
   MManageRepositories,
   MNoRegularRepositories,
   MPermanentRepositories,
+  MAskIndexFoundRepositories,
 };
