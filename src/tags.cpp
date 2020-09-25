@@ -803,7 +803,8 @@ bool TagFileInfo::CreateIndex(time_t tagsModTime, bool singleFileRepos)
 {
   TagFileInfo* fi = this;
   int pos=0;
-  FILE *f=fopen(fi->filename.c_str(),"rb");
+  auto tagsFile = FOpen(fi->filename.c_str(),"rb");
+  FILE *f=tagsFile.get();
   if(!f)return false;
   fseek(f,0,SEEK_END);
   int sz=ftell(f);
@@ -815,10 +816,7 @@ bool TagFileInfo::CreateIndex(time_t tagsModTime, bool singleFileRepos)
   std::string buffer;
   char const* strbuf;
   if(!GetLine(strbuf, buffer, f) || strncmp(strbuf,"!_TAG_FILE_FORMAT",17))
-  {
-    fclose(f);
     return false;
-  }
 
   LineInfo *li;
   struct LIPool{
@@ -892,7 +890,8 @@ bool TagFileInfo::CreateIndex(time_t tagsModTime, bool singleFileRepos)
   fullpathrepo = !pathIntersection.empty();
   reporoot = pathIntersection.empty() ? GetDirOfFile(filename) : MakeFilename(pathIntersection);
   singlefile = singleFileRepos && !lines.empty() ? std::string(GetFilename(lines.back()->fn), GetFilenameEnd(lines.back()->fn)) : "";
-  FILE *g=fopen(fi->indexFile.c_str(),"wb");
+  auto indexFile = FOpen(fi->indexFile.c_str(),"wb");
+  FILE *g=indexFile.get();
   if(!g)
   {
     delete [] linespool;
@@ -925,7 +924,6 @@ bool TagFileInfo::CreateIndex(time_t tagsModTime, bool singleFileRepos)
   WriteOffsets(g, lines.begin(), linesEnd);
   WriteTagsStat(g, RefreshNamesCache(fi, f, namesOffsets, NamesCache->GetStat()));
   WriteTagsStat(g, RefreshFilesCache(fi, f, filesOffsets, FilesCache->GetStat()));
-  fclose(f);
   delete [] linespool;
   while(poolfirst)
   {
@@ -933,7 +931,6 @@ bool TagFileInfo::CreateIndex(time_t tagsModTime, bool singleFileRepos)
     delete poolfirst;
     poolfirst=pool;
   }
-  fclose(g);
   return LoadCache();
 }
 
