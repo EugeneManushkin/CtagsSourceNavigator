@@ -924,6 +924,7 @@ bool TagFileInfo::CreateIndex(time_t tagsModTime, bool singleFileRepos)
   WriteOffsets(g, lines.begin(), linesEnd);
   WriteTagsStat(g, RefreshNamesCache(fi, f, namesOffsets, NamesCache->GetStat()));
   WriteTagsStat(g, RefreshFilesCache(fi, f, filesOffsets, FilesCache->GetStat()));
+  tagsFile.reset();
   delete [] linespool;
   while(poolfirst)
   {
@@ -931,6 +932,7 @@ bool TagFileInfo::CreateIndex(time_t tagsModTime, bool singleFileRepos)
     delete poolfirst;
     poolfirst=pool;
   }
+  indexFile.reset();
   return LoadCache();
 }
 
