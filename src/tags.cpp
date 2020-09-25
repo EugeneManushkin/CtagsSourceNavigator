@@ -292,12 +292,12 @@ static void WriteSignedChar(FILE* f, char value)
   WriteInt<int32_t>(f, value);
 }
 
-static bool ReadUnsignedInt(FILE* f, size_t& value)
+static bool ReadUnsignedInt(FILE* f, unsigned int& value)
 {
   return ReadInt<uint32_t>(f, value);
 }
 
-static void WriteUnsignedInt(FILE* f, size_t value)
+static void WriteUnsignedInt(FILE* f, unsigned int value)
 {
   WriteInt<uint32_t>(f, value);
 }
@@ -340,18 +340,18 @@ static bool ReadTagInfo(FILE* f, TagInfo& tag)
 
 static void WriteTagsStat(FILE* f, std::vector<std::pair<TagInfo, size_t>> const& stat)
 {
-  WriteUnsignedInt(f, stat.size());
+  WriteUnsignedInt(f, static_cast<unsigned int>(stat.size()));
   for (auto i = stat.rbegin(); i != stat.rend(); ++i)
   {
     WriteTagInfo(f, i->first);
-    WriteUnsignedInt(f, i->second);
+    WriteUnsignedInt(f, static_cast<unsigned int>(i->second));
   }
 }
 
 static bool ReadTagsCache(FILE* f, Tags::Internal::TagsCache& cache, std::string const& tagsFile)
 {
-  size_t const capacityThreshold = 500;
-  size_t sz = 0;
+  unsigned int const capacityThreshold = 500;
+  unsigned int sz = 0;
   if (!ReadUnsignedInt(f, sz) || sz > capacityThreshold)
     return false;
 
@@ -362,7 +362,7 @@ static bool ReadTagsCache(FILE* f, Tags::Internal::TagsCache& cache, std::string
     if (!ReadTagInfo(f, tag))
       return false;
 
-    size_t freq = 0;
+    unsigned int freq = 0;
     if (!ReadUnsignedInt(f, freq))
       return false;
 
