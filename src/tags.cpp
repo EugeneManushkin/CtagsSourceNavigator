@@ -217,47 +217,6 @@ static bool ReadSignature(FILE* f)
   return true;
 }
 
-static uint32_t const stringLengthThreshold = 32 * 1024;
-
-static bool ReadString(FILE* f, std::string& str)
-{
-  uint32_t len = 0;
-  if (fread(&len, sizeof(len), 1, f) != 1 || len > stringLengthThreshold)
-    return false;
-
-  if (len > 0)
-  {
-    std::vector<char> buf(len);
-    if (fread(&buf[0], 1, buf.size(), f) != buf.size() || std::find(buf.begin(), buf.end(), 0) != buf.end())
-      return false;  
-
-    str = std::string(buf.begin(), buf.end());
-  }
-  else
-  {
-    str.clear();
-  }
-
-  return true;
-}
-
-static bool SkipString(FILE* f)
-{
-  uint32_t len = 0;
-  if (fread(&len, sizeof(len), 1, f) != 1 || len > stringLengthThreshold)
-    return false;
-
-  fseek(f, len, SEEK_CUR);
-  return true;
-}
-
-static void WriteString(FILE* f, std::string const& str)
-{
-  auto len = static_cast<uint32_t>(str.length());
-  fwrite(&len, 1, sizeof(len), f);
-  fwrite(str.c_str(), 1, str.length(), f);
-}
-
 template<typename StoredType, typename ValueType> bool ReadInt(FILE* f, ValueType& value)
 {
   auto val = static_cast<StoredType>(0);
@@ -300,6 +259,56 @@ static bool ReadUnsignedInt(FILE* f, unsigned int& value)
 static void WriteUnsignedInt(FILE* f, unsigned int value)
 {
   WriteInt<uint32_t>(f, value);
+}
+
+static bool ReadTimeT(FILE* f, time_t& value)
+{
+  return ReadInt<int64_t>(f, value);
+}
+
+static void WriteTimeT(FILE* f, time_t value)
+{
+  WriteInt<int64_t>(f, value);
+}
+
+static unsigned int const stringLengthThreshold = 32 * 1024;
+
+static bool ReadString(FILE* f, std::string& str)
+{
+  unsigned int len = 0;
+  if (!ReadUnsignedInt(f, len) || len > stringLengthThreshold)
+    return false;
+
+  if (len > 0)
+  {
+    std::vector<char> buf(len);
+    if (fread(&buf[0], 1, buf.size(), f) != buf.size() || std::find(buf.begin(), buf.end(), 0) != buf.end())
+      return false;
+
+    str = std::string(buf.begin(), buf.end());
+  }
+  else
+  {
+    str.clear();
+  }
+
+  return true;
+}
+
+static bool SkipString(FILE* f)
+{
+  unsigned int len = 0;
+  if (!ReadUnsignedInt(f, len) || len > stringLengthThreshold)
+    return false;
+
+  fseek(f, len, SEEK_CUR);
+  return true;
+}
+
+static void WriteString(FILE* f, std::string const& str)
+{
+  WriteUnsignedInt(f, static_cast<unsigned int>(str.length()));
+  fwrite(str.c_str(), 1, str.length(), f);
 }
 
 static bool ReadRepoRoot(FILE* f, std::string& repoRoot, std::string& singleFile)
@@ -713,18 +722,17 @@ static std::string GetIntersection(char const* left, char const* right)
 
 static void WriteOffsets(FILE* f, std::vector<LineInfo*>::iterator begin, std::vector<LineInfo*>::iterator end)
 {
-  auto sz = static_cast<OffsetType>(std::distance(begin, end));
-  fwrite(&sz, sizeof(sz), 1, f);
+  WriteUnsignedInt(f, static_cast<unsigned int>(std::distance(begin, end)));
   for (; begin != end; ++begin)
   {
-    fwrite(&(*begin)->pos, sizeof((*begin)->pos), 1, f);
+    WriteInt<OffsetType>(f, (*begin)->pos);
   }
 }
 
 static bool ReadOffsets(FILE* f, OffsetCont& offsets)
 {
-  auto sz = static_cast<OffsetType>(0);
-  if (fread(&sz, sizeof(sz), 1, f) != 1)
+  unsigned int sz = 0;
+  if (!ReadUnsignedInt(f, sz))
     return false;
 
   offsets.resize(sz);
@@ -733,8 +741,8 @@ static bool ReadOffsets(FILE* f, OffsetCont& offsets)
 
 static bool SkipOffsets(FILE* f)
 {
-  auto sz = static_cast<OffsetType>(0);
-  if (fread(&sz, sizeof(sz), 1, f) != 1)
+  unsigned int sz = 0;
+  if (!ReadUnsignedInt(f, sz))
     return false;
 
   fseek(f, sizeof(OffsetType) * sz, SEEK_CUR);
@@ -897,7 +905,7 @@ bool TagFileInfo::CreateIndex(time_t tagsModTime, bool singleFileRepos)
     return false;
   }
   fwrite(IndexFileSignature, 1, sizeof(IndexFileSignature), g);
-  fwrite(&tagsModTime,sizeof(tagsModTime),1,g);
+  WriteTimeT(g, tagsModTime);
   WriteString(g, fullpathrepo ? reporoot : std::string());
   WriteString(g, singlefile);
   std::sort(lines.begin(), lines.end(), [](LineInfo* left, LineInfo* right) { return FieldLess(left->line, right->line); });
@@ -987,7 +995,7 @@ std::shared_ptr<FILE> TagFileInfo::OpenIndex(char const* mode) const
     return std::shared_ptr<FILE>();
 
   time_t storedTagsModTime = 0;
-  if (fread(&storedTagsModTime, sizeof(storedTagsModTime), 1, &*f) != 1 || storedTagsModTime != tagsStat.st_mtime)
+  if (!ReadTimeT(&*f, storedTagsModTime) || storedTagsModTime != tagsStat.st_mtime)
     return std::shared_ptr<FILE>();
 
   return SkipRepoRoot(&*f) ? std::move(f) : std::shared_ptr<FILE>();
