@@ -219,6 +219,21 @@ namespace Internal
       ASSERT_EQ(TAGS({FirstTag, SecondTag}), sut->Get());
       ASSERT_EQ(STAT({{FirstTag, 1}, {SecondTag, 1}}), sut->GetStat());
     }
+
+    TEST(TagsCache, ResetsCounters)
+    {
+      auto sut = MakeCache({FirstTag, FirstTag, FirstTag, SecondTag, SecondTag, ThirdTag});
+      sut->ResetCounters();
+      ASSERT_EQ(STAT({{FirstTag, 1}, {SecondTag, 1}, {ThirdTag, 1}}), sut->GetStat());
+    }
+
+    TEST(TagsCache, OrderNotChangedIfCounterReset)
+    {
+      auto sut = MakeCache({FirstTag, FirstTag, FirstTag, SecondTag, SecondTag, ThirdTag});
+      auto expected = sut->Get();
+      sut->ResetCounters();
+      ASSERT_EQ(expected, sut->Get());
+    }
   }
 }
 }

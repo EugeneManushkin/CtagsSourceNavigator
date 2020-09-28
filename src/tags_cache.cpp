@@ -82,6 +82,15 @@ namespace
       Capacity = capacity;
     }
 
+    virtual void ResetCounters() override
+    {
+      auto tags = Get(0);
+      Frequency.clear();
+      Tags.clear();
+      for (auto i = tags.rbegin(); i != tags.rend(); ++i)
+        Insert(*i, 1);
+    }
+
   private:
     void Resize(size_t newSize)
     {

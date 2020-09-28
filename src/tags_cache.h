@@ -18,6 +18,7 @@ namespace Internal
     virtual void Insert(TagInfo const&, size_t frequency = 1) = 0;
     virtual void Erase(TagInfo const&) = 0;
     virtual void SetCapacity(size_t) = 0;
+    virtual void ResetCounters() = 0;
   };
 
   std::shared_ptr<TagsCache> CreateTagsCache(size_t);
