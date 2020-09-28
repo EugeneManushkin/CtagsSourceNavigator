@@ -27,6 +27,7 @@
 #include <sys/stat.h>
 #include <string>
 #include <string.h>
+#include <time.h>
 #include <tuple>
 #include <unordered_map>
 #include <vector>
@@ -100,6 +101,7 @@ struct TagFileInfo{
     , indexFile(filename + ".idx")
     , singlefilerepos(singleFileRepos)
     , IndexModTime(0)
+    , CacheModTime(0)
     , NamesCache(Tags::Internal::CreateTagsCache(0))
     , FilesCache(Tags::Internal::CreateTagsCache(0))
   {
@@ -135,12 +137,14 @@ struct TagFileInfo{
     Tags::Internal::TagsCache& cache = tag.name.empty() ? *FilesCache : *NamesCache;
     cache.SetCapacity(cacheSize);
     cache.Insert(tag.name.empty() ? MakeFileTag(TagInfo(tag)) : tag);
+    CacheModTime = time(nullptr);
   }
 
   void EraseCachedTag(TagInfo const& tag)
   {
     Tags::Internal::TagsCache& cache = tag.name.empty() ? *FilesCache : *NamesCache;
     cache.Erase(tag);
+    CacheModTime = time(nullptr);
   }
 
   std::vector<TagInfo> GetCachedTags(bool getFiles, size_t limit) const
@@ -149,6 +153,11 @@ struct TagFileInfo{
   }
 
   void FlushCachedTags();
+
+  time_t ElapsedSinceCached() const
+  {
+    return !CacheModTime ? CacheModTime : time(nullptr) - CacheModTime;
+  }
 
 private:
   bool CreateIndex(time_t tagsModTime, bool singleFileRepos);
@@ -180,6 +189,7 @@ private:
   bool singlefilerepos;
   bool fullpathrepo;
   time_t IndexModTime;
+  time_t CacheModTime;
   std::shared_ptr<Tags::Internal::TagsCache> NamesCache;
   std::shared_ptr<Tags::Internal::TagsCache> FilesCache;
   OffsetCont NamesOffsets;
@@ -792,6 +802,7 @@ void TagFileInfo::FlushCachedTags()
   
   WriteTagsStat(&*f, NamesCache->GetStat());
   WriteTagsStat(&*f, FilesCache->GetStat());
+  WriteTimeT(&*f, CacheModTime);
   Truncate(&*f, ftell(&*f));
   CloseIndexFile(std::move(f));
 }
@@ -924,6 +935,7 @@ bool TagFileInfo::CreateIndex(time_t tagsModTime, bool singleFileRepos)
   WriteOffsets(g, lines.begin(), linesEnd);
   WriteTagsStat(g, RefreshNamesCache(fi, f, namesOffsets, NamesCache->GetStat()));
   WriteTagsStat(g, RefreshFilesCache(fi, f, filesOffsets, FilesCache->GetStat()));
+  WriteTimeT(g, CacheModTime);
   tagsFile.reset();
   delete [] linespool;
   while(poolfirst)
@@ -939,6 +951,7 @@ bool TagFileInfo::CreateIndex(time_t tagsModTime, bool singleFileRepos)
 bool TagFileInfo::LoadCache()
 {
   IndexModTime = 0;
+  CacheModTime = 0;
   auto f = FOpen(indexFile.c_str(), "r+b");
   if (!f || !ReadSignature(&*f))
     return false;
@@ -973,6 +986,7 @@ bool TagFileInfo::LoadCache()
     {
       NamesCache = std::move(namesCache);
       FilesCache = std::move(filesCache);
+      ReadTimeT(&*f, CacheModTime);
     }
   }
 
@@ -1539,6 +1553,11 @@ namespace
     std::vector<TagInfo> GetCachedTags(bool getFiles, size_t maxCount) const override
     {
       return Info.GetCachedTags(getFiles, maxCount);
+    }
+
+    time_t ElapsedSinceCached() const override
+    {
+      return Info.ElapsedSinceCached();
     }
 
   private:

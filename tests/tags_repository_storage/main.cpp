@@ -89,6 +89,11 @@ namespace
       return std::vector<TagInfo>();
     }
 
+    time_t ElapsedSinceCached() const override
+    {
+      return 0;
+    }
+
   private:
     std::string TagsFilePath;
   };

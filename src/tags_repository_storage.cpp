@@ -34,7 +34,7 @@ namespace
 
   RepositoryInfo ToRepositoryInfo(RepositoryRuntimeInfo const& info)
   {
-    return {info.Repository->TagsPath(), info.Repository->Root(), info.Type};
+    return {info.Repository->TagsPath(), info.Repository->Root(), info.Type, info.Repository->ElapsedSinceCached()};
   }
 
   class RepositoryStorageImpl : public Tags::RepositoryStorage

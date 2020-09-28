@@ -34,6 +34,7 @@ namespace Tags
     std::string TagsPath;
     std::string Root;
     RepositoryType Type;
+    time_t ElapsedSinceCached;
   };
 
   class RepositoryStorage

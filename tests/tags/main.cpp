@@ -619,6 +619,25 @@ namespace TESTS
   {
     TestFindFile("include_file_repos/tags.universal");
   }
+
+  TEST_F(Tags, CacheTags)
+  {
+    if (CheckIdxFiles) return;
+    ASSERT_NO_FATAL_FAILURE(LoadTagsFile("cache_repos/tags", RepositoryType::Regular, 3));
+    ASSERT_EQ(0, Storage->GetInfo("cache_repos/tags").ElapsedSinceCached);
+    Storage->CacheTag(Find("first", "cache_repos/tags").at(0), 3, true);
+  }
+
+  TEST_F(Tags, ElapsedSinceCachedResetWhenTagCached)
+  {
+    if (!CheckIdxFiles) return;
+    ASSERT_NO_FATAL_FAILURE(LoadTagsFile("cache_repos/tags", RepositoryType::Regular, 3));
+    auto elapsed = Storage->GetInfo("cache_repos/tags").ElapsedSinceCached;
+    ASSERT_GT(elapsed, 0);
+    Storage->CacheTag(Find("first", "cache_repos/tags").at(0), 3, true);
+    ASSERT_NO_FATAL_FAILURE(LoadTagsFile("cache_repos/tags", RepositoryType::Regular, 3));
+    ASSERT_GT(elapsed, Storage->GetInfo("cache_repos/tags").ElapsedSinceCached);
+  }
 }
 }
 
