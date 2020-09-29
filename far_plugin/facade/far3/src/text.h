@@ -72,4 +72,5 @@ enum{
   MAskIndexFoundRepositories,
   MAskResetCounters,
   MCacheNotModified,
+  MResetCountersAfter,
 };

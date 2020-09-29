@@ -853,6 +853,12 @@ static Config LoadConfig(std::string const& fileName)
     {
       config.use_built_in_ctags = val == "true";
     }
+    else if(key == "resetcachecounterstimeouthours")
+    {
+      int timeout = 0;
+      if (sscanf(val.c_str(), "%d", &timeout) == 1 && timeout >= 0)
+        config.reset_cache_counters_timeout_hours = timeout;
+    }
   }
 
   config.history_len = config.history_file.empty() ? 0 : config.history_len;
@@ -2456,7 +2462,7 @@ static intptr_t ConfigurePlugin()
   WideString menuTitle = WideString(GetMsg(MPlugin)) + L" " + PluginVersionString();
   struct InitDialogItem initItems[]={
 //    Type        X1  Y2  X2 Y2  F S           Flags D Data
-    DI_DOUBLEBOX, 3, ++y, 64,27, 0,0,              0,0,-1,menuTitle.c_str(),{},
+    DI_DOUBLEBOX, 3, ++y, 64,29, 0,0,              0,0,-1,menuTitle.c_str(),{},
     DI_TEXT,      5, ++y,  0, 0, 0,0,              0,0,MPathToExe,L"",{},
     DI_EDIT,      5, ++y, 62, 3, 1,0,              0,0,-1,ToString(config.exe),{"pathtoexe", true},
     DI_CHECKBOX,  5, ++y, 62,10, 1,config.use_built_in_ctags,0,0,MUseBuiltInCtags,L"",{"usebuiltinctags", false, true},
@@ -2465,6 +2471,8 @@ static intptr_t ConfigurePlugin()
     DI_TEXT,      5, ++y, 62,10, 1,0,DIF_SEPARATOR|DIF_BOXCOLOR,0,-1,L"",{},
     DI_TEXT,      5, ++y,  0, 0, 0,0,              0,0,MMaxResults,L"",{},
     DI_EDIT,      5, ++y, 62, 9, 1,0,              0,0,-1,ToString(std::to_string(config.max_results)),{"maxresults", true},
+    DI_TEXT,      5, ++y,  0, 0, 0,0,              0,0,MResetCountersAfter,L"",{},
+    DI_EDIT,      5, ++y, 62, 9, 1,0,              0,0,-1,ToString(std::to_string(config.reset_cache_counters_timeout_hours)),{"resetcachecounterstimeouthours", true},
     DI_CHECKBOX,  5, ++y, 62,10, 1,config.casesens,0,0,MCaseSensFilt,L"",{"casesensfilt", false, true},
     DI_CHECKBOX,  5, ++y, 62,10, 1,config.sort_class_members_by_name,0,0,MSortClassMembersByName,L"",{"sortclassmembersbyname", false, true},
     DI_CHECKBOX,  5, ++y, 62,10, 1,config.cur_file_first,0,0,MCurFileFirst,L"",{"curfilefirst", false, true},
