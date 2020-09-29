@@ -94,6 +94,10 @@ namespace
       return 0;
     }
 
+    void ResetCacheCounters() override
+    {
+    }
+
   private:
     std::string TagsFilePath;
   };

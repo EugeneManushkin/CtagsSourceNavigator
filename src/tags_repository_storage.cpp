@@ -91,6 +91,13 @@ namespace
         info.Repository->EraseCachedTag(tag, flush);
     }
 
+    void ResetCacheCounters(char const* tagsPath) override
+    {
+      auto info = GetRuntimeInfo(tagsPath);
+      if (!Empty(info))
+        info.Repository->ResetCacheCounters();
+    }
+
     std::unique_ptr<Tags::Selector> GetSelector(char const* currentFile, bool caseInsensitive, Tags::SortingOptions sortOptions, size_t limit) override
     {
       std::vector<RepositoryPtr> repositories;

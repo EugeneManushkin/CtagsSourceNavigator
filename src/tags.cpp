@@ -159,6 +159,13 @@ struct TagFileInfo{
     return !CacheModTime ? CacheModTime : time(nullptr) - CacheModTime;
   }
 
+  void ResetCacheCounters()
+  {
+    NamesCache->ResetCounters();
+    FilesCache->ResetCounters();
+    CacheModTime = time(nullptr);
+  }
+
 private:
   bool CreateIndex(time_t tagsModTime, bool singleFileRepos);
   bool LoadCache();
@@ -1558,6 +1565,11 @@ namespace
     time_t ElapsedSinceCached() const override
     {
       return Info.ElapsedSinceCached();
+    }
+
+    void ResetCacheCounters() override
+    {
+      Info.ResetCacheCounters();
     }
 
   private:
