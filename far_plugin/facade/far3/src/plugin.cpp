@@ -99,6 +99,7 @@ struct Config{
   bool sort_class_members_by_name;
   static const size_t max_history_len;
   bool use_built_in_ctags;
+  size_t reset_cache_counters_timeout_hours;
 
 private:
   std::string wordchars;
@@ -120,6 +121,7 @@ Config::Config()
   , index_edited_file(true)
   , sort_class_members_by_name(false)
   , use_built_in_ctags(true)
+  , reset_cache_counters_timeout_hours(12)
 {
   SetWordchars("0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz~$_");
 }
@@ -890,14 +892,21 @@ static void LoadTags(std::string const& tagsFile, bool silent)
   VisitTags(tagsFile);
 }
 
-static void ResetCacheCounters(TagInfo const& tag)
+static void ManualResetCacheCounters(TagInfo const& tag)
 {
   auto info = Storage->GetInfo(tag.Owner.TagsFile.c_str());
   std::string elapsed = std::to_string(info.ElapsedSinceCached / 3600) + ":"
                       + std::to_string((info.ElapsedSinceCached / 60) % 60) + ":"
                       + std::to_string(info.ElapsedSinceCached % 60);
   if (YesNoCalncelDialog(GetMsg(MAskResetCounters) + ToString(info.Root) + GetMsg(MCacheNotModified) + ToString(elapsed) + L")") == YesNoCancel::Yes)
-    Storage->ResetCacheCounters(info.TagsPath.c_str(), true);
+    Storage->ResetCacheCounters(info.TagsPath.c_str(), FlushTagsCache);
+}
+
+static void ResetCacheCountersOnTimeout(TagInfo const& tag)
+{
+  time_t timeout = config.reset_cache_counters_timeout_hours * 3600;
+  if (!!timeout && Storage->GetInfo(tag.Owner.TagsFile.c_str()).ElapsedSinceCached > timeout)
+    Storage->ResetCacheCounters(tag.Owner.TagsFile.c_str(), FlushTagsCache);
 }
 
 static WideString LabelToStr(char label)
@@ -1112,6 +1121,7 @@ static LookupResult LookupTagsMenu(TagsViewer const& viewer, TagInfo& tag, Forma
     }
     if (IsCtrlDel(fk[bkey]))
     {
+      ResetCacheCountersOnTimeout(*selectedTag);
       Storage->EraseCachedTag(*selectedTag, FlushTagsCache);
       continue;
     }
@@ -1121,7 +1131,7 @@ static LookupResult LookupTagsMenu(TagsViewer const& viewer, TagInfo& tag, Forma
     }
     if (IsCtrlR(fk[bkey]))
     {
-      ResetCacheCounters(*selectedTag);
+      ManualResetCacheCounters(*selectedTag);
       continue;
     }
     if (static_cast<size_t>(bkey) >= filterkeys.length())
@@ -1623,6 +1633,7 @@ void PlainNavigator::Move(WideString const& file, int line, bool setPanelDir)
 
 void PlainNavigator::CacheTag(TagInfo const& tag)
 {
+  ResetCacheCountersOnTimeout(tag);
   if (!tag.name.empty())
     Storage->CacheTag(Tags::MakeFileTag(TagInfo(tag)), config.max_results, FlushTagsCache);
 
