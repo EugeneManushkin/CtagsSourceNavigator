@@ -69,3 +69,5 @@
 "<No regular repositories>"
 "Permanent repositories:"
 "Would you like to index detected repositories?"
+"Reset cache counters for repository: "
+"?\n(cache not modified "

@@ -94,7 +94,7 @@ namespace
       return 0;
     }
 
-    void ResetCacheCounters() override
+    void ResetCacheCounters(bool flush) override
     {
     }
 

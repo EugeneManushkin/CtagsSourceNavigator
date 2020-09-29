@@ -1567,9 +1567,11 @@ namespace
       return Info.ElapsedSinceCached();
     }
 
-    void ResetCacheCounters() override
+    void ResetCacheCounters(bool flush) override
     {
       Info.ResetCacheCounters();
+      if (flush)
+        Info.FlushCachedTags();
     }
 
   private:

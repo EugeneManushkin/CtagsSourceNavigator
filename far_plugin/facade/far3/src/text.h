@@ -70,4 +70,6 @@ enum{
   MNoRegularRepositories,
   MPermanentRepositories,
   MAskIndexFoundRepositories,
+  MAskResetCounters,
+  MCacheNotModified,
 };

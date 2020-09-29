@@ -890,6 +890,16 @@ static void LoadTags(std::string const& tagsFile, bool silent)
   VisitTags(tagsFile);
 }
 
+static void ResetCacheCounters(TagInfo const& tag)
+{
+  auto info = Storage->GetInfo(tag.Owner.TagsFile.c_str());
+  std::string elapsed = std::to_string(info.ElapsedSinceCached / 3600) + ":"
+                      + std::to_string((info.ElapsedSinceCached / 60) % 60) + ":"
+                      + std::to_string(info.ElapsedSinceCached % 60);
+  if (YesNoCalncelDialog(GetMsg(MAskResetCounters) + ToString(info.Root) + GetMsg(MCacheNotModified) + ToString(elapsed) + L")") == YesNoCancel::Yes)
+    Storage->ResetCacheCounters(info.TagsPath.c_str(), true);
+}
+
 static WideString LabelToStr(char label)
 {
   return !label ? WideString() : label == ' ' ? WideString(L"  ") : WideString(L"&") + wchar_t(label) + L" ";
@@ -987,6 +997,8 @@ std::vector<FarKey> GetFarKeys(std::string const& filterkeys)
   fk.push_back({VK_DELETE, RIGHT_CTRL_PRESSED});
   fk.push_back({0x5A, LEFT_CTRL_PRESSED});
   fk.push_back({0x5A, RIGHT_CTRL_PRESSED});
+  fk.push_back({0x52, LEFT_CTRL_PRESSED});
+  fk.push_back({0x52, RIGHT_CTRL_PRESSED});
   fk.push_back(FarKey());
   return fk;
 }
@@ -1013,6 +1025,11 @@ bool IsCtrlZ(FarKey const& key)
 {
   return (key.VirtualKeyCode == 0x5A && key.ControlKeyState == LEFT_CTRL_PRESSED)
       || (key.VirtualKeyCode == 0x5A && key.ControlKeyState == RIGHT_CTRL_PRESSED);
+}
+
+bool IsCtrlR(FarKey const& key)
+{
+  return key.VirtualKeyCode == 0x52 && (key.ControlKeyState == LEFT_CTRL_PRESSED || key.ControlKeyState == RIGHT_CTRL_PRESSED);
 }
 
 using Tags::FormatTagFlag;
@@ -1101,6 +1118,11 @@ static LookupResult LookupTagsMenu(TagsViewer const& viewer, TagInfo& tag, Forma
     if (IsCtrlZ(fk[bkey]))
     {
       return LookupResult::Exit;
+    }
+    if (IsCtrlR(fk[bkey]))
+    {
+      ResetCacheCounters(*selectedTag);
+      continue;
     }
     if (static_cast<size_t>(bkey) >= filterkeys.length())
     {

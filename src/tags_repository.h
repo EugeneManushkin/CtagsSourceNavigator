@@ -29,7 +29,7 @@ namespace Tags
       virtual void EraseCachedTag(TagInfo const& tag, bool flush) = 0;
       virtual std::vector<TagInfo> GetCachedTags(bool getFiles, size_t maxCount) const = 0;
       virtual time_t ElapsedSinceCached() const = 0;
-      virtual void ResetCacheCounters() = 0;
+      virtual void ResetCacheCounters(bool flush) = 0;
     };
   }
 }
