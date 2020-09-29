@@ -49,6 +49,7 @@
 #include <bitset>
 #include <deque>
 #include <functional>
+#include <iomanip>
 #include <iterator>
 #include <regex>
 #include <sstream> 
@@ -901,10 +902,11 @@ static void LoadTags(std::string const& tagsFile, bool silent)
 static void ManualResetCacheCounters(TagInfo const& tag)
 {
   auto info = Storage->GetInfo(tag.Owner.TagsFile.c_str());
-  std::string elapsed = std::to_string(info.ElapsedSinceCached / 3600) + ":"
-                      + std::to_string((info.ElapsedSinceCached / 60) % 60) + ":"
-                      + std::to_string(info.ElapsedSinceCached % 60);
-  if (YesNoCalncelDialog(GetMsg(MAskResetCounters) + ToString(info.Root) + GetMsg(MCacheNotModified) + ToString(elapsed) + L")") == YesNoCancel::Yes)
+  std::stringstream elapsed;
+  elapsed << std::setfill('0') << std::setw(2) << info.ElapsedSinceCached / 3600 << std::setw(0) << ":"
+                               << std::setw(2) << (info.ElapsedSinceCached / 60) % 60 << std::setw(0) << ":"
+                               << std::setw(2) << info.ElapsedSinceCached % 60;
+  if (YesNoCalncelDialog(GetMsg(MAskResetCounters) + ToString(info.Root) + GetMsg(MCacheNotModified) + ToString(elapsed.str()) + L")") == YesNoCancel::Yes)
     Storage->ResetCacheCounters(info.TagsPath.c_str(), FlushTagsCache);
 }
 
