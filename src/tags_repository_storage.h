@@ -51,6 +51,6 @@ namespace Tags
     virtual void CacheTag(TagInfo const& tag, size_t cacheSize, bool flush) = 0;
     virtual void EraseCachedTag(TagInfo const& tag, bool flush) = 0;
     virtual void ResetCacheCounters(char const* tagsPath, bool flush) = 0;
-    virtual std::unique_ptr<Selector> GetSelector(char const* currentFile, bool caseInsensitive, SortingOptions sortOptions, size_t limit = 0) = 0;
+    virtual std::unique_ptr<Selector> GetSelector(char const* currentFile, bool caseInsensitive, SortingOptions sortOptions, size_t limit) = 0;
   };
 }
