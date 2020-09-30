@@ -2155,7 +2155,7 @@ HANDLE WINAPI OpenW(const struct OpenInfo *info)
       , MI::Separator()
       , MI(MPluginConfiguration, miPluginConfiguration, 'C')
     };
-    int res=Menu(GetMsg(MPlugin),ml,MFindSymbol);
+    int res=Menu(GetMsg(MPlugin),ml,miReindexRepo);
     if(res==-1)return nullptr;
     if ((res == miFindSymbol
       || res == miComplete
@@ -2250,7 +2250,7 @@ HANDLE WINAPI OpenW(const struct OpenInfo *info)
          , MI::Separator()
          , MI(MPluginConfiguration, miPluginConfiguration, 'C')
       };
-      int rc=Menu(GetMsg(MPlugin),ml,miLookupSymbol);
+      int rc=Menu(GetMsg(MPlugin),ml,miReindexRepo);
       switch(rc)
       {
         case miLoadFromHistory:
