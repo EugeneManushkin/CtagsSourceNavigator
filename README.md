@@ -21,17 +21,17 @@ This is a [Far Manager](https://www.farmanager.com/) plugin for browsing source 
 + Hotkeys macro
 ## What's new 
 ### 2.1.0.63
-+ Plugin detects git and svn repositories. CD to a git repository and just start using plugin or select "Reindex repository" menu. Plugin will detect the root of a repository and suggest to index it (#66).
-+ Cache become more convinient. After a specified time (12 hours by default) the cache is not used all counters are reset so newly searched names will go to the top of the list. 
-  The reset counters time may be configured or disabled in plugin configuration menu (#67).
++ Plugin detects git and svn repositories. CD to a git repository and just start using plugin or select "Reindex repository" menu. Plugin will detect the root of a repository and suggest to index it (#66)
++ Cache become more convinient. After a specified time (12 hours by default) the cache is not used all counters are reset so newly searched names will go to the top of the list.
+  The reset counters time may be configured or disabled in plugin configuration menu (#67)
 + Fixed bugs (#62 #68)
 + **For those who love Lua**. If you would like to browse **not only functions** check out my new project: [Yet Another Lua TAgs](https://github.com/EugeneManushkin/Yalta). This is a Lua source code indexer
-  that integrates with CtagsSourceNavigator plugin. Just download (latest release)[https://github.com/EugeneManushkin/Yalta/releases], unpack it and put full path to **ctags_wrapper.bat** script to **Path to ctags.exe** in plugin configuration menu
-  (**F11->Ctags Source Navigator->C Plugin configuration**).
+  that integrates with CtagsSourceNavigator plugin. Just download [latest release](https://github.com/EugeneManushkin/Yalta/releases), unpack it and put full path to **ctags_wrapper.bat** script to **Path to ctags.exe** in plugin configuration menu
+  (**F11->Ctags Source Navigator->C Plugin configuration**)
 
 ### 2.1.0.54
-+ Supported permanent repositories which are available for navigation and name lookup in any other repository or not indexed source file (#53).
-+ Improved repository management: you may navigate to the root of a loaded repository in 'Manage repositories' menu (#57).
++ Supported permanent repositories which are available for navigation and name lookup in any other repository or not indexed source file (#53)
++ Improved repository management: you may navigate to the root of a loaded repository in 'Manage repositories' menu (#57)
 + Improved platform error reporting
 + Fixed view of tags with large name length (#60)
 ### 2.1.0.47
