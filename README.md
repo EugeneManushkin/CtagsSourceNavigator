@@ -13,12 +13,22 @@ This is a [Far Manager](https://www.farmanager.com/) plugin for browsing source 
 + Searching name in entire repository
 + Searching name in currently edited file
 + Search and open files by name
++ Remember your most visited names and files
 + Listing class members
 + Source code browsing history
 + Creating Ctags database for selected repository root
 + Reindexing repository.
 + Hotkeys macro
 ## What's new 
+### 2.1.0.63
++ Plugin detects git and svn repositories. CD to a git repository and just start using plugin or select "Reindex repository" menu. Plugin will detect the root of a repository and suggest to index it (#66).
++ Cache become more convinient. After a specified time (12 hours by default) the cache is not used all counters are reset so newly searched names will go to the top of the list. 
+  The reset counters time may be configured or disabled in plugin configuration menu (#67).
++ Fixed bugs (#62 #68)
++ **For those who love Lua**. If you would like to browse **not only functions** check out my new project: [Yet Another Lua TAgs](https://github.com/EugeneManushkin/Yalta). This is a Lua source code indexer
+  that integrates with CtagsSourceNavigator plugin. Just download (latest release)[https://github.com/EugeneManushkin/Yalta/releases], unpack it and put full path to **ctags_wrapper.bat** script to **Path to ctags.exe** in plugin configuration menu
+  (**F11->Ctags Source Navigator->C Plugin configuration**).
+
 ### 2.1.0.54
 + Supported permanent repositories which are available for navigation and name lookup in any other repository or not indexed source file (#53).
 + Improved repository management: you may navigate to the root of a loaded repository in 'Manage repositories' menu (#57).
@@ -29,12 +39,6 @@ This is a [Far Manager](https://www.farmanager.com/) plugin for browsing source 
 + Improved parsing string literals for navigation (#46)
 + Supported line numbers in round brackets like ```src\plugin.cpp(1323)``` or ```src\plugin.cpp(1323):``` (#47)
 + Included regular linux build
-### 2.1.0.42
-+ Ctags utility installation is no longer required! Latest [Universal Ctags](https://ctags.io/) utility is included in plugins archive (#42)
-+ Most recently searched names and files are shown in lookup menus. List of recently searched names and files is kept for each repository and synchronized accross multiple Far Manager instances (#33)
-+ Open declaration also opens include files in string literals like ```#include <src/include/my_file.h>``` or ```#include "src\my_file.h"```. This option is renamed to "Go to" (#41)
-+ You may now search indexed files by full path or partial path. Also you may specify line number in search string using colon symbol like ```src/include/my_file.h:1234```
-+ Fixed bugs
 ## Installation
 1. Download latest release from [release page](https://github.com/EugeneManushkin/CtagsSourceNavigator/releases)
 2. Extract downloaded archive to FarManager/Plugins folder
