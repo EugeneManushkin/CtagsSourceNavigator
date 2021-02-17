@@ -364,7 +364,9 @@ static bool ReadTagInfo(FILE* f, TagInfo& tag)
   return success;
 }
 
-static void WriteTagsStat(FILE* f, std::vector<std::pair<TagInfo, size_t>> const& stat)
+using TagsStat = std::vector<std::pair<TagInfo, size_t>>;
+
+static void WriteTagsStat(FILE* f, TagsStat const& stat)
 {
   WriteUnsignedInt(f, static_cast<unsigned int>(stat.size()));
   for (auto i = stat.rbegin(); i != stat.rend(); ++i)
@@ -374,14 +376,13 @@ static void WriteTagsStat(FILE* f, std::vector<std::pair<TagInfo, size_t>> const
   }
 }
 
-static bool ReadTagsCache(FILE* f, Tags::Internal::TagsCache& cache, std::string const& tagsFile)
+static bool ReadTagsStat(FILE* f, std::string const& tagsFile, TagsStat& stat)
 {
   unsigned int const capacityThreshold = 500;
   unsigned int sz = 0;
   if (!ReadUnsignedInt(f, sz) || sz > capacityThreshold)
     return false;
 
-  cache.SetCapacity(sz);
   for (; !!sz; --sz)
   {
     TagInfo tag;
@@ -393,7 +394,7 @@ static bool ReadTagsCache(FILE* f, Tags::Internal::TagsCache& cache, std::string
       return false;
 
     tag.Owner.TagsFile = tagsFile;
-    cache.Insert(tag, freq);
+    stat.push_back(std::make_pair(tag, freq));
   }
 
   return true;
@@ -491,6 +492,27 @@ static std::string MakeFilename(std::string const& str)
   std::replace(result.begin(), result.end(), '/', '\\');
   result.erase(std::unique(result.begin(), result.end(), [](char a, char b) {return a == '\\' && a == b; }), result.end());
   return std::move(result);
+}
+
+static TagsStat MakeFullFilePaths(TagFileInfo const& fi, TagsStat&& stat)
+{
+  for (auto& entry : stat)
+    entry.first.file = MakeFilename(fi.GetFullPath(entry.first.file));
+
+  return std::move(stat);
+}
+
+static TagsStat MakeRelativeFilePaths(TagFileInfo const& fi, TagsStat&& stat)
+{
+  for (auto& entry : stat)
+    entry.first.file = fi.GetRelativePath(entry.first.file.c_str());
+
+  return std::move(stat);
+}
+
+static TagsStat CorrectStatFilePaths(TagFileInfo const& fi, TagsStat&& stat)
+{
+  return !fi.IsFullPathRepo() ? MakeRelativeFilePaths(fi, std::move(stat)) : std::move(stat);
 }
 
 inline bool IsLineEnd(char c)
@@ -807,15 +829,15 @@ void TagFileInfo::FlushCachedTags()
       return;
   }
   
-  WriteTagsStat(&*f, NamesCache->GetStat());
-  WriteTagsStat(&*f, FilesCache->GetStat());
+  WriteTagsStat(&*f, CorrectStatFilePaths(*this, NamesCache->GetStat()));
+  WriteTagsStat(&*f, CorrectStatFilePaths(*this, FilesCache->GetStat()));
   WriteTimeT(&*f, CacheModTime);
   Truncate(&*f, ftell(&*f));
   CloseIndexFile(std::move(f));
 }
 
-static std::vector<std::pair<TagInfo, size_t>> RefreshNamesCache(TagFileInfo* fi, FILE* f, OffsetCont const& offsets, std::vector<std::pair<TagInfo, size_t>>&& tagsWithFreq);
-static std::vector<std::pair<TagInfo, size_t>> RefreshFilesCache(TagFileInfo* fi, FILE* f, OffsetCont const& offsets, std::vector<std::pair<TagInfo, size_t>>&& tagsWithFreq);
+static TagsStat RefreshNamesCache(TagFileInfo* fi, FILE* f, OffsetCont const& offsets, TagsStat&& tagsWithFreq);
+static TagsStat RefreshFilesCache(TagFileInfo* fi, FILE* f, OffsetCont const& offsets, TagsStat&& tagsWithFreq);
 
 bool TagFileInfo::CreateIndex(time_t tagsModTime, bool singleFileRepos)
 {
@@ -940,8 +962,8 @@ bool TagFileInfo::CreateIndex(time_t tagsModTime, bool singleFileRepos)
   OffsetCont filesOffsets;
   std::transform(lines.begin(), linesEnd, std::back_inserter(filesOffsets), [](LineInfo* line){ return line->pos; });
   WriteOffsets(g, lines.begin(), linesEnd);
-  WriteTagsStat(g, RefreshNamesCache(fi, f, namesOffsets, NamesCache->GetStat()));
-  WriteTagsStat(g, RefreshFilesCache(fi, f, filesOffsets, FilesCache->GetStat()));
+  WriteTagsStat(g, CorrectStatFilePaths(*fi, RefreshNamesCache(fi, f, namesOffsets, NamesCache->GetStat())));
+  WriteTagsStat(g, CorrectStatFilePaths(*fi, RefreshFilesCache(fi, f, filesOffsets, FilesCache->GetStat())));
   WriteTimeT(g, CacheModTime);
   tagsFile.reset();
   delete [] linespool;
@@ -953,6 +975,15 @@ bool TagFileInfo::CreateIndex(time_t tagsModTime, bool singleFileRepos)
   }
   indexFile.reset();
   return LoadCache();
+}
+
+static std::shared_ptr<Tags::Internal::TagsCache> TagsStatToTagsCache(TagsStat const& stat)
+{
+  auto cache = Tags::Internal::CreateTagsCache(stat.size());
+  for (auto const& entry : stat)
+    cache->Insert(entry.first, entry.second);
+
+  return std::move(cache);
 }
 
 bool TagFileInfo::LoadCache()
@@ -980,10 +1011,10 @@ bool TagFileInfo::LoadCache()
 
   if (!IsEndOfFile(&*f))
   {
-    auto namesCache = Tags::Internal::CreateTagsCache(0);
-    auto filesCache = Tags::Internal::CreateTagsCache(0);
+    TagsStat namesStat;
+    TagsStat filesStat;
     auto tagsCacheBegins = ftell(&*f);
-    if (!ReadTagsCache(&*f, *namesCache, filename) || !ReadTagsCache(&*f, *filesCache, filename))
+    if (!ReadTagsStat(&*f, filename, namesStat) || !ReadTagsStat(&*f, filename, filesStat))
     {
       NamesCache = Tags::Internal::CreateTagsCache(0);
       FilesCache = Tags::Internal::CreateTagsCache(0);
@@ -991,8 +1022,8 @@ bool TagFileInfo::LoadCache()
     }
     else
     {
-      NamesCache = std::move(namesCache);
-      FilesCache = std::move(filesCache);
+      NamesCache = TagsStatToTagsCache(MakeFullFilePaths(*this, std::move(namesStat)));
+      FilesCache = TagsStatToTagsCache(MakeFullFilePaths(*this, std::move(filesStat)));
       ReadTimeT(&*f, CacheModTime);
     }
   }
@@ -1445,7 +1476,7 @@ private:
   TagInfo const& Tag;
 };
 
-static std::vector<std::pair<TagInfo, size_t>> RefreshNamesCache(TagFileInfo* fi, FILE* f, OffsetCont const& offsets, std::vector<std::pair<TagInfo, size_t>>&& tagsWithFreq)
+static TagsStat RefreshNamesCache(TagFileInfo* fi, FILE* f, OffsetCont const& offsets, TagsStat&& tagsWithFreq)
 {
   auto cur = tagsWithFreq.begin();
   for (auto i = tagsWithFreq.begin(); i != tagsWithFreq.end(); ++i)
@@ -1460,7 +1491,7 @@ static std::vector<std::pair<TagInfo, size_t>> RefreshNamesCache(TagFileInfo* fi
   return std::move(tagsWithFreq);
 }
 
-static std::vector<std::pair<TagInfo, size_t>> RefreshFilesCache(TagFileInfo* fi, FILE* f, OffsetCont const& offsets, std::vector<std::pair<TagInfo, size_t>>&& tagsWithFreq)
+static TagsStat RefreshFilesCache(TagFileInfo* fi, FILE* f, OffsetCont const& offsets, TagsStat&& tagsWithFreq)
 {
 //TODO: refactor duplicated code
   auto cur = tagsWithFreq.begin();
