@@ -1875,6 +1875,13 @@ static WideString SelectTags(std::vector<WideString> const& foundTags)
   return tagsFile;
 }
 
+static std::vector<WideString> FilterLoadedTags(std::vector<WideString>&& tagsFiles)
+{
+  auto isLoaded = [](WideString const& tagsFile){return !Storage->GetInfo(ToStdString(tagsFile).c_str()).TagsPath.empty();};
+  tagsFiles.erase(std::remove_if(tagsFiles.begin(), tagsFiles.end(), isLoaded), tagsFiles.end());
+  return std::move(tagsFiles);
+}
+
 static WideString IndexSelectedRepository(std::vector<WideString> const& repositories)
 {
   MenuList lst;
@@ -1895,11 +1902,13 @@ static WideString IndexSelectedRepository(std::vector<WideString> const& reposit
 static std::pair<WideString, bool> SearchTagsFile(WideString const& fileName)
 {
   auto found = SearchInParents(fileName, {{~FILE_ATTRIBUTE_DIRECTORY, ToString(config.tagsmask)}, {FILE_ATTRIBUTE_DIRECTORY, L".git,.svn"}});
-  if (found.count(0) > 0)
-    return std::make_pair(SelectTags(found[0]), false);
+  auto foundTags = FilterLoadedTags(std::move(found[0]));
+  if (!foundTags.empty())
+    return std::make_pair(SelectTags(foundTags), false);
 
-  if (found.count(1) > 0)
-    return std::make_pair(IndexSelectedRepository(found[1]), true);
+  auto foundScms = std::move(found[1]);
+  if (!foundScms.empty())
+    return std::make_pair(IndexSelectedRepository(foundScms), true);
 
   return std::make_pair(WideString(), false);
 }
