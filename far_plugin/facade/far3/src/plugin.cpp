@@ -1992,7 +1992,7 @@ static bool EnsureOwnersLoaded(WideString const& fileName, bool createTempTags)
     return createTempTags && CreateTemporaryTags(fileName);
 
   LoadTags(ToStdString(found.first).c_str(), !found.second);
-  return true;
+  return !Storage->GetOwners(ToStdString(fileName).c_str()).empty();
 }
 
 static bool EnsureTagsLoaded(WideString const& fileName, bool createTempTags)
