@@ -24,7 +24,7 @@ target_compile_definitions(ctags PUBLIC CTAGS_VERSION_MAJOR=${CTAGS_VERSION_MAJO
                                  PUBLIC CTAGS_GIT_COMMIT="${CTAGS_GIT_COMMIT}"
 )
 
-set(PLUGIN_DIR ${CMAKE_BINARY_DIR}/$<CONFIG>/ctags)
+set(PLUGIN_DIR ${CMAKE_BINARY_DIR}/$<CONFIG>/ctags CACHE STRING "Plugin release folder")
 file(GLOB README_FILES "${CMAKE_SOURCE_DIR}/README*.md")
 add_custom_command(TARGET ctags POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E make_directory ${PLUGIN_DIR}
