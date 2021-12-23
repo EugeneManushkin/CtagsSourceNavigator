@@ -2012,7 +2012,8 @@ static bool EnsureOwnersLoaded(WideString const& fileName, bool createTempTags)
 
 static bool EnsureTagsLoaded(WideString const& fileName, bool createTempTags)
 {
-  return EnsureOwnersLoaded(fileName, createTempTags) && (LoadPermanents(), true);
+  LoadPermanents();
+  return EnsureOwnersLoaded(fileName, createTempTags);
 }
 
 static WideString ReindexTagsFile(WideString const& tagsFile)
