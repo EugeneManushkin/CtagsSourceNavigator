@@ -20,6 +20,8 @@ This is a [Far Manager](https://www.farmanager.com/) plugin for browsing source 
 + Reindexing repository.
 + Hotkeys macro
 ## What's new 
+### 2.1.0.68
++ Plugin become more stable. Fixed bugs: #70, #71, #75
 ### 2.1.0.63
 + Plugin detects git and svn repositories. CD to a git repository and just start using plugin or select "Reindex repository" menu. Plugin will detect the root of a repository and suggest to index it (#66)
 + Cache become more convinient. After a specified time (12 hours by default) the cache is not used all counters are reset so newly searched names will go to the top of the list.
@@ -28,17 +30,11 @@ This is a [Far Manager](https://www.farmanager.com/) plugin for browsing source 
 + **For those who love Lua**. If you would like to browse **not only functions** check out my new project: [Yet Another Lua TAgs](https://github.com/EugeneManushkin/Yalta). This is a Lua source code indexer
   that integrates with CtagsSourceNavigator plugin. Just download [latest release](https://github.com/EugeneManushkin/Yalta/releases), unpack it and put full path to **ctags_wrapper.bat** script to **Path to ctags.exe** in plugin configuration menu
   (**F11->Ctags Source Navigator->C Plugin configuration**)
-
 ### 2.1.0.54
 + Supported permanent repositories which are available for navigation and name lookup in any other repository or not indexed source file (#53)
 + Improved repository management: you may navigate to the root of a loaded repository in 'Manage repositories' menu (#57)
 + Improved platform error reporting
 + Fixed view of tags with large name length (#60)
-### 2.1.0.47
-+ Supported filtering search results with in any selecting menu. You may also filter filtered results. Press 'Tab' key to enter filtering mode, 'Esc' to return to previous filter and 'Ctrl+Z' to close menu (#54)
-+ Improved parsing string literals for navigation (#46)
-+ Supported line numbers in round brackets like ```src\plugin.cpp(1323)``` or ```src\plugin.cpp(1323):``` (#47)
-+ Included regular linux build
 ## Installation
 1. Download latest release from [release page](https://github.com/EugeneManushkin/CtagsSourceNavigator/releases)
 2. Extract downloaded archive to FarManager/Plugins folder
