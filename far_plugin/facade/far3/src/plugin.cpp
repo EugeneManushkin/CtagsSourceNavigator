@@ -65,8 +65,6 @@ FarStandardFunctions FSF;
 
 static const wchar_t* APPNAME = CTAGS_PRODUCT_NAME;
 
-static const wchar_t* ConfigFileName=L"config";
-
 static const wchar_t* const DefaultTagsFilename = L"tags";
 
 static const bool FlushTagsCache = true;
@@ -642,6 +640,20 @@ static bool IsInTempDirectory(WideString const& fileName)
   return !tempDir.empty() && !dirOfFile.empty() && !!FSF.ProcessName(JoinPath(tempDir, L"*").c_str(), const_cast<wchar_t*>(dirOfFile.c_str()), 0, PN_CMPNAME);
 }
 
+static bool FileExists(WideString const& file)
+{
+  auto attrs = GetFileAttributesW(file.c_str());
+  return attrs != INVALID_FILE_ATTRIBUTES && !(attrs & FILE_ATTRIBUTE_DIRECTORY);
+}
+
+static void Copy(WideString const& originalFile, WideString const& newFile)
+{
+  if (!::CopyFileW(originalFile.c_str(), newFile.c_str(), 0))
+    throw std::runtime_error("Failed to copy file:\n" + ToStdString(originalFile) +
+                             "\nto file:\n" + ToStdString(newFile) +
+                             "\nwith error: " + GetErrorText(GetLastError()));
+}
+
 static void RenameFile(WideString const& originalFile, WideString const& newFile)
 {
   if (!::MoveFileExW(originalFile.c_str(), newFile.c_str(), MOVEFILE_REPLACE_EXISTING))
@@ -707,7 +719,18 @@ static WideString GetModulePath()
 
 static WideString GetConfigFilePath()
 {
-  return JoinPath(GetModulePath(), ConfigFileName);
+  return ExpandEnvString(L"%USERPROFILE%\\.tags-config");
+}
+
+static void MigrateConfig()
+{
+  auto obsoletConfig = JoinPath(GetModulePath(), L"config");
+  auto actualConfig = GetConfigFilePath();
+  if (!FileExists(actualConfig) && FileExists(obsoletConfig))
+  {
+    SafeCall(Copy, Facade::ExceptionHandler(), obsoletConfig, actualConfig);
+    SafeCall(RemoveFile, Facade::ExceptionHandler(), obsoletConfig);
+  }
 }
 
 static WideString GetCtagsUtilityPath()
@@ -1227,6 +1250,7 @@ void WINAPI SetStartupInfoW(const struct PluginStartupInfo *Info)
   I=*Info;
   FSF = *Info->FSF;
   I.FSF = &FSF;
+  MigrateConfig();
   config = LoadConfig(ToStdString(GetConfigFilePath()));
 }
 
