@@ -48,6 +48,7 @@ enum{
   MTagsMask,
   MSelectTags,
   MReindexRepo,
+  MReindexFile,
   MAskReindex,
   MProceed,
   MTagsNotFound,
