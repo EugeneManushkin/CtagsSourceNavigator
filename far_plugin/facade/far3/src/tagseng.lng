@@ -47,6 +47,7 @@
 "Tags files matching masks"
 "Select tags file"
 "Reindex repository"
+"Reindex this file"
 "You are about to index following directory:"
 "Proceed?"
 "Tags not found"

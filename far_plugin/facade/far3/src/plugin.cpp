@@ -2066,6 +2066,42 @@ static WideString ReindexRepository(WideString const& fileName)
        : WideString();
 }
 
+static Tags::RepositoryInfo SelectRepository(std::vector<Tags::RepositoryInfo>&& repositories)
+{
+  if (repositories.size() <= 1)
+    return repositories.empty() ? Tags::RepositoryInfo() : Tags::RepositoryInfo(std::move(repositories.back()));
+
+  std::vector<WideString> tagsFiles;
+  std::transform(repositories.begin(), repositories.end(), std::back_inserter(tagsFiles), [](Tags::RepositoryInfo const& r){ return ToString(r.TagsPath); });
+  auto selected = SelectTags(tagsFiles);
+  return selected.empty() ? Tags::RepositoryInfo() : Storage->GetInfo(ToStdString(selected).c_str());
+}
+
+static WideString ReindexFile(WideString const& fileName)
+{
+  auto owners = Storage->GetOwners(ToStdString(fileName).c_str());
+  if (owners.empty())
+  {
+    auto searched = SearchInParents(fileName, TAGS_FILES | SCM_DIRS);
+    searched[TAGS_FILES] = FilterLoadedTags(std::move(searched[TAGS_FILES]));
+    if (!Found(TAGS_FILES, searched))
+      return Found(SCM_DIRS, searched) ? IndexSelectedRepository(searched[SCM_DIRS]) : WideString();
+
+    auto selected = SelectTags(searched[TAGS_FILES]);
+    if (!selected.empty())
+      LoadTags(ToStdString(selected).c_str(), true);
+
+    owners = Storage->GetOwners(ToStdString(fileName).c_str());
+  }
+
+  auto repo = SelectRepository(std::move(owners));
+  if (repo.Type == Tags::RepositoryType::Temporary)
+    IndexSingleFile(fileName, GetDirOfFile(ToString(repo.TagsPath)));
+//TODO: else if (repo.Type == Tags::RepositoryType::Regular) ...
+
+  return ToString(repo.TagsPath);
+}
+
 static void Lookup(WideString const& file, bool getFiles, bool setPanelDir, bool createTempTags)
 {
   if (!EnsureTagsLoaded(file, createTempTags))
@@ -2184,7 +2220,7 @@ HANDLE WINAPI OpenW(const struct OpenInfo *info)
     auto ei = GetCurrentEditorInfo();
     auto fileName = GetFileNameFromEditor(ei.EditorID);
     enum{
-      miFindSymbol,miGoBack,miGoForward,miReindexRepo,
+      miFindSymbol,miGoBack,miGoForward,miReindexRepo,miReindexFile,
       miComplete,miBrowseClass,miBrowseFile,miLookupSymbol,miSearchFile,
       miPluginConfiguration,miNavigationHistory,
     };
@@ -2201,10 +2237,11 @@ HANDLE WINAPI OpenW(const struct OpenInfo *info)
       , MI(MSearchFile,miSearchFile, '7')
       , MI::Separator()
       , MI(MReindexRepo, miReindexRepo, '8')
+      , MI(MReindexFile, miReindexFile, 'R')
       , MI::Separator()
       , MI(MPluginConfiguration, miPluginConfiguration, 'C')
     };
-    int res=Menu(GetMsg(MPlugin),ml,miReindexRepo);
+    int res=Menu(GetMsg(MPlugin),ml,miReindexFile);
     if(res==-1)return nullptr;
     if ((res == miFindSymbol
       || res == miComplete
@@ -2269,6 +2306,10 @@ HANDLE WINAPI OpenW(const struct OpenInfo *info)
       case miReindexRepo:
       {
         tagfile = SafeCall(ReindexRepository, Err, fileName).second;
+      }break;
+      case miReindexFile:
+      {
+        tagfile = SafeCall(ReindexFile, Err, fileName).second;
       }break;
       case miPluginConfiguration:
       {
