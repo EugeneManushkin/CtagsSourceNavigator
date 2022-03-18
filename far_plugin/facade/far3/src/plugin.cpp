@@ -1816,21 +1816,20 @@ static std::string RemoveFileMask(std::string const& args)
 }
 
 //TODO: handle '-f tagfile' ctags flag
-static bool IndexSingleFile(WideString const& fileFullPath, WideString const& tagsDirectoryPath)
+static void IndexSingleFile(WideString const& fileFullPath, WideString const& tagsDirectoryPath)
 {
   auto args = ToString(RemoveFileMask(config.opt));
   args += args.empty() || args.back() == ' ' ? L" " : L"";
   args += L"\"" + fileFullPath + L"\"";
   ExecuteScript(GetCtagsUtilityPath(), args, tagsDirectoryPath);
-  return !!LoadTagsImpl(ToStdString(JoinPath(tagsDirectoryPath, DefaultTagsFilename)), Tags::RepositoryType::Temporary);
 }
 
 static bool CreateTemporaryTags(WideString const& fileFullPath)
 {
   auto tempDirPath = GenerateTempPath();
   MkDir(tempDirPath);
-  if (SafeCall(IndexSingleFile, Err, fileFullPath, tempDirPath).second)
-    return true;
+  if (SafeCall(IndexSingleFile, Err, fileFullPath, tempDirPath).first)
+    return !!LoadTagsImpl(ToStdString(JoinPath(tempDirPath, DefaultTagsFilename)), Tags::RepositoryType::Temporary);
 
   RemoveDirWithFiles(tempDirPath);
   return false;
@@ -2077,6 +2076,22 @@ static Tags::RepositoryInfo SelectRepository(std::vector<Tags::RepositoryInfo>&&
   return selected.empty() ? Tags::RepositoryInfo() : Storage->GetInfo(ToStdString(selected).c_str());
 }
 
+static void UpdateFileInRepositoryImpl(WideString const& fileName, WideString const& tempDirectory, Tags::RepositoryInfo const& repo)
+{
+  IndexSingleFile(fileName, tempDirectory);
+  throw std::runtime_error("Not implemented");
+  //TODO: Storage->SyncByFile(...);
+}
+
+static bool UpdateFileInRepository(WideString const& fileName, Tags::RepositoryInfo const& repo)
+{
+  auto tempDirectory = GenerateTempPath();
+  MkDir(tempDirectory);
+  bool success = SafeCall(UpdateFileInRepositoryImpl, Err, fileName, tempDirectory, repo).first;
+  SafeCall(RemoveDirWithFiles, Err, tempDirectory);
+  return success;
+}
+
 static WideString ReindexFile(WideString const& fileName)
 {
   auto owners = Storage->GetOwners(ToStdString(fileName).c_str());
@@ -2095,11 +2110,13 @@ static WideString ReindexFile(WideString const& fileName)
   }
 
   auto repo = SelectRepository(std::move(owners));
+  bool updated = false;
   if (repo.Type == Tags::RepositoryType::Temporary)
-    IndexSingleFile(fileName, GetDirOfFile(ToString(repo.TagsPath)));
-//TODO: else if (repo.Type == Tags::RepositoryType::Regular) ...
+    updated = (IndexSingleFile(fileName, GetDirOfFile(ToString(repo.TagsPath))), true);
+  else if (repo.Type == Tags::RepositoryType::Regular)
+    updated = UpdateFileInRepository(fileName, repo);
 
-  return ToString(repo.TagsPath);
+  return updated ? ToString(repo.TagsPath) : WideString();
 }
 
 static void Lookup(WideString const& file, bool getFiles, bool setPanelDir, bool createTempTags)
