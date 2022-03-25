@@ -98,6 +98,10 @@ namespace
     {
     }
 
+    void UpdateTagsByFile(const char* fileTagsPath) const override
+    {
+    }
+
   private:
     std::string TagsFilePath;
   };
