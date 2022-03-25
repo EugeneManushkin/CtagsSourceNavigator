@@ -542,35 +542,41 @@ inline bool NextField(char const*& cur, char const*& next, std::string const& se
   return next != cur;
 }
 
-bool ParseLine(const char* buf, TagFileInfo const& fi, TagInfo& result)
+struct TagFields
+{
+  std::pair<char const*, char const*> Name;
+  std::pair<char const*, char const*> File;
+  std::pair<char const*, char const*> Excmd;
+  std::pair<char const*, char const*> Kind;
+  std::pair<char const*, char const*> Lineno;
+  std::pair<char const*, char const*> Info;
+};
+
+static bool ParseLine(const char* buf, TagFields& result)
 {
   char const* next = buf;
   if (!NextField(buf, next))
     return false; 
 
-  result.name = std::string(buf, next);
+  result.Name = std::make_pair(buf, next);
   if (!NextField(buf, next))
     return false;
 
-  result.file = MakeFilename(fi.GetFullPath(std::string(buf, next)));
+  result.File = std::make_pair(buf, next);
   std::string const separator = ";\"";
   if (!NextField(buf, next, separator))
     return false;
 
-  std::string excmd(buf, next);
-  if(excmd.length() > 1 && excmd.front() == '/')
+  if (*buf == '/')
   {
-    if (excmd.length() < 2 || excmd.back() != '/')
+    if (next - buf < 2 || *(next - 1) != '/')
       return false;
 
-    excmd = excmd.substr(1, excmd.length() - 2);
-    QuoteMeta(excmd);
-    ReplaceSpaces(excmd);
-    result.re = std::move(excmd);
+    result.Excmd = std::make_pair(buf + 1, next - 1);
   }
   else
   {
-    result.lineno=ToInt(excmd);
+    result.Lineno = std::make_pair(buf, next);
   }
 
   next += IsLineEnd(*next) ? 0 : separator.length();
@@ -581,20 +587,40 @@ bool ParseLine(const char* buf, TagFileInfo const& fi, TagInfo& result)
   if (!NextField(buf, next))
     return false;
 
-  result.type = *buf;
+  result.Kind = std::make_pair(buf, next);
   if (!NextField(buf, next))
     return true;
 
   std::string const line = "line:";
   if (next > buf + line.length() && !line.compare(0, line.length(), buf, line.length()))
   {
-    result.lineno=ToInt(std::string(buf + line.length(), next));
+    result.Lineno = std::make_pair(buf + line.length(), next);
     if (!NextField(buf, next))
       return true;
   }
 
-  result.info = std::string(buf, next);
+  result.Info = std::make_pair(buf, next);
   return true;
+}
+
+static TagInfo MakeTag(TagFields const& fields, TagFileInfo const& fi)
+{
+  TagInfo result;
+  result.Owner = {fi.GetName()};
+  result.name = std::string(fields.Name.first, fields.Name.second);
+  result.file = MakeFilename(fi.GetFullPath(std::string(fields.File.first, fields.File.second)));
+  if (fields.Excmd.first)
+  {
+    std::string excmd(fields.Excmd.first, fields.Excmd.second);
+    QuoteMeta(excmd);
+    ReplaceSpaces(excmd);
+    result.re = std::move(excmd);
+  }
+
+  result.type = fields.Kind.first ? *fields.Kind.first : result.type;
+  result.lineno = fields.Lineno.first ? ToInt(std::string(fields.Lineno.first, fields.Lineno.second)) : result.lineno;
+  result.info = fields.Info.first ? std::string(fields.Info.first, fields.Info.second) : result.info;
+  return std::move(result);
 }
 
 static char strbuf[16384];
@@ -1308,10 +1334,10 @@ static std::vector<TagInfo> GetMatchedTags(TagFileInfo const* fi, FILE* f, Offse
     fseek(&*f, offsets[i], SEEK_SET);
     std::string line;
     GetLine(line, &*f);
-    TagInfo tag;
-    if (ParseLine(line.c_str(), *fi, tag) && visitor.Filter(tag))
+    TagFields fields;
+    auto tag = ParseLine(line.c_str(), fields) ? MakeTag(fields, *fi) : TagInfo();
+    if (!tag.Owner.TagsFile.empty() && visitor.Filter(tag))
     {
-      tag.Owner = {fi->GetName()};
       result.push_back(std::move(tag));
       maxCount -= maxCount > 0 ? 1 : 0;
     }
