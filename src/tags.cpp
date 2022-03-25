@@ -1605,6 +1605,11 @@ namespace
         Info.FlushCachedTags();
     }
 
+    void UpdateTagsByFile(const char* fileTagsPath) const override
+    {
+      throw std::runtime_error("Not implemented");
+    }
+
   private:
     std::vector<TagInfo> FindFilesImpl(const char* part, bool comparationType, size_t maxCount) const
     {

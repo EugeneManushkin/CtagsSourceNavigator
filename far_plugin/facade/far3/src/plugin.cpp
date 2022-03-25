@@ -2079,8 +2079,7 @@ static Tags::RepositoryInfo SelectRepository(std::vector<Tags::RepositoryInfo>&&
 static void UpdateFileInRepositoryImpl(WideString const& fileName, WideString const& tempDirectory, Tags::RepositoryInfo const& repo)
 {
   IndexSingleFile(fileName, tempDirectory);
-  throw std::runtime_error("Not implemented");
-  //TODO: Storage->SyncByFile(...);
+  Storage->UpdateTagsByFile(repo.TagsPath.c_str(), ToStdString(JoinPath(tempDirectory, DefaultTagsFilename)).c_str());
 }
 
 static bool UpdateFileInRepository(WideString const& fileName, Tags::RepositoryInfo const& repo)

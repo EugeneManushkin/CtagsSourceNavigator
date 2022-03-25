@@ -114,6 +114,13 @@ namespace
       return Tags::Internal::CreateSelector(std::move(repositories), currentFile, caseInsensitive, sortOptions, limit);
     }
 
+    void UpdateTagsByFile(const char* tagsPath, const char* fileTagsPath) const override
+    {
+      auto info = GetRuntimeInfo(tagsPath);
+      if (!Empty(info))
+        info.Repository->UpdateTagsByFile(fileTagsPath);
+    }
+
   private:
     using RepositoriesCont = std::list<RepositoryRuntimeInfo>;
     RepositoryRuntimeInfo GetRuntimeInfo(char const* tagsPath) const;
