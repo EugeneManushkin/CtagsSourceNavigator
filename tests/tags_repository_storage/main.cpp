@@ -98,7 +98,7 @@ namespace
     {
     }
 
-    void UpdateTagsByFile(const char* fileTagsPath) const override
+    void UpdateTagsByFile(const char* file, const char* fileTagsPath) const override
     {
     }
 
