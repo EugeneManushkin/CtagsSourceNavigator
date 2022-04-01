@@ -18,6 +18,7 @@
 */
 
 #include <algorithm>
+#include <fstream>
 #include <functional>
 #include <iterator>
 #include <list>
@@ -923,7 +924,7 @@ bool TagFileInfo::CreateIndex(time_t tagsModTime, bool singleFileRepos)
   std::string pathIntersection;
   while(GetLine(strbuf, buffer, f))
   {
-    if(strbuf[0]=='!')
+    if(strbuf[0]=='!' || strbuf[0]=='\t')
     {
       pos=ftell(f);
       continue;
@@ -1109,6 +1110,15 @@ char const* TagFileInfo::GetRelativePath(char const* fileName) const
 
   for (; IsPathSeparator(*fileName); ++fileName);
   return !*fileName || (!singlefile.empty() && !PathsEqual(fileName, singlefile.c_str())) ? nullptr : fileName;
+}
+
+static std::string GetRelativePath(TagFileInfo const& fi, char const* fileName)
+{
+  auto relativePath = fi.GetRelativePath(fileName);
+  if (!relativePath || !*relativePath)
+    throw std::logic_error(std::string("File '") + fileName + "' is not relative to '" + fi.GetRoot() + "'");
+
+  return std::string(relativePath);
 }
 
 std::string TagFileInfo::GetFullPath(std::string const& relativePath) const
@@ -1355,6 +1365,19 @@ static std::vector<TagInfo> GetMatchedTags(TagFileInfo const* fi, IndexType inde
   return !f ? std::vector<TagInfo>() : GetMatchedTags(fi, &*f, offsets, visitor, maxCount);
 }
 
+OffsetCont GetMatchedOffsets(TagFileInfo const& fi, IndexType index, MatchVisitor const& visitor)
+{
+  OffsetCont offsets;
+  auto f = fi.OpenTags(offsets, index);
+  if (!f)
+    throw std::runtime_error("Failed to load offests");
+
+  auto range = GetMatchedOffsetRange(&*f, offsets, visitor);
+  std::copy(offsets.begin() + std::get<0>(range), offsets.begin() + std::get<2>(range), offsets.begin());
+  offsets.resize(std::get<2>(range) - std::get<0>(range));
+  return std::move(offsets);
+}
+
 class TagsLess
 {
 public:
@@ -1536,6 +1559,121 @@ static TagsStat RefreshFilesCache(TagFileInfo* fi, FILE* f, OffsetCont const& of
 
 namespace
 {
+  using LinePosition = std::pair<OffsetType, size_t>;
+  using LinePositionCont = std::vector<LinePosition>;
+  using StrToOffset = std::unordered_map<std::string, OffsetType>;
+
+  std::fstream OpenStream(char const* file, std::ios_base::iostate exceptionMask, std::ios_base::openmode mode)
+  {
+    std::fstream result;
+    result.exceptions(exceptionMask);
+    result.open(file, mode);
+    return result;
+  }
+
+  void OverwriteLine(std::iostream &stream, LinePosition const& position, std::string overwriteWith)
+  {
+    stream.seekp(position.first);
+    stream << overwriteWith;
+    for (auto len = position.second - std::min(position.second, overwriteWith.length()); len > 0; --len, stream.put('\t'));
+  }
+
+  std::string ReadLine(std::istream &stream, OffsetType offset)
+  {
+    std::string result;
+    stream.seekg(offset);
+    std::getline(stream, result);
+    result.resize(!result.empty() && result.back() == '\r' ? result.size() - 1 : result.size());
+    return std::move(result);
+  }
+
+  TagFields ParseTagFields(std::string const& line)
+  {
+    TagFields result;
+    if (!ParseLine(line.c_str(), result))
+      throw std::runtime_error("Invalid tags file format");
+
+    return result;
+  }
+
+  std::string ReadCrlf(std::istream &stream)
+  {
+    char prev = 0, last = 0;
+    stream.seekg(0);
+    for (stream.get(last); last != '\n' && !stream.eof(); prev = last, stream.get(last));
+    if (last != '\n')
+      throw std::runtime_error("No line end in input stream");
+
+    return prev == '\r' ? "\r\n" : "\n";
+  }
+
+  std::string ComparationString(TagFields const& fields)
+  {
+    return std::string(fields.Lineno.first, fields.Lineno.second) + "/"
+         + std::string(fields.Kind.first, fields.Kind.second) + "/"
+         + std::string(fields.Excmd.first, fields.Excmd.second) + "/"
+         + std::string(fields.Name.first, fields.Name.second) + "/"
+    ;
+  }
+
+  StrToOffset ReadMergeTags(std::istream& stream)
+  {
+    std::string const ignore = "!_TAG";
+    StrToOffset result;
+    while(!stream.eof())
+    {
+      std::string line;
+      auto pos = stream.tellg();
+      std::getline(stream, line);
+      TagFields fields;
+      if (!line.empty() && !!line.compare(0, ignore.length(), ignore) && ParseLine(line.c_str(), fields))
+        result.emplace(ComparationString(fields), static_cast<OffsetType>(pos));
+    }
+
+    stream.clear();
+    return std::move(result);
+  }
+
+  std::pair<OffsetCont, LinePositionCont> GetAddRemoveLines(StrToOffset&& tagsToMerge, std::istream& intoStream, OffsetCont const& intoOffsets)
+  {
+    LinePositionCont toRemove;
+    for (auto offset : intoOffsets)
+    {
+      auto line = ReadLine(intoStream, offset);
+      auto found = tagsToMerge.find(ComparationString(ParseTagFields(line)));
+      if (found == tagsToMerge.end())
+        toRemove.push_back(std::make_pair(offset, line.length()));
+      else
+        tagsToMerge.erase(found);
+    }
+
+    OffsetCont toAdd;
+    std::transform(tagsToMerge.begin(), tagsToMerge.end(), std::back_inserter(toAdd), [](StrToOffset::value_type const& v){return v.second;});
+    return std::make_pair(std::move(toAdd), std::move(toRemove));
+  }
+
+  std::string StrReplace(std::string&& str, size_t begin, size_t end, std::string const& substr)
+  {
+    auto const len = str.length();
+    auto const newLen = str.length() - (end - begin) + substr.length();
+    if (newLen > str.length())
+      str.resize(newLen);
+
+    str.replace(str.begin() + begin + substr.length(), str.end(), str.begin() + end, str.begin() + len);
+    str.replace(begin, substr.length(), substr);
+    str.resize(newLen);
+    return std::move(str);
+  }
+
+  std::string ReplaceFilePath(std::string&& line, std::string const& newPath)
+  {
+    auto const fields = ParseTagFields(line);
+    return StrReplace(std::move(line), fields.File.first - line.c_str(), fields.File.second - line.c_str(), newPath);
+  }
+}
+
+namespace
+{
   class RepositoryImpl : public Tags::Internal::Repository
   {
   public:
@@ -1631,9 +1769,37 @@ namespace
         Info.FlushCachedTags();
     }
 
-    void UpdateTagsByFile(const char* fileTagsPath) const override
+    void UpdateTagsByFile(char const* file, const char* fileTagsPath) const override
     {
-      throw std::runtime_error("Not implemented");
+      auto const relativePath = GetRelativePath(Info, file);
+      auto const bypathsOffsets = GetMatchedOffsets(Info, IndexType::Paths, PathMatch(Info.IsFullPathRepo() ? file : relativePath.c_str()));
+      auto fromStream = OpenStream(fileTagsPath, std::ios_base::badbit, std::ios_base::in);
+      auto intoStream = OpenStream(Info.GetName().c_str(), std::ios_base::failbit | std::ios_base::badbit, std::ios_base::in | std::ios_base::out | std::ios_base::binary);
+      auto lines = GetAddRemoveLines(ReadMergeTags(fromStream), intoStream, bypathsOffsets);
+      auto const addLines = std::move(lines.first);
+      auto removeLines = std::move(lines.second);
+      std::string const crlf = ReadCrlf(intoStream);
+      for (auto const& addLine : addLines)
+      {
+        auto line = ReadLine(fromStream, addLine);
+        line = Info.IsFullPathRepo() ? line : ReplaceFilePath(std::move(line), relativePath);
+        auto found = std::find_if(removeLines.begin(), removeLines.end(), [&line](LinePosition const& pos){return pos.second >= line.length();});
+        if (found == removeLines.end())
+        {
+          intoStream.seekp(0, std::ios_base::end);
+          intoStream << line << crlf;
+        }
+        else
+        {
+          OverwriteLine(intoStream, *found, line);
+          found->second = 0;
+        }
+      }
+
+      for (auto const& removeLine : removeLines)
+      {
+        OverwriteLine(intoStream, removeLine, std::string());
+      }
     }
 
   private:
