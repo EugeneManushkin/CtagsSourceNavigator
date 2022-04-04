@@ -1778,6 +1778,7 @@ namespace
       auto lines = GetAddRemoveLines(ReadMergeTags(fromStream), intoStream, bypathsOffsets);
       auto const addLines = std::move(lines.first);
       auto removeLines = std::move(lines.second);
+      std::sort(removeLines.begin(), removeLines.end(), [](LinePosition const& left, LinePosition const& right){return left.second < right.second;});
       std::string const crlf = ReadCrlf(intoStream);
       for (auto const& addLine : addLines)
       {
