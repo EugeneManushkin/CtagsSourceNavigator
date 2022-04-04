@@ -2,6 +2,7 @@
 
 #include "tag_info.h"
 
+#include <functional>
 #include <memory>
 #include <vector>
 
@@ -30,7 +31,7 @@ namespace Tags
       virtual std::vector<TagInfo> GetCachedTags(bool getFiles, size_t maxCount) const = 0;
       virtual time_t ElapsedSinceCached() const = 0;
       virtual void ResetCacheCounters(bool flush) = 0;
-      virtual void UpdateTagsByFile(char const* file, const char* fileTagsPath) const = 0;
+      virtual std::function<void()> UpdateTagsByFile(char const* file, const char* fileTagsPath) const = 0;
     };
   }
 }
