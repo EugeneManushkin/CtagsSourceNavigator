@@ -114,11 +114,10 @@ namespace
       return Tags::Internal::CreateSelector(std::move(repositories), currentFile, caseInsensitive, sortOptions, limit);
     }
 
-    void UpdateTagsByFile(const char* tagsPath, char const* file, const char* fileTagsPath) const override
+    std::function<void()> UpdateTagsByFile(const char* tagsPath, char const* file, const char* fileTagsPath) const override
     {
       auto info = GetRuntimeInfo(tagsPath);
-      if (!Empty(info))
-        info.Repository->UpdateTagsByFile(file, fileTagsPath);
+      return Empty(info) ? std::function<void()>() : info.Repository->UpdateTagsByFile(file, fileTagsPath);
     }
 
   private:

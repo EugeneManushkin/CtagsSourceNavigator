@@ -74,4 +74,5 @@ enum{
   MAskResetCounters,
   MCacheNotModified,
   MResetCountersAfter,
+  MTagsCorrupted,
 };

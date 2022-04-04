@@ -1796,7 +1796,7 @@ namespace
         Info.FlushCachedTags();
     }
 
-    void UpdateTagsByFile(char const* file, const char* fileTagsPath) const override
+    std::function<void()> UpdateTagsByFile(char const* file, const char* fileTagsPath) const override
     {
       auto relativePath = GetRelativePath(Info, file); // check that file belongs to repository
       auto pathInTags = Info.IsFullPathRepo() ? std::string(file) : std::string(std::move(relativePath));
@@ -1805,7 +1805,14 @@ namespace
       auto intoStream = OpenStream(Info.GetName().c_str(), std::ios_base::failbit | std::ios_base::badbit, std::ios_base::in | std::ios_base::out | std::ios_base::binary);
       auto lines = GetAddRemoveLines(ReadMergeTags(fromStream), intoStream, bypathsOffsets);
       auto crlf = ReadCrlf(intoStream);
-      AddRemoveLines(std::move(lines), std::move(crlf), std::move(pathInTags), std::move(fromStream), std::move(intoStream));
+      return std::bind([](std::pair<OffsetCont, LinePositionCont>& lines, std::string& crlf, std::string& pathSubst,
+                          std::shared_ptr<std::fstream> const& fromStream, std::shared_ptr<std::fstream> const& intoStream)
+                      {
+                        AddRemoveLines(std::move(lines), std::move(crlf), std::move(pathSubst), std::move(*fromStream), std::move(*intoStream));
+                      },
+                      std::move(lines), std::move(crlf), std::move(pathInTags),
+                      std::make_shared<std::fstream>(std::move(fromStream)), std::make_shared<std::fstream>(std::move(intoStream))
+      );
     }
 
   private:

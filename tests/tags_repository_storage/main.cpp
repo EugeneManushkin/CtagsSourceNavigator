@@ -98,8 +98,9 @@ namespace
     {
     }
 
-    void UpdateTagsByFile(const char* file, const char* fileTagsPath) const override
+    std::function<void()> UpdateTagsByFile(const char* file, const char* fileTagsPath) const override
     {
+      return std::function<void()>();
     }
 
   private:

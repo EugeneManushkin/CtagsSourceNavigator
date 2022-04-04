@@ -2079,7 +2079,15 @@ static Tags::RepositoryInfo SelectRepository(std::vector<Tags::RepositoryInfo>&&
 static void UpdateFileInRepositoryImpl(WideString const& fileName, WideString const& tempDirectory, Tags::RepositoryInfo const& repo)
 {
   IndexSingleFile(fileName, tempDirectory);
-  Storage->UpdateTagsByFile(repo.TagsPath.c_str(), ToStdString(fileName).c_str(), ToStdString(JoinPath(tempDirectory, DefaultTagsFilename)).c_str());
+  auto commit = Storage->UpdateTagsByFile(repo.TagsPath.c_str(), ToStdString(fileName).c_str(), ToStdString(JoinPath(tempDirectory, DefaultTagsFilename)).c_str());
+  try
+  {
+    commit();
+  }
+  catch (std::exception const& e)
+  {
+    throw Error(MTagsCorrupted, "Error", e.what());
+  }
 }
 
 static bool UpdateFileInRepository(WideString const& fileName, Tags::RepositoryInfo const& repo)
