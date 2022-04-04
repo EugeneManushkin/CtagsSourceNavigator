@@ -1670,6 +1670,33 @@ namespace
     auto const fields = ParseTagFields(line);
     return StrReplace(std::move(line), fields.File.first - line.c_str(), fields.File.second - line.c_str(), newPath);
   }
+
+  void AddRemoveLines(std::pair<OffsetCont, LinePositionCont> lines, std::string crlf, std::string pathSubst, std::fstream fromStream, std::fstream intoStream)
+  {
+      auto const addLines = std::move(lines.first);
+      auto removeLines = std::move(lines.second);
+      std::sort(removeLines.begin(), removeLines.end(), [](LinePosition const& left, LinePosition const& right){return left.second < right.second;});
+      for (auto const& addLine : addLines)
+      {
+        auto line = ReplaceFilePath(ReadLine(fromStream, addLine), pathSubst);
+        auto found = std::find_if(removeLines.begin(), removeLines.end(), [&line](LinePosition const& pos){return pos.second >= line.length();});
+        if (found == removeLines.end())
+        {
+          intoStream.seekp(0, std::ios_base::end);
+          intoStream << line << crlf;
+        }
+        else
+        {
+          OverwriteLine(intoStream, *found, line);
+          found->second = 0;
+        }
+      }
+
+      for (auto const& removeLine : removeLines)
+      {
+        OverwriteLine(intoStream, removeLine, std::string());
+      }
+  }
 }
 
 namespace
@@ -1771,36 +1798,14 @@ namespace
 
     void UpdateTagsByFile(char const* file, const char* fileTagsPath) const override
     {
-      auto const relativePath = GetRelativePath(Info, file);
-      auto const bypathsOffsets = GetMatchedOffsets(Info, IndexType::Paths, PathMatch(Info.IsFullPathRepo() ? file : relativePath.c_str()));
+      auto relativePath = GetRelativePath(Info, file); // check that file belongs to repository
+      auto pathInTags = Info.IsFullPathRepo() ? std::string(file) : std::string(std::move(relativePath));
+      auto const bypathsOffsets = GetMatchedOffsets(Info, IndexType::Paths, PathMatch(pathInTags.c_str()));
       auto fromStream = OpenStream(fileTagsPath, std::ios_base::badbit, std::ios_base::in);
       auto intoStream = OpenStream(Info.GetName().c_str(), std::ios_base::failbit | std::ios_base::badbit, std::ios_base::in | std::ios_base::out | std::ios_base::binary);
       auto lines = GetAddRemoveLines(ReadMergeTags(fromStream), intoStream, bypathsOffsets);
-      auto const addLines = std::move(lines.first);
-      auto removeLines = std::move(lines.second);
-      std::sort(removeLines.begin(), removeLines.end(), [](LinePosition const& left, LinePosition const& right){return left.second < right.second;});
-      std::string const crlf = ReadCrlf(intoStream);
-      for (auto const& addLine : addLines)
-      {
-        auto line = ReadLine(fromStream, addLine);
-        line = Info.IsFullPathRepo() ? line : ReplaceFilePath(std::move(line), relativePath);
-        auto found = std::find_if(removeLines.begin(), removeLines.end(), [&line](LinePosition const& pos){return pos.second >= line.length();});
-        if (found == removeLines.end())
-        {
-          intoStream.seekp(0, std::ios_base::end);
-          intoStream << line << crlf;
-        }
-        else
-        {
-          OverwriteLine(intoStream, *found, line);
-          found->second = 0;
-        }
-      }
-
-      for (auto const& removeLine : removeLines)
-      {
-        OverwriteLine(intoStream, removeLine, std::string());
-      }
+      auto crlf = ReadCrlf(intoStream);
+      AddRemoveLines(std::move(lines), std::move(crlf), std::move(pathInTags), std::move(fromStream), std::move(intoStream));
     }
 
   private:
