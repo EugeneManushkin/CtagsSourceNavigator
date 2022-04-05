@@ -2078,6 +2078,7 @@ static Tags::RepositoryInfo SelectRepository(std::vector<Tags::RepositoryInfo>&&
 
 static void UpdateFileInRepositoryImpl(WideString const& fileName, WideString const& tempDirectory, Tags::RepositoryInfo const& repo)
 {
+  auto message = LongOperationMessage(GetMsg(MIndexingFile));
   IndexSingleFile(fileName, tempDirectory);
   auto commit = Storage->UpdateTagsByFile(repo.TagsPath.c_str(), ToStdString(fileName).c_str(), ToStdString(JoinPath(tempDirectory, DefaultTagsFilename)).c_str());
   try

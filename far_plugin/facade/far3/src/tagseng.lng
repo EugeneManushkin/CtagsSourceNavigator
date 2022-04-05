@@ -74,3 +74,4 @@
 "?\n(cache not modified "
 "Reset cache counters after (hours. 0 - never reset):"
 "Tags file corrupted due to internal error. Please reindex repository"
+"Indexing file..."

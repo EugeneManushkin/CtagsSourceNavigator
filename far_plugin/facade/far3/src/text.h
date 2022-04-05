@@ -75,4 +75,5 @@ enum{
   MCacheNotModified,
   MResetCountersAfter,
   MTagsCorrupted,
+  MIndexingFile,
 };
