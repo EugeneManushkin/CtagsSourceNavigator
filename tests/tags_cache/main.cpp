@@ -7,7 +7,7 @@ bool operator == (TagInfo const& left, TagInfo const& right)
       && left.file == right.file
       && left.re == right.re
       && left.lineno == right.lineno
-      && left.type == right.type
+      && left.kind == right.kind
       && left.info == right.info;
 }
 
@@ -29,7 +29,7 @@ namespace Internal
       tag.file = "C:\\Folder\\File.cpp";
       tag.re = "^class TestClass$";
       tag.lineno = 10;
-      tag.type = 'c';
+      tag.kind = 'c';
       tag.info = "struct:Test::TestClass";
       return tag;
     }

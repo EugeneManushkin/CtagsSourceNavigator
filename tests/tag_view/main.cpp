@@ -18,14 +18,14 @@ namespace Tags
     size_t const FileColumn = 2;
     size_t const LongColumnLength = 1000;
 
-    TagInfo GetTag(std::string const& name = DefaultName, std::string const& filename = DefaultFilename, int line = DefaultLine, std::string const& regex = "", char type = 'd', std::string const& info = "")
+    TagInfo GetTag(std::string const& name = DefaultName, std::string const& filename = DefaultFilename, int line = DefaultLine, std::string const& regex = "", char kind = 'd', std::string const& info = "")
     {
       TagInfo result;
       result.name = name;
       result.file = filename;
       result.re = regex;
       result.lineno = line;
-      result.type = type;
+      result.kind = kind;
       result.info = info;
       return std::move(result);
     }

@@ -96,7 +96,7 @@ namespace
 
   std::string GetLeftColumn(TagInfo const& tag, FormatTagFlag flag)
   {
-    return tag.name.empty() ? tag.file : flag == FormatTagFlag::DisplayOnlyName ? tag.name : std::string(1, tag.type) + ":" + tag.name;
+    return tag.name.empty() ? tag.file : flag == FormatTagFlag::DisplayOnlyName ? tag.name : std::string(1, tag.kind) + ":" + tag.name;
   }
 
   size_t GetLeftColumnLen(TagInfo const& tag, FormatTagFlag flag)

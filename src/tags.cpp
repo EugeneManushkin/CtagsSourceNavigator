@@ -346,7 +346,7 @@ static void WriteTagInfo(FILE* f, TagInfo const& tag)
   WriteString(f, tag.re);
   WriteString(f, tag.info);
   WriteSignedInt(f, tag.lineno);
-  WriteSignedChar(f, tag.type);
+  WriteSignedChar(f, tag.kind);
 }
 
 static bool ReadTagInfo(FILE* f, TagInfo& tag)
@@ -358,7 +358,7 @@ static bool ReadTagInfo(FILE* f, TagInfo& tag)
   success = success && ReadString(f, val.re);
   success = success && ReadString(f, val.info);
   success = success && ReadSignedInt(f, val.lineno);
-  success = success && ReadSignedChar(f, val.type);
+  success = success && ReadSignedChar(f, val.kind);
   if (success)
     tag = std::move(val);
 
@@ -618,7 +618,7 @@ static TagInfo MakeTag(TagFields const& fields, TagFileInfo const& fi)
     result.re = std::move(excmd);
   }
 
-  result.type = fields.Kind.first ? *fields.Kind.first : result.type;
+  result.kind = fields.Kind.first ? *fields.Kind.first : result.kind;
   result.lineno = fields.Lineno.first ? ToInt(std::string(fields.Lineno.first, fields.Lineno.second)) : result.lineno;
   result.info = fields.Info.first ? std::string(fields.Info.first, fields.Info.second) : result.info;
   return std::move(result);
@@ -1495,7 +1495,7 @@ inline bool InfoEqual(std::string const& left, std::string const& right)
 inline bool TagsOpposite(TagInfo const& left, TagInfo const& right)
 {
   bool tagsNotEqual = left.lineno != right.lineno || !PathsEqual(left.file.c_str(), right.file.c_str());
-  return tagsNotEqual && TypesOpposite(left.type, right.type) && InfoEqual(left.info, right.info);
+  return tagsNotEqual && TypesOpposite(left.kind, right.kind) && InfoEqual(left.info, right.info);
 }
 
 std::vector<TagInfo>::const_iterator Tags::Reorder(TagInfo const& context, std::vector<TagInfo>& tags)
@@ -1514,7 +1514,7 @@ public:
 
   virtual bool Filter(TagInfo const& tag) const
   {
-    return Tag.type == tag.type &&
+    return Tag.kind == tag.kind &&
            Tag.info == tag.info &&
            Tag.re == tag.re &&
            Tag.file == tag.file &&

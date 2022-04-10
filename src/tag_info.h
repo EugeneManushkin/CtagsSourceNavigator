@@ -8,7 +8,7 @@ struct TagInfo
   std::string file;
   std::string re;
   int lineno;
-  char type;
+  char kind;
   std::string info;
 
   struct
@@ -17,7 +17,7 @@ struct TagInfo
   } Owner;
 
   TagInfo()
-    : type(0)
+    : kind(0)
     , lineno(-1)
     , Owner{}
   {

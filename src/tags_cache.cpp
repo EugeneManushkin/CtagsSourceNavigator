@@ -12,7 +12,7 @@ namespace
     {
       int cmp = 0;
       return left.lineno != right.lineno ? left.lineno < right.lineno :
-             left.type != right.type ? left.type < right.type :
+             left.kind != right.kind ? left.kind < right.kind :
              !!(cmp = left.name.compare(right.name)) ? cmp < 0 :
              !!(cmp = left.file.compare(right.file)) ? cmp < 0 :
              !!(cmp = left.info.compare(right.info)) ? cmp < 0 :
