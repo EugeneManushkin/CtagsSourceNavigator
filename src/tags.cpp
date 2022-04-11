@@ -564,7 +564,7 @@ static bool ParseLine(const char* buf, TagFields& result)
     return false;
 
   result.File = std::make_pair(buf, next);
-  std::string const separator = ";\"";
+  std::string const separator = ";\"\t";
   if (!NextField(buf, next, separator))
     return false;
 
@@ -580,10 +580,10 @@ static bool ParseLine(const char* buf, TagFields& result)
     result.Lineno = std::make_pair(buf, next);
   }
 
-  next += IsLineEnd(*next) ? 0 : separator.length();
-  if (*next != '\t')
-    return IsLineEnd(*next);
+  if (IsLineEnd(*next))
+    return true;
 
+  next += separator.length() - 1;
 //TODO: support --fields=-k
   if (!NextField(buf, next))
     return false;

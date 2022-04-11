@@ -530,6 +530,16 @@ namespace TESTS
     LoadAndLookupNames("Mixed Case Repos/tags.universal", "Mixed Case Repos/tags.meta");
   }
 
+  TEST_F(Tags, AllNamesFoundInExuberantSemicolonQuotesRepos)
+  {
+    LoadAndLookupNames("semicolon_quotes_repos/tags.exuberant.w", "semicolon_quotes_repos/tags.meta");
+  }
+
+  TEST_F(Tags, AllNamesFoundInUniversalSemicolonQuotesRepos)
+  {
+    LoadAndLookupNames("semicolon_quotes_repos/tags.universal", "semicolon_quotes_repos/tags.meta");
+  }
+
   TEST_F(Tags, AllNamesFoundInCygwinFullPathRepos)
   {
     LoadAndLookupNames("full_path_repos/tags.exuberant", "full_path_repos/tags.meta");
