@@ -2121,7 +2121,7 @@ static WideString ReindexFile(WideString const& fileName)
   bool updated = false;
   if (repo.Type == Tags::RepositoryType::Temporary)
     updated = (IndexSingleFile(fileName, GetDirOfFile(ToString(repo.TagsPath))), true);
-  else if (repo.Type == Tags::RepositoryType::Regular)
+  else if (repo.Type != Tags::RepositoryInfo().Type)
     updated = UpdateFileInRepository(fileName, repo);
 
   return updated ? ToString(repo.TagsPath) : WideString();
