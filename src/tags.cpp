@@ -584,13 +584,15 @@ static bool ParseLine(const char* buf, TagFields& result)
     return true;
 
   next += separator.length() - 1;
-//TODO: support --fields=-k
   if (!NextField(buf, next))
     return false;
 
-  result.Kind = std::make_pair(buf, next);
-  if (!NextField(buf, next))
-    return true;
+  if (next - buf == 1)
+  {
+    result.Kind = std::make_pair(buf, next);
+    if (!NextField(buf, next))
+      return true;
+  }
 
   std::string const line = "line:";
   if (next > buf + line.length() && !line.compare(0, line.length(), buf, line.length()))

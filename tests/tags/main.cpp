@@ -123,7 +123,7 @@ namespace
     int Line;
   };
 
-  std::regex const MetaTag::Regex("^([a-zA-Z0-9_~]+):(.+):line:([0-9]+)\\r*$");
+  std::regex const MetaTag::Regex("^([a-zA-Z0-9_~]+):(.+):line:([-]?[0-9]+)\\r*$");
 
   using MetaTagCont = std::vector<MetaTag>;
   using MetaClassCont = std::vector<std::pair<std::string, MetaTagCont> >;
@@ -538,6 +538,16 @@ namespace TESTS
   TEST_F(Tags, AllNamesFoundInUniversalSemicolonQuotesRepos)
   {
     LoadAndLookupNames("semicolon_quotes_repos/tags.universal", "semicolon_quotes_repos/tags.meta");
+  }
+
+  TEST_F(Tags, AllNamesFoundInExuberantNoKindNoLineRepos)
+  {
+    LoadAndLookupNames("no_kind_no_line_repos/tags.exuberant.w", "no_kind_no_line_repos/tags.meta");
+  }
+
+  TEST_F(Tags, AllNamesFoundInUniversalNoKindNoLineRepos)
+  {
+    LoadAndLookupNames("no_kind_no_line_repos/tags.universal", "no_kind_no_line_repos/tags.meta");
   }
 
   TEST_F(Tags, AllNamesFoundInCygwinFullPathRepos)
