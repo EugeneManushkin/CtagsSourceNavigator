@@ -96,12 +96,12 @@ namespace
 
   std::string GetLeftColumn(TagInfo const& tag, FormatTagFlag flag)
   {
-    return tag.name.empty() ? tag.file : flag == FormatTagFlag::DisplayOnlyName ? tag.name : std::string(1, tag.kind) + ":" + tag.name;
+    return tag.name.empty() ? tag.file : flag == FormatTagFlag::DisplayOnlyName || !tag.kind ? tag.name : std::string(1, tag.kind) + ":" + tag.name;
   }
 
   size_t GetLeftColumnLen(TagInfo const& tag, FormatTagFlag flag)
   {
-    return tag.name.empty() ? tag.file.length() : flag == FormatTagFlag::DisplayOnlyName ? tag.name.length() : tag.name.length() + 2;
+    return tag.name.empty() ? tag.file.length() : flag == FormatTagFlag::DisplayOnlyName || !tag.kind ? tag.name.length() : tag.name.length() + 2;
   }
 
   std::string GetDeclarationColumn(TagInfo const& tag, FormatTagFlag flag)
@@ -116,12 +116,16 @@ namespace
 
   std::string GetFileColumn(TagInfo const& tag, FormatTagFlag flag)
   {
-    return (flag == FormatTagFlag::NotDisplayFile ? LineNumberCaption : tag.file) + ":" + std::to_string(tag.lineno);
+    std::string file = flag != FormatTagFlag::NotDisplayFile ? tag.file
+                     : tag.lineno >= 0 ? LineNumberCaption : "";
+    return file + (tag.lineno >= 0 ? ":" + std::to_string(tag.lineno) : "");
   }
 
   size_t GetFileColumnLength(TagInfo const& tag, FormatTagFlag flag)
   {
-    return (flag == FormatTagFlag::NotDisplayFile ? LineNumberCaption.length() : tag.file.length()) + 1 + std::to_string(tag.lineno).length();
+    auto fileLen = flag != FormatTagFlag::NotDisplayFile ? tag.file.length()
+                 : tag.lineno >= 0 ? LineNumberCaption.length() : 0;
+    return fileLen + (tag.lineno >= 0 ? std::to_string(tag.lineno).length() + 1 : 0);
   }
 
   std::array<std::string(*)(TagInfo const&, FormatTagFlag), 3> const GetColumnCallbacks = {GetLeftColumn, GetDeclarationColumn, GetFileColumn};

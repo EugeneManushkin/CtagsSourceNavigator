@@ -40,6 +40,11 @@ namespace Tags
       return TagView(&tag).GetColumn(index, formatFlag, size);
     }
 
+    size_t GetColumnLen(TagInfo const& tag, size_t index, FormatTagFlag formatFlag)
+    {
+      return TagView(&tag).GetColumnLen(index, formatFlag);
+    }
+
     TEST(TagView, ReturnsOneColumnForFileTag)
     {
       auto const fileTag = GetFileTag();
@@ -83,6 +88,33 @@ namespace Tags
       std::string expectedColumn = LongFilename + ":" + std::to_string(DefaultLine);
       expectedColumn = expectedColumn.substr(expectedColumn.length() - MinColLength);
       EXPECT_EQ(expectedColumn, GetColumn(GetTag(DefaultName, LongFilename), FileColumn, expectedColumn.length()));
+    }
+
+    TEST(TagView, InvalidLinenoNotDisplayedInFileColumn)
+    {
+      int const invalidLineno = -1;
+      auto const invalidLinenoTag = GetTag(DefaultName, DefaultFilename, invalidLineno);
+      std::string const expected = DefaultFilename;
+      EXPECT_EQ(expected, GetColumn(invalidLinenoTag, FileColumn, expected.length(), FormatTagFlag::Default));
+      EXPECT_EQ(expected.length(), GetColumnLen(invalidLinenoTag, FileColumn, FormatTagFlag::Default));
+    }
+
+    TEST(TagView, ReturnsEmptyFileColumn)
+    {
+      int const invalidLine = -1;
+      auto const invalidLineTag = GetTag(DefaultName, DefaultFilename, invalidLine);
+      std::string const expected = std::string(DefaultFilename.length(), ' ');
+      EXPECT_EQ(expected, GetColumn(invalidLineTag, FileColumn, expected.length(), FormatTagFlag::NotDisplayFile));
+      EXPECT_EQ(0, GetColumnLen(invalidLineTag, FileColumn, FormatTagFlag::NotDisplayFile));
+    }
+
+    TEST(TagView, InvalidKindNotDisplayed)
+    {
+      char const invalidKind = 0;
+      auto const invalidKindTag = GetTag(DefaultName, DefaultFilename, DefaultLine, "", invalidKind);
+      std::string const expected = DefaultName;
+      EXPECT_EQ(expected, GetColumn(invalidKindTag, 0, expected.length()));
+      EXPECT_EQ(expected.length(), GetColumnLen(invalidKindTag, 0, FormatTagFlag::Default));
     }
 
     TEST(TagView, ReturnsWiderRaw)
