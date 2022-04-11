@@ -53,7 +53,7 @@ exit /b
   )
 
   cmake -DCTAGS_VERSION_MAJOR=%CTAGS_VERSION_MAJOR% -DCTAGS_VERSION_MINOR=%CTAGS_VERSION_MINOR% -DCTAGS_BUILD=%CTAGS_BUILD% -G %CMAKE_GENERATOR% "%REPO_ROOT%" || exit /b 1
-  cmake --build ./ --config Release  || exit /b 1
+  cmake --build ./ --config Release -j 6 || exit /b 1
   cd Release\ctags || exit /b 1
   %ARCHIVER% a ctags-%BUILD_NUM%-%1.zip * || exit /b 1
   move ctags-%BUILD_NUM%-%1.zip "%ROOT%" || exit /b 1
