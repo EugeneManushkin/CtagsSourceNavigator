@@ -605,10 +605,11 @@ static WideString GetSelectedItem(WideString const& DotDotSubst = L".")
 }
 
 static WideString GetCtagsUtilityPath();
+static bool IsRegularDirectory(WideString const& directory);
 
 void TagDirectory(WideString const& dir)
 {
-  if (!(GetFileAttributesW(dir.c_str()) & FILE_ATTRIBUTE_DIRECTORY))
+  if (!IsRegularDirectory(dir))
     throw std::runtime_error("Selected item is not a direcory");
 
   ExecuteScript(GetCtagsUtilityPath(), ToString(config.opt), dir, WideString(GetMsg(MTagingCurrentDirectory)) + L"\n" + dir);
