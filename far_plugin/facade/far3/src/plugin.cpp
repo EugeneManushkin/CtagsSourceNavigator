@@ -633,11 +633,22 @@ static WideString GetTempFilename()
   return pos == WideString::npos ? tempPath : tempPath.substr(pos, WideString::npos);
 }
 
-static bool IsInTempDirectory(WideString const& fileName)
+static bool IsTempDirectory(WideString const& directory)
 {
   auto const tempDir = GetDirOfFile(GenerateTempPath());
-  auto const dirOfFile = GetDirOfFile(fileName);
-  return !tempDir.empty() && !dirOfFile.empty() && !!FSF.ProcessName(JoinPath(tempDir, L"*").c_str(), const_cast<wchar_t*>(dirOfFile.c_str()), 0, PN_CMPNAME);
+  return !tempDir.empty() && !directory.empty() && !!FSF.ProcessName(JoinPath(tempDir, L"*").c_str(), const_cast<wchar_t*>(directory.c_str()), 0, PN_CMPNAME);
+}
+
+static bool IsAsciiAlpha(WideString::value_type c)
+{
+  return ('A' <= c && c <= 'Z') || ('a' <= c && c <= 'z');
+}
+
+static bool IsRegularDirectory(WideString const& directory)
+{
+  return directory.length() > 2
+      && IsAsciiAlpha(directory[0]) && directory[1] == ':'
+      && GetFileAttributesW(directory.c_str()) == FILE_ATTRIBUTE_DIRECTORY;
 }
 
 static bool FileExists(WideString const& file)
@@ -1874,9 +1885,10 @@ static void SearchInDirectory(WideString const& dir, SearchRequest const& reques
 
 static SearchResults SearchInParents(WideString const& fileName, SearchRequest const& request)
 {
-  bool isTempDirectory = IsInTempDirectory(fileName);
+  auto const dirOfFile = GetDirOfFile(fileName);
+  bool isRegular = IsRegularDirectory(dirOfFile) && !IsTempDirectory(dirOfFile);
   SearchResults results;
-  for (auto dir = GetDirOfFile(fileName); !isTempDirectory && !dir.empty(); dir = GetDirOfFile(dir))
+  for (auto dir = GetDirOfFile(fileName); isRegular && !dir.empty(); dir = GetDirOfFile(dir))
     SearchInDirectory(dir, request, results);
 
   return std::move(results);
