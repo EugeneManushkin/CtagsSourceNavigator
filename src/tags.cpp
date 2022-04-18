@@ -641,23 +641,16 @@ static bool CaseSensitive = !CaseInsensitive;
 static bool PartialCompare = true;
 static bool FullCompare = !PartialCompare;
 
-std::string ToLower(std::string const& str)
+inline int CharCmp(char left, char right, bool caseInsensitive)
 {
-  auto result = str;
-  std::transform(result.begin(), result.end(), result.begin(), ::tolower);
-  return std::move(result);
-}
-
-inline int CharCmp(int left, int right, bool caseInsensitive)
-{
-  return caseInsensitive ? tolower(left) - tolower(right) : left - right;
+  return caseInsensitive ? tolower(static_cast<unsigned char>(left)) - tolower(static_cast<unsigned char>(right)) : left - right;
 }
 
 inline int FieldCompare(char const* left, char const*& right, bool caseInsensitive, bool partialCompare)
 {
   for (; left && !IsFieldEnd(*left) && right && !IsFieldEnd(*right) && !CharCmp(*left, *right, caseInsensitive); ++left, ++right);
-  int leftChar = left && !IsFieldEnd(*left) ? *left : 0;
-  int rightChar = right && !IsFieldEnd(*right) ? *right : 0;
+  char leftChar = left && !IsFieldEnd(*left) ? *left : 0;
+  char rightChar = right && !IsFieldEnd(*right) ? *right : 0;
   rightChar = partialCompare && !leftChar ? 0 : rightChar;
   return CharCmp(leftChar, rightChar, caseInsensitive);
 }
@@ -684,9 +677,9 @@ inline int PathCompare(char const* left, char const* &right, bool partialCompare
     }
   }
 
-  int leftChar = left && !IsFieldEnd(*left) ? *left : 0;
+  char leftChar = left && !IsFieldEnd(*left) ? *left : 0;
   leftChar = IsPathSeparator(leftChar) ? '\\' : leftChar;
-  int rightChar = right && !IsFieldEnd(*right) ? *right : 0;
+  char rightChar = right && !IsFieldEnd(*right) ? *right : 0;
   rightChar = partialCompare && !leftChar ? 0 : rightChar;
   rightChar = IsPathSeparator(rightChar) ? '\\' : rightChar;
   return CharCmp(leftChar, rightChar, CaseInsensitive);
