@@ -33,14 +33,14 @@ namespace
   std::string ToLower(std::string const& str)
   {
     auto result = str;
-    std::transform(result.begin(), result.end(), result.begin(), ::tolower);
+    std::transform(result.begin(), result.end(), result.begin(), [](unsigned char c){return static_cast<char>(tolower(c));});
     return std::move(result);
   }
 
   std::string ToUpper(std::string const& str)
   {
     auto result = str;
-    std::transform(result.begin(), result.end(), result.begin(), ::toupper);
+    std::transform(result.begin(), result.end(), result.begin(), [](unsigned char c){return static_cast<char>(toupper(c));});
     return std::move(result);
   }
 
