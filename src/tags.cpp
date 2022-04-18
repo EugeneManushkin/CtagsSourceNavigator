@@ -895,7 +895,6 @@ bool TagFileInfo::CreateIndex(time_t tagsModTime, bool singleFileRepos)
 
 
   pos=ftell(f);
-  bool sorted=true;
   std::string pathIntersection;
   while(GetLine(strbuf, buffer, f))
   {
@@ -911,10 +910,6 @@ bool TagFileInfo::CreateIndex(time_t tagsModTime, bool singleFileRepos)
     if(strbuf[len-1]==0x0d || strbuf[len-1]==0x0a)len--;
     memcpy(li->line,strbuf,len);
     li->line[len]=0;
-    if(sorted && lines.size()>1 && strcmp(li->line,lines.back()->line)<0)
-    {
-      sorted=false;
-    }
     linespoolpos+=len+1;
     li->pos=pos;
     for(li->fn = li->line; !IsFieldEnd(*li->fn); ++li->fn);
