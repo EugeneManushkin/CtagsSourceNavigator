@@ -630,9 +630,9 @@ static TagInfo MakeTag(TagFields const& fields, TagFileInfo const& fi)
 static char strbuf[16384];
 
 struct LineInfo{
-  char *line;
   int pos;
-  char const *fn;
+  char const *name;
+  char const *path;
   char const *cls;
 };
 
@@ -701,14 +701,14 @@ static char const* GetFilename(char const* path)
   for (; !IsFieldEnd(*path); ++path)
     pos = IsPathSeparator(*path) ? path : pos;
 
-  for (; *pos && IsPathSeparator(*pos); ++pos);
+  for (; !IsFieldEnd(*pos) && IsPathSeparator(*pos); ++pos);
   return pos;
 }
 
-inline char const* GetFilenameEnd(char const* path)
+inline char const* GetFieldEnd(char const* str)
 {
-  for (; !IsFieldEnd(*path); ++path);
-  return path;
+  for (; !IsFieldEnd(*str); ++str);
+  return str;
 }
 
 static char const* FindClassFullQualification(char const* str)
@@ -751,10 +751,9 @@ static char const* ExtractClassName(char const* fullQualification)
 }
 
 //TODO: rework
-char const* GetLine(char const* &str, std::string& buffer, FILE *f)
+char const* GetLine(std::string& buffer, FILE *f)
 {
   buffer.clear();
-  str = 0;
   char const* ptr = 0;
   do
   {
@@ -762,14 +761,7 @@ char const* GetLine(char const* &str, std::string& buffer, FILE *f)
     buffer += ptr ? ptr : "";
   }
   while(ptr && *buffer.rbegin() != '\n'); 
-  str = !ptr && !buffer.length() ? nullptr : buffer.c_str();
-  return str;
-}
-
-char const* GetLine(std::string& buffer, FILE *f)
-{
-  char const* tmp = 0;
-  return GetLine(tmp, buffer, f);
+  return !ptr && !buffer.length() ? nullptr : buffer.c_str();
 }
 
 static std::string GetIntersection(char const* left, char const* right)
@@ -865,7 +857,6 @@ static TagsStat RefreshFilesCache(TagFileInfo* fi, FILE* f, OffsetCont const& of
 bool TagFileInfo::CreateIndex(time_t tagsModTime, bool singleFileRepos)
 {
   TagFileInfo* fi = this;
-  int pos=0;
   auto tagsFile = FOpen(fi->filename.c_str(),"rb");
   FILE *f=tagsFile.get();
   if(!f)return false;
@@ -874,11 +865,10 @@ bool TagFileInfo::CreateIndex(time_t tagsModTime, bool singleFileRepos)
   fseek(f,0,SEEK_SET);
   std::vector<LineInfo*> lines;
   std::vector<LineInfo*> classes;
-  lines.reserve(sz/80);
 
+  std::string const pattern = "!_TAG_FILE_FORMAT";
   std::string buffer;
-  char const* strbuf;
-  if(!GetLine(strbuf, buffer, f) || strncmp(strbuf,"!_TAG_FILE_FORMAT",17))
+  if(!GetLine(buffer, f) || buffer.compare(0, pattern.length(), pattern))
     return false;
 
   LineInfo *li;
@@ -886,39 +876,34 @@ bool TagFileInfo::CreateIndex(time_t tagsModTime, bool singleFileRepos)
   std::unique_ptr<char[]> linespool(new char[sz+16]);
   size_t linespoolpos=0;
 
-
-  pos=ftell(f);
   std::string pathIntersection;
-  while(GetLine(strbuf, buffer, f))
+  for (int pos=ftell(f); GetLine(buffer, f); pos=ftell(f))
   {
-    if(strbuf[0]=='!' || strbuf[0]=='\t')
-    {
-      pos=ftell(f);
+    if(buffer[0]=='!' || buffer[0]=='\t')
       continue;
-    }
+
+    for (; IsLineEnd(buffer.back()); buffer.resize(buffer.size() - 1));
+    char* line = linespool.get() + linespoolpos;
+    memcpy(line, buffer.c_str(), buffer.length() + 1);
+    linespoolpos += buffer.length() + 1;
+
     li_pool.push_front(LineInfo());
     li = &li_pool.front();
-    auto len=buffer.length();
-    li->line=linespool.get()+linespoolpos;
-    if(strbuf[len-1]==0x0d || strbuf[len-1]==0x0a)len--;
-    memcpy(li->line,strbuf,len);
-    li->line[len]=0;
-    linespoolpos+=len+1;
-    li->pos=pos;
-    for(li->fn = li->line; !IsFieldEnd(*li->fn); ++li->fn);
-    li->fn += *li->fn ? 1 : 0;
-    singleFileRepos = singleFileRepos && (lines.empty() || PathsEqual(lines.back()->fn, li->fn));
-    pathIntersection = IsFullPath(li->fn) ? GetIntersection(pathIntersection.c_str(), li->fn) : pathIntersection;
-    if (li->cls = ExtractClassName(FindClassFullQualification(li->line)))
+    li->pos = pos;
+    li->name = line;
+    li->path = GetFieldEnd(li->name);
+    if (!*li->path++) return false;
+    if (li->cls = ExtractClassName(FindClassFullQualification(li->path)))
       classes.push_back(li);
 
+    singleFileRepos = singleFileRepos && (lines.empty() || PathsEqual(lines.back()->path, li->path));
+    pathIntersection = IsFullPath(li->path) ? GetIntersection(pathIntersection.c_str(), li->path) : pathIntersection;
     lines.push_back(li);
-    pos=ftell(f);
   }
   for (; !pathIntersection.empty() && IsPathSeparator(pathIntersection.back()); pathIntersection.resize(pathIntersection.length() - 1));
   fullpathrepo = !pathIntersection.empty();
   reporoot = pathIntersection.empty() ? GetDirOfFile(filename) : MakeFilename(pathIntersection);
-  singlefile = singleFileRepos && !lines.empty() ? std::string(GetFilename(lines.back()->fn), GetFilenameEnd(lines.back()->fn)) : "";
+  singlefile = singleFileRepos && !lines.empty() ? std::string(GetFilename(lines.back()->path), GetFieldEnd(lines.back()->path)) : "";
   auto indexFile = FOpen(fi->indexFile.c_str(),"wb");
   FILE *g=indexFile.get();
   if(!g)
@@ -929,18 +914,18 @@ bool TagFileInfo::CreateIndex(time_t tagsModTime, bool singleFileRepos)
   WriteTimeT(g, tagsModTime);
   WriteString(g, fullpathrepo ? reporoot : std::string());
   WriteString(g, singlefile);
-  std::sort(lines.begin(), lines.end(), [](LineInfo* left, LineInfo* right) { return FieldLess(left->line, right->line); });
+  std::sort(lines.begin(), lines.end(), [](LineInfo* left, LineInfo* right) { return FieldLess(left->name, right->name); });
   OffsetCont namesOffsets;
   std::transform(lines.begin(), lines.end(), std::back_inserter(namesOffsets), [](LineInfo* line){ return line->pos; });
   WriteOffsets(g, lines.begin(), lines.end());
-  std::sort(lines.begin(), lines.end(), [](LineInfo* left, LineInfo* right) { return FieldLess(left->line, right->line, CaseInsensitive); });
+  std::sort(lines.begin(), lines.end(), [](LineInfo* left, LineInfo* right) { return FieldLess(left->name, right->name, CaseInsensitive); });
   WriteOffsets(g, lines.begin(), lines.end());
-  std::sort(lines.begin(), lines.end(), [](LineInfo* left, LineInfo* right) { return PathLess(left->fn, right->fn); });
+  std::sort(lines.begin(), lines.end(), [](LineInfo* left, LineInfo* right) { return PathLess(left->path, right->path); });
   WriteOffsets(g, lines.begin(), lines.end());
   std::sort(classes.begin(), classes.end(), [](LineInfo* left, LineInfo* right) { return FieldLess(left->cls, right->cls); });
   WriteOffsets(g, classes.begin(), classes.end());
-  auto linesEnd = std::unique(lines.begin(), lines.end(), [](LineInfo* left, LineInfo* right) { return PathsEqual(left->fn, right->fn); });
-  std::sort(lines.begin(), linesEnd, [](LineInfo* left, LineInfo* right) { return FieldLess(GetFilename(left->fn), GetFilename(right->fn), CaseInsensitive); });
+  auto linesEnd = std::unique(lines.begin(), lines.end(), [](LineInfo* left, LineInfo* right) { return PathsEqual(left->path, right->path); });
+  std::sort(lines.begin(), linesEnd, [](LineInfo* left, LineInfo* right) { return FieldLess(GetFilename(left->path), GetFilename(right->path), CaseInsensitive); });
   OffsetCont filesOffsets;
   std::transform(lines.begin(), linesEnd, std::back_inserter(filesOffsets), [](LineInfo* line){ return line->pos; });
   WriteOffsets(g, lines.begin(), linesEnd);
