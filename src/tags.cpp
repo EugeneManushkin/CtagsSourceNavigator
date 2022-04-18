@@ -890,7 +890,7 @@ bool TagFileInfo::CreateIndex(time_t tagsModTime, bool singleFileRepos)
 
   LineInfo *li;
   std::forward_list<LineInfo> li_pool;
-  char *linespool=new char[sz+16];
+  std::unique_ptr<char[]> linespool(new char[sz+16]);
   size_t linespoolpos=0;
 
 
@@ -907,7 +907,7 @@ bool TagFileInfo::CreateIndex(time_t tagsModTime, bool singleFileRepos)
     li_pool.push_front(LineInfo());
     li = &li_pool.front();
     auto len=buffer.length();
-    li->line=linespool+linespoolpos;
+    li->line=linespool.get()+linespoolpos;
     if(strbuf[len-1]==0x0d || strbuf[len-1]==0x0a)len--;
     memcpy(li->line,strbuf,len);
     li->line[len]=0;
@@ -935,7 +935,6 @@ bool TagFileInfo::CreateIndex(time_t tagsModTime, bool singleFileRepos)
   FILE *g=indexFile.get();
   if(!g)
   {
-    delete [] linespool;
     return false;
   }
   fwrite(IndexFileSignature, 1, sizeof(IndexFileSignature), g);
@@ -961,7 +960,6 @@ bool TagFileInfo::CreateIndex(time_t tagsModTime, bool singleFileRepos)
   WriteTagsStat(g, CorrectStatFilePaths(*fi, RefreshFilesCache(fi, f, filesOffsets, FilesCache->GetStat())));
   WriteTimeT(g, CacheModTime);
   tagsFile.reset();
-  delete [] linespool;
   indexFile.reset();
   return LoadCache();
 }
