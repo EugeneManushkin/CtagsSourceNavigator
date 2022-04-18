@@ -18,6 +18,7 @@
 */
 
 #include <algorithm>
+#include <forward_list>
 #include <fstream>
 #include <functional>
 #include <iterator>
@@ -888,35 +889,7 @@ bool TagFileInfo::CreateIndex(time_t tagsModTime, bool singleFileRepos)
     return false;
 
   LineInfo *li;
-  struct LIPool{
-    LineInfo *ptr;
-    int used;
-    int size;
-    LIPool *next;
-    LineInfo* getNext(LIPool*& page)
-    {
-      if(used==size)
-      {
-        next=new LIPool(size);
-        page=page->next;
-      }
-      return &page->ptr[page->used++];
-    }
-    LIPool(int count)
-    {
-      size=count;
-      ptr=new LineInfo[size];
-      used=0;
-      next=0;
-    }
-    ~LIPool()
-    {
-      delete [] ptr;
-    }
-  };
-  LIPool *poolfirst,*pool;
-  poolfirst=new LIPool(sz/100);
-  pool=poolfirst;
+  std::forward_list<LineInfo> li_pool;
   char *linespool=new char[sz+16];
   size_t linespoolpos=0;
 
@@ -931,7 +904,8 @@ bool TagFileInfo::CreateIndex(time_t tagsModTime, bool singleFileRepos)
       pos=ftell(f);
       continue;
     }
-    li=pool->getNext(pool);
+    li_pool.push_front(LineInfo());
+    li = &li_pool.front();
     auto len=buffer.length();
     li->line=linespool+linespoolpos;
     if(strbuf[len-1]==0x0d || strbuf[len-1]==0x0a)len--;
@@ -942,7 +916,6 @@ bool TagFileInfo::CreateIndex(time_t tagsModTime, bool singleFileRepos)
       sorted=false;
     }
     linespoolpos+=len+1;
-    //strdup(strbuf);
     li->pos=pos;
     for(li->fn = li->line; !IsFieldEnd(*li->fn); ++li->fn);
     li->fn += *li->fn ? 1 : 0;
@@ -952,7 +925,6 @@ bool TagFileInfo::CreateIndex(time_t tagsModTime, bool singleFileRepos)
       classes.push_back(li);
 
     lines.push_back(li);
-//    fi->offsets.Push(pos);
     pos=ftell(f);
   }
   for (; !pathIntersection.empty() && IsPathSeparator(pathIntersection.back()); pathIntersection.resize(pathIntersection.length() - 1));
@@ -964,12 +936,6 @@ bool TagFileInfo::CreateIndex(time_t tagsModTime, bool singleFileRepos)
   if(!g)
   {
     delete [] linespool;
-    while(poolfirst)
-    {
-      pool=poolfirst->next;
-      delete poolfirst;
-      poolfirst=pool;
-    }
     return false;
   }
   fwrite(IndexFileSignature, 1, sizeof(IndexFileSignature), g);
@@ -996,12 +962,6 @@ bool TagFileInfo::CreateIndex(time_t tagsModTime, bool singleFileRepos)
   WriteTimeT(g, CacheModTime);
   tagsFile.reset();
   delete [] linespool;
-  while(poolfirst)
-  {
-    pool=poolfirst->next;
-    delete poolfirst;
-    poolfirst=pool;
-  }
   indexFile.reset();
   return LoadCache();
 }
