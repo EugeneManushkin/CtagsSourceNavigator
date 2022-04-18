@@ -643,7 +643,7 @@ static bool FullCompare = !PartialCompare;
 
 inline int CharCmp(char left, char right, bool caseInsensitive)
 {
-  return caseInsensitive ? tolower(static_cast<unsigned char>(left)) - tolower(static_cast<unsigned char>(right)) : left - right;
+  return caseInsensitive ? static_cast<char>(tolower(static_cast<unsigned char>(left))) - static_cast<char>(tolower(static_cast<unsigned char>(right))) : left - right;
 }
 
 inline int FieldCompare(char const* left, char const*& right, bool caseInsensitive, bool partialCompare)
@@ -660,7 +660,7 @@ inline bool FieldLess(char const* left, char const* right, bool caseInsensitive 
   return FieldCompare(left, right, caseInsensitive, FullCompare) < 0;
 }
 
-inline int PathCompare(char const* left, char const* &right, bool partialCompare)
+inline int PathCompare(char const* left, char const* &right, bool partialCompare, bool caseInsensitive = CaseInsensitive)
 {
   int cmp = 0;
   while (left && !IsFieldEnd(*left) && right && !IsFieldEnd(*right) && !cmp)
@@ -670,7 +670,7 @@ inline int PathCompare(char const* left, char const* &right, bool partialCompare
       while (IsPathSeparator(*(++right)));
       while (IsPathSeparator(*(++left)));
     }
-    else if (!(cmp = CharCmp(*left, *right, CaseInsensitive)))
+    else if (!(cmp = CharCmp(*left, *right, caseInsensitive)))
     {
       ++left;
       ++right;
@@ -682,17 +682,17 @@ inline int PathCompare(char const* left, char const* &right, bool partialCompare
   char rightChar = right && !IsFieldEnd(*right) ? *right : 0;
   rightChar = partialCompare && !leftChar ? 0 : rightChar;
   rightChar = IsPathSeparator(rightChar) ? '\\' : rightChar;
-  return CharCmp(leftChar, rightChar, CaseInsensitive);
+  return CharCmp(leftChar, rightChar, caseInsensitive);
 }
 
-inline bool PathLess(char const* left, char const* right)
+inline bool PathLess(char const* left, char const* right, bool caseInsensitive = CaseInsensitive)
 {
-  return PathCompare(left, right, FullCompare) < 0;
+  return PathCompare(left, right, FullCompare, caseInsensitive) < 0;
 }
 
-inline bool PathsEqual(const char* left, const char* right)
+inline bool PathsEqual(const char* left, const char* right, bool caseInsensitive = CaseInsensitive)
 {
-  return !PathCompare(left, right, FullCompare);
+  return !PathCompare(left, right, FullCompare, caseInsensitive);
 }
 
 static char const* GetFilename(char const* path)
@@ -886,18 +886,17 @@ bool TagFileInfo::CreateIndex(time_t tagsModTime, bool singleFileRepos)
     char* line = linespool.get() + linespoolpos;
     memcpy(line, buffer.c_str(), buffer.length() + 1);
     linespoolpos += buffer.length() + 1;
+    auto path = GetFieldEnd(line);
+    if (!*path++) return false;
+    pathIntersection = IsFullPath(path) ? GetIntersection(pathIntersection.c_str(), path) : pathIntersection;
+    for (char* p = const_cast<char*>(path); !IsFieldEnd(*p++); *p = static_cast<char>(tolower(static_cast<unsigned char>(*p))));
+    singleFileRepos = singleFileRepos && (lines.empty() || PathsEqual(lines.back()->path, path, CaseSensitive));
 
-    li_pool.push_front(LineInfo());
+    li_pool.push_front({pos, line, path, ExtractClassName(FindClassFullQualification(path))});
     li = &li_pool.front();
-    li->pos = pos;
-    li->name = line;
-    li->path = GetFieldEnd(li->name);
-    if (!*li->path++) return false;
-    if (li->cls = ExtractClassName(FindClassFullQualification(li->path)))
+    if (li->cls)
       classes.push_back(li);
 
-    singleFileRepos = singleFileRepos && (lines.empty() || PathsEqual(lines.back()->path, li->path));
-    pathIntersection = IsFullPath(li->path) ? GetIntersection(pathIntersection.c_str(), li->path) : pathIntersection;
     lines.push_back(li);
   }
   for (; !pathIntersection.empty() && IsPathSeparator(pathIntersection.back()); pathIntersection.resize(pathIntersection.length() - 1));
@@ -920,12 +919,12 @@ bool TagFileInfo::CreateIndex(time_t tagsModTime, bool singleFileRepos)
   WriteOffsets(g, lines.begin(), lines.end());
   std::sort(lines.begin(), lines.end(), [](LineInfo* left, LineInfo* right) { return FieldLess(left->name, right->name, CaseInsensitive); });
   WriteOffsets(g, lines.begin(), lines.end());
-  std::sort(lines.begin(), lines.end(), [](LineInfo* left, LineInfo* right) { return PathLess(left->path, right->path); });
+  std::sort(lines.begin(), lines.end(), [](LineInfo* left, LineInfo* right) { return PathLess(left->path, right->path, CaseSensitive); });
   WriteOffsets(g, lines.begin(), lines.end());
   std::sort(classes.begin(), classes.end(), [](LineInfo* left, LineInfo* right) { return FieldLess(left->cls, right->cls); });
   WriteOffsets(g, classes.begin(), classes.end());
-  auto linesEnd = std::unique(lines.begin(), lines.end(), [](LineInfo* left, LineInfo* right) { return PathsEqual(left->path, right->path); });
-  std::sort(lines.begin(), linesEnd, [](LineInfo* left, LineInfo* right) { return FieldLess(GetFilename(left->path), GetFilename(right->path), CaseInsensitive); });
+  auto linesEnd = std::unique(lines.begin(), lines.end(), [](LineInfo* left, LineInfo* right) { return PathsEqual(left->path, right->path, CaseSensitive); });
+  std::sort(lines.begin(), linesEnd, [](LineInfo* left, LineInfo* right) { return FieldLess(GetFilename(left->path), GetFilename(right->path)); });
   OffsetCont filesOffsets;
   std::transform(lines.begin(), linesEnd, std::back_inserter(filesOffsets), [](LineInfo* line){ return line->pos; });
   WriteOffsets(g, lines.begin(), linesEnd);
