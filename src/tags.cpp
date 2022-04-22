@@ -851,6 +851,25 @@ void TagFileInfo::FlushCachedTags()
   CloseIndexFile(std::move(f));
 }
 
+using MemBlock = std::tuple<size_t, size_t, std::unique_ptr<char[]>>;
+using MemBlocks = std::vector<MemBlock>;
+size_t const MemBlockSize = 512 * 1024; // 0.5 Mb
+
+static MemBlock MakeMemBlock(size_t blockSize)
+{
+  std::unique_ptr<char[]> block(new char[blockSize]);
+  return std::make_tuple(0, blockSize, std::move(block));
+}
+
+static char* Allocate(size_t sz, std::vector<MemBlock>& blocks, size_t blockSize = MemBlockSize)
+{
+  if (blocks.empty() || std::get<0>(blocks.back()) + sz > std::get<1>(blocks.back()))
+    blocks.push_back(MakeMemBlock(std::max(blockSize, sz)));
+
+  std::get<0>(blocks.back()) += sz;
+  return std::get<2>(blocks.back()).get() + std::get<0>(blocks.back()) - sz;
+}
+
 static TagsStat RefreshNamesCache(TagFileInfo* fi, FILE* f, OffsetCont const& offsets, TagsStat&& tagsWithFreq);
 static TagsStat RefreshFilesCache(TagFileInfo* fi, FILE* f, OffsetCont const& offsets, TagsStat&& tagsWithFreq);
 
@@ -860,9 +879,6 @@ bool TagFileInfo::CreateIndex(time_t tagsModTime, bool singleFileRepos)
   auto tagsFile = FOpen(fi->filename.c_str(),"rb");
   FILE *f=tagsFile.get();
   if(!f)return false;
-  fseek(f,0,SEEK_END);
-  int sz=ftell(f);
-  fseek(f,0,SEEK_SET);
   std::vector<LineInfo*> lines;
   std::vector<LineInfo*> classes;
 
@@ -873,8 +889,7 @@ bool TagFileInfo::CreateIndex(time_t tagsModTime, bool singleFileRepos)
 
   LineInfo *li;
   std::forward_list<LineInfo> li_pool;
-  std::unique_ptr<char[]> linespool(new char[sz+16]);
-  size_t linespoolpos=0;
+  MemBlocks linespool;
 
   std::string pathIntersection;
   for (int pos=ftell(f); GetLine(buffer, f); pos=ftell(f))
@@ -883,9 +898,8 @@ bool TagFileInfo::CreateIndex(time_t tagsModTime, bool singleFileRepos)
       continue;
 
     for (; IsLineEnd(buffer.back()); buffer.resize(buffer.size() - 1));
-    char* line = linespool.get() + linespoolpos;
+    char* line = Allocate(buffer.length() + 1, linespool);
     memcpy(line, buffer.c_str(), buffer.length() + 1);
-    linespoolpos += buffer.length() + 1;
     auto path = GetFieldEnd(line);
     if (!*path++) return false;
     pathIntersection = IsFullPath(path) ? GetIntersection(pathIntersection.c_str(), path) : pathIntersection;
