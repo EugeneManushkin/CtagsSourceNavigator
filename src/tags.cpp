@@ -632,6 +632,7 @@ static char strbuf[16384];
 struct LineInfo{
   int pos;
   char const *name;
+  char const *name_lower;
   char const *path;
   char const *cls;
 };
@@ -870,6 +871,55 @@ static char* Allocate(size_t sz, std::vector<MemBlock>& blocks, size_t blockSize
   return std::get<2>(blocks.back()).get() + std::get<0>(blocks.back()) - sz;
 }
 
+static bool ParseIndexedFields(const char* buf, TagFields& result)
+{
+  char const* next = buf;
+  if (!NextField(buf, next))
+    return false;
+
+  result.Name = std::make_pair(buf, next);
+  if (!NextField(buf, next))
+    return false;
+
+  result.File = std::make_pair(buf, next);
+  auto cls = ExtractClassName(FindClassFullQualification(next));
+  result.Info = std::make_pair(cls, cls ? GetFieldEnd(cls) : cls);
+  return true;
+}
+
+static char* StoreField(std::pair<char const*, char const*> const& field, char* buffer, bool caseInsensitive)
+{
+  size_t sz = field.second - field.first;
+  buffer[sz] = 0;
+  if (caseInsensitive)
+    for (size_t i = 0; field.first + i != field.second; buffer[i] = static_cast<char>(tolower(static_cast<unsigned char>(field.first[i]))), ++i);
+  else
+    memcpy(buffer, field.first, sz);
+
+  return buffer + sz + 1;
+}
+
+static LineInfo StoreIndexedFields(TagFields const& fields, MemBlocks& linespool)
+{
+  LineInfo result;
+  size_t sz = (fields.Name.second - fields.Name.first + 1) * 2
+            + (fields.File.second - fields.File.first + 1)
+            + (fields.Info.first ? (fields.Info.second - fields.Info.first + 1) : 1);
+  auto ptr = Allocate(sz, linespool);
+  result.name = ptr;
+  ptr = StoreField(fields.Name, ptr, CaseSensitive);
+  result.name_lower = ptr;
+  ptr = StoreField(fields.Name, ptr, CaseInsensitive);
+  result.path = ptr;
+  ptr = StoreField(fields.File, ptr, CaseInsensitive);
+  result.cls = ptr;
+  *ptr = 0;
+  if (fields.Info.first)
+    ptr = StoreField(fields.Info, ptr, CaseSensitive);
+
+  return result;
+}
+
 static TagsStat RefreshNamesCache(TagFileInfo* fi, FILE* f, OffsetCont const& offsets, TagsStat&& tagsWithFreq);
 static TagsStat RefreshFilesCache(TagFileInfo* fi, FILE* f, OffsetCont const& offsets, TagsStat&& tagsWithFreq);
 
@@ -897,21 +947,18 @@ bool TagFileInfo::CreateIndex(time_t tagsModTime, bool singleFileRepos)
     if(buffer[0]=='!' || buffer[0]=='\t')
       continue;
 
-    for (; IsLineEnd(buffer.back()); buffer.resize(buffer.size() - 1));
-    char* line = Allocate(buffer.length() + 1, linespool);
-    memcpy(line, buffer.c_str(), buffer.length() + 1);
-    auto path = GetFieldEnd(line);
-    if (!*path++) return false;
-    pathIntersection = IsFullPath(path) ? GetIntersection(pathIntersection.c_str(), path) : pathIntersection;
-    for (char* p = const_cast<char*>(path); !IsFieldEnd(*p++); *p = static_cast<char>(tolower(static_cast<unsigned char>(*p))));
-    singleFileRepos = singleFileRepos && (lines.empty() || PathsEqual(lines.back()->path, path, CaseSensitive));
+    TagFields fields;
+    if (!ParseIndexedFields(buffer.c_str(), fields))
+      return false;
 
-    li_pool.push_front({pos, line, path, ExtractClassName(FindClassFullQualification(path))});
+    li_pool.push_front(StoreIndexedFields(fields, linespool));
     li = &li_pool.front();
-    if (li->cls)
-      classes.push_back(li);
-
+    li->pos = pos;
+    pathIntersection = IsFullPath(fields.File.first) ? GetIntersection(pathIntersection.c_str(), fields.File.first) : pathIntersection;
+    singleFileRepos = singleFileRepos && (lines.empty() || PathsEqual(lines.back()->path, li->path, CaseSensitive));
     lines.push_back(li);
+    if (*li->cls)
+      classes.push_back(li);
   }
   for (; !pathIntersection.empty() && IsPathSeparator(pathIntersection.back()); pathIntersection.resize(pathIntersection.length() - 1));
   fullpathrepo = !pathIntersection.empty();
@@ -931,7 +978,7 @@ bool TagFileInfo::CreateIndex(time_t tagsModTime, bool singleFileRepos)
   OffsetCont namesOffsets;
   std::transform(lines.begin(), lines.end(), std::back_inserter(namesOffsets), [](LineInfo* line){ return line->pos; });
   WriteOffsets(g, lines.begin(), lines.end());
-  std::sort(lines.begin(), lines.end(), [](LineInfo* left, LineInfo* right) { return FieldLess(left->name, right->name, CaseInsensitive); });
+  std::sort(lines.begin(), lines.end(), [](LineInfo* left, LineInfo* right) { return FieldLess(left->name_lower, right->name_lower); });
   WriteOffsets(g, lines.begin(), lines.end());
   std::sort(lines.begin(), lines.end(), [](LineInfo* left, LineInfo* right) { return PathLess(left->path, right->path, CaseSensitive); });
   WriteOffsets(g, lines.begin(), lines.end());
