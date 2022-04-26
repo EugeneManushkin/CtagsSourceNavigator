@@ -642,9 +642,9 @@ static bool CaseSensitive = !CaseInsensitive;
 static bool PartialCompare = true;
 static bool FullCompare = !PartialCompare;
 
-inline int CharCmp(char left, char right, bool caseInsensitive)
+inline int CharCmp(unsigned char left, unsigned char right, bool caseInsensitive)
 {
-  return caseInsensitive ? static_cast<char>(tolower(static_cast<unsigned char>(left))) - static_cast<char>(tolower(static_cast<unsigned char>(right))) : left - right;
+  return caseInsensitive ? static_cast<unsigned char>(tolower(left)) - static_cast<unsigned char>(tolower(right)) : left - right;
 }
 
 inline int FieldCompare(char const* left, char const*& right, bool caseInsensitive, bool partialCompare)
@@ -656,9 +656,9 @@ inline int FieldCompare(char const* left, char const*& right, bool caseInsensiti
   return CharCmp(leftChar, rightChar, caseInsensitive);
 }
 
-inline bool FieldLess(char const* left, char const* right, bool caseInsensitive = false)
+inline bool FieldLess(char const* left, char const* left_end, char const* right, char const* right_end)
 {
-  return FieldCompare(left, right, caseInsensitive, FullCompare) < 0;
+  return memcmp(left, right, std::min(left_end - left, right_end - right)) < 0;
 }
 
 inline int PathCompare(char const* left, char const* &right, bool partialCompare, bool caseInsensitive = CaseInsensitive)
@@ -974,18 +974,18 @@ bool TagFileInfo::CreateIndex(time_t tagsModTime, bool singleFileRepos)
   WriteTimeT(g, tagsModTime);
   WriteString(g, fullpathrepo ? reporoot : std::string());
   WriteString(g, singlefile);
-  std::sort(lines.begin(), lines.end(), [](LineInfo* left, LineInfo* right) { return FieldLess(left->name, right->name); });
+  std::sort(lines.begin(), lines.end(), [](LineInfo* left, LineInfo* right) { return FieldLess(left->name, left->name_lower, right->name, right->name_lower); });
   OffsetCont namesOffsets;
   std::transform(lines.begin(), lines.end(), std::back_inserter(namesOffsets), [](LineInfo* line){ return line->pos; });
   WriteOffsets(g, lines.begin(), lines.end());
-  std::sort(lines.begin(), lines.end(), [](LineInfo* left, LineInfo* right) { return FieldLess(left->name_lower, right->name_lower); });
+  std::sort(lines.begin(), lines.end(), [](LineInfo* left, LineInfo* right) { return FieldLess(left->name_lower, left->path, right->name_lower, right->path); });
   WriteOffsets(g, lines.begin(), lines.end());
   std::sort(lines.begin(), lines.end(), [](LineInfo* left, LineInfo* right) { return PathLess(left->path, right->path, CaseSensitive); });
   WriteOffsets(g, lines.begin(), lines.end());
-  std::sort(classes.begin(), classes.end(), [](LineInfo* left, LineInfo* right) { return FieldLess(left->cls, right->cls); });
+  std::sort(classes.begin(), classes.end(), [](LineInfo* left, LineInfo* right) { auto r = right->cls; return FieldCompare(left->cls, r, CaseSensitive, FullCompare) < 0; });
   WriteOffsets(g, classes.begin(), classes.end());
   auto linesEnd = std::unique(lines.begin(), lines.end(), [](LineInfo* left, LineInfo* right) { return PathsEqual(left->path, right->path, CaseSensitive); });
-  std::sort(lines.begin(), linesEnd, [](LineInfo* left, LineInfo* right) { return FieldLess(GetFilename(left->path), GetFilename(right->path)); });
+  std::sort(lines.begin(), linesEnd, [](LineInfo* left, LineInfo* right) { return FieldLess(GetFilename(left->path), left->cls, GetFilename(right->path), right->cls); });
   OffsetCont filesOffsets;
   std::transform(lines.begin(), linesEnd, std::back_inserter(filesOffsets), [](LineInfo* line){ return line->pos; });
   WriteOffsets(g, lines.begin(), linesEnd);
