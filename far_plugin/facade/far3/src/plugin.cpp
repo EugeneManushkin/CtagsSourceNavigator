@@ -2017,9 +2017,9 @@ static void AddPermanent(std::string const& tagsFile)
   SavePermanents();
 }
 
-static void AddPermanentRepository()
+static void AddPermanentRepository(WideString const& fileName)
 {
-  auto searched = SearchInParents(JoinPath(GetSelectedItem(WideString()), L"."), TAGS_FILES | SCM_DIRS);
+  auto searched = SearchInParents(fileName, TAGS_FILES | SCM_DIRS);
   auto selected = Found(TAGS_FILES, searched) ? SelectTags(searched[TAGS_FILES])
                 : Found(SCM_DIRS, searched) ? IndexSelectedRepository(searched[SCM_DIRS])
                 : WideString();
@@ -2404,7 +2404,7 @@ HANDLE WINAPI OpenW(const struct OpenInfo *info)
         }break;
         case miAddPermanentRepository:
         {
-          SafeCall(AddPermanentRepository, Err);
+          SafeCall(AddPermanentRepository, Err, GetSelectedItem());
         }break;
         case miLookupSymbol:
         {
