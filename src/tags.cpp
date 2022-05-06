@@ -1263,68 +1263,52 @@ public:
   }
 };
 
+static char const* GetLine(size_t pos, FILE* f, OffsetCont const& offsets, std::string& buffer)
+{
+  fseek(f, offsets.at(pos), SEEK_SET);
+  return GetLine(buffer, f);
+}
+
+static size_t binary_search(size_t left, size_t right, std::function<bool(char const* strbuf)>&& pred, FILE* f, OffsetCont const& offsets)
+{
+  std::string buffer;
+  while (left < right)
+  {
+    auto middle = (left + right) / 2;
+    if (pred(GetLine(middle, f, offsets, buffer)))
+      left = middle + 1;
+    else
+      right = middle;
+  }
+
+  return left;
+}
+
 static std::tuple<size_t, size_t, size_t> GetMatchedOffsetRange(FILE* f, OffsetCont const& offsets, MatchVisitor const& visitor)
 {
   if (offsets.empty() || visitor.GetPattern().empty())
     return std::make_tuple(0, 0, offsets.size());
 
-  size_t pos;
-  size_t left=0;
-  size_t right=offsets.size();
-  int cmp;
   std::string buffer;
-  char const* strbuf = nullptr;
-  while(left < right)
+  size_t left = 0;
+  size_t right = offsets.size();
+  while (left < right)
   {
-    pos=(right+left)/2;
-    fseek(f,offsets[pos],SEEK_SET);
-    strbuf = GetLine(buffer,f);
-    cmp=visitor.Compare(strbuf);
-    if(!cmp)
-    {
-      left = right = pos;
-    }else if(cmp < 0)
-    {
-      right=pos;
-    }else
-    {
-      left=pos+1;
-    }
+    auto middle = (left + right) / 2;
+    auto strbuf = GetLine(middle, f, offsets, buffer);
+    auto cmp = visitor.Compare(strbuf);
+    if (cmp > 0)
+      left = middle + 1;
+    else if(cmp < 0)
+      right = middle;
+    else
+      break;
   }
-  if(!cmp)
-  {
-    size_t endpos=pos;
-    size_t exactmatchend=IsFieldEnd(*strbuf) ? pos + 1 : pos;
-    while(pos>0)
-    {
-      fseek(f,offsets[pos-1],SEEK_SET);
-      strbuf = GetLine(buffer,f);
-      if(!visitor.Compare(strbuf))
-      {
-        pos--;
-        exactmatchend = !IsFieldEnd(*strbuf) ? pos : exactmatchend;
-      }else
-      {
-        break;
-      }
-    }
-    while(endpos<offsets.size()-1)
-    {
-      fseek(f,offsets[endpos+1],SEEK_SET);
-      strbuf = GetLine(buffer,f);
-      if(!visitor.Compare(strbuf))
-      {
-        endpos++;
-        exactmatchend = IsFieldEnd(*strbuf) ? endpos + 1 : exactmatchend;
-      }else
-      {
-        break;
-      }
-    }
-    ++endpos;
-    return std::make_tuple(pos, exactmatchend, endpos);
-  }
-  return std::make_tuple(0, 0, 0);
+
+  left = binary_search(left, right, [&visitor](char const* str){ return visitor.Compare(str) > 0; }, f, offsets);
+  right = binary_search(left, right, [&visitor](char const* str){ return visitor.Compare(str) >= 0; }, f, offsets);
+  auto exact = binary_search(left, right, [&visitor](char const* str){ visitor.Compare(str); return IsFieldEnd(*str); }, f, offsets);
+  return std::make_tuple(left, exact, right);
 }
 
 static std::vector<TagInfo> GetMatchedTags(TagFileInfo const* fi, FILE* f, OffsetCont const& offsets, MatchVisitor const& visitor, size_t maxCount)
