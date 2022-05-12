@@ -61,6 +61,7 @@ enum{
   MMaxResults,
   MSortClassMembersByName,
   MCurFileFirst,
+  MCachedTagsOnTop,
   MIndexEditedFile,
   MPluginConfiguration,
   MNavigationHistory,

@@ -94,6 +94,7 @@ struct Config{
   bool casesens;
   size_t max_results;
   bool cur_file_first;
+  bool cached_tags_on_top;
   bool index_edited_file;
   bool sort_class_members_by_name;
   static const size_t max_history_len;
@@ -117,6 +118,7 @@ Config::Config()
   , casesens(true)
   , max_results(10)
   , cur_file_first(true)
+  , cached_tags_on_top(true)
   , index_edited_file(true)
   , sort_class_members_by_name(false)
   , use_built_in_ctags(true)
@@ -877,6 +879,10 @@ static Config LoadConfig(std::string const& fileName)
     {
       config.cur_file_first = val == "true";
     }
+    else if(key == "cachedtagsontop")
+    {
+      config.cached_tags_on_top = val == "true";
+    }
     else if(key == "indexeditedfile")
     {
       config.index_edited_file = val == "true";
@@ -907,7 +913,10 @@ using Tags::SortingOptions;
 
 inline SortingOptions GetSortOptions(Config const& config)
 {
-  return SortingOptions::SortByName | (config.cur_file_first ? SortingOptions::CurFileFirst : SortingOptions::Default);
+  return SortingOptions::SortByName
+       | (config.cur_file_first ? SortingOptions::CurFileFirst : SortingOptions::Default)
+       | (config.cached_tags_on_top ? SortingOptions::CachedTagsOnTop : SortingOptions::Default)
+  ;
 }
 
 static std::unique_ptr<Tags::Selector> GetSelector(std::string const& file)
@@ -2592,7 +2601,7 @@ static intptr_t ConfigurePlugin()
   WideString menuTitle = WideString(GetMsg(MPlugin)) + L" " + PluginVersionString();
   struct InitDialogItem initItems[]={
 //    Type        X1  Y2  X2 Y2  F S           Flags D Data
-    DI_DOUBLEBOX, 3, ++y, 64,29, 0,0,              0,0,-1,menuTitle.c_str(),{},
+    DI_DOUBLEBOX, 3, ++y, 64,30, 0,0,              0,0,-1,menuTitle.c_str(),{},
     DI_TEXT,      5, ++y,  0, 0, 0,0,              0,0,MPathToExe,L"",{},
     DI_EDIT,      5, ++y, 62, 3, 1,0,              0,0,-1,ToString(config.exe),{"pathtoexe", true},
     DI_CHECKBOX,  5, ++y, 62,10, 1,config.use_built_in_ctags,0,0,MUseBuiltInCtags,L"",{"usebuiltinctags", false, true},
@@ -2606,6 +2615,7 @@ static intptr_t ConfigurePlugin()
     DI_CHECKBOX,  5, ++y, 62,10, 1,config.casesens,0,0,MCaseSensFilt,L"",{"casesensfilt", false, true},
     DI_CHECKBOX,  5, ++y, 62,10, 1,config.sort_class_members_by_name,0,0,MSortClassMembersByName,L"",{"sortclassmembersbyname", false, true},
     DI_CHECKBOX,  5, ++y, 62,10, 1,config.cur_file_first,0,0,MCurFileFirst,L"",{"curfilefirst", false, true},
+    DI_CHECKBOX,  5, ++y, 62,10, 1,config.cached_tags_on_top,0,0,MCachedTagsOnTop,L"",{"cachedtagsontop", false, true},
     DI_CHECKBOX,  5, ++y, 62,10, 1,config.index_edited_file,0,0,MIndexEditedFile,L"",{"indexeditedfile", false, true},
     DI_TEXT,      5, ++y,  0, 0, 0,0,              0,0,MWordChars,L"",{},
     DI_EDIT,      5, ++y, 62, 9, 1,0,              0,0,-1,ToString(config.GetWordchars()),{"wordchars", true},
