@@ -33,7 +33,7 @@ namespace
 
     std::vector<TagInfo> GetFiles(const char* path) const override
     {
-      return ForEach([&path](Repository const& repo){ return repo.FindFiles(path); });
+      return ForEach([&path](Repository const& repo){ return repo.FindFiles(path); }, true, true, true);
     }
 
     std::vector<TagInfo> GetClassMembers(const char* classname) const override
@@ -48,7 +48,7 @@ namespace
 
     std::vector<TagInfo> GetByPart(const char* part, bool getFiles, bool unlimited) const override
     {
-      return ForEach([this, part, getFiles, unlimited](Repository const& repo) { return GetByPart(repo, getFiles, part, unlimited); });
+      return ForEach([this, part, getFiles, unlimited](Repository const& repo) { return GetByPart(repo, getFiles, part, unlimited); }, true, true, getFiles);
     }
 
     std::vector<TagInfo> GetCachedTags(bool getFiles) const override
@@ -57,12 +57,15 @@ namespace
     }
 
   protected:
-    std::vector<TagInfo> ForEach(std::function<std::vector<TagInfo>(Repository const&)>&& func, bool unlimited = true, bool sorted = true) const
+    std::vector<TagInfo> ForEach(std::function<std::vector<TagInfo>(Repository const&)>&& func, bool unlimited = true, bool sorted = true, bool getFiles = false) const
     {
       std::vector<TagInfo> result;
       for (auto repos = Repositories.begin(); repos != Repositories.end() && (unlimited || result.size() < Limit); ++repos)
       {
         auto tags = SortTags(func(**repos), CurrentFile.c_str(), sorted ? SortOptions : Tags::SortingOptions::DoNotSort);
+        bool cachedOnTop = sorted && !!(SortOptions & Tags::SortingOptions::CachedTagsOnTop);
+        auto cached = cachedOnTop && !tags.empty() ? (*repos)->GetCachedTags(getFiles, Limit) : std::vector<TagInfo>();
+        tags = !cached.empty() ? Tags::MoveOnTop(std::move(tags), std::move(cached)) : tags;
         auto tagsEnd = !unlimited && result.size() + tags.size() > Limit ? tags.begin() + (Limit - result.size()) : tags.end();
         std::move(tags.begin(), tagsEnd, std::back_inserter(result));
       }

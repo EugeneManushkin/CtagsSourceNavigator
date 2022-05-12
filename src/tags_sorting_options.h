@@ -8,6 +8,7 @@ namespace Tags
     Default = 0,
     SortByName = 1 << 0,
     CurFileFirst = 1 << 1,
+    CachedTagsOnTop = 1 << 2,
   };
 
   inline SortingOptions operator | (SortingOptions left, SortingOptions right) { return static_cast<SortingOptions>(static_cast<int>(left) | static_cast<int>(right)); }
