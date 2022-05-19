@@ -77,4 +77,5 @@ enum{
   MResetCountersAfter,
   MTagsCorrupted,
   MIndexingFile,
+  MLoadTagsFromHistoryDeprecated,
 };

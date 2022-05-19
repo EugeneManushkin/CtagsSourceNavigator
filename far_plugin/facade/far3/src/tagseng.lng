@@ -76,3 +76,4 @@
 "Reset cache counters after (hours. 0 - never reset):"
 "Tags file corrupted due to internal error. Please reindex repository"
 "Indexing file..."
+"This menu is deprecated and will be removed in future releases.\nPlease use 'Manage repositories' menu instead"

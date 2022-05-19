@@ -1848,24 +1848,6 @@ void OnCloseModalWindow()
   NavigatorInstance->OnCloseModalWindow();
 }
 
-static WideString SelectFromHistory()
-{
-  auto history = LoadHistory();
-  if (history.empty())
-  {
-    InfoMessage(GetMsg(MHistoryEmpty));
-    return WideString();
-  }
-
-  int i = 0;
-  MenuList menuList;
-  for (auto file = history.rbegin(); file != history.rend(); ++file)
-    menuList.push_back(MI(ToString(*file), ++i));
-
-  auto rc = Menu(GetMsg(MTitleHistory), menuList);
-  return rc < 0 ? WideString() : ToString(history.at(history.size() - rc));
-}
-
 static std::string RemoveFileMask(std::string const& args)
 {
   auto fileMaskEndPos = config.opt.find_last_not_of(" ");
@@ -2433,7 +2415,8 @@ HANDLE WINAPI OpenW(const struct OpenInfo *info)
       {
         case miLoadFromHistory:
         {
-          tagfile = SelectFromHistory();
+          InfoMessage(GetMsg(MLoadTagsFromHistoryDeprecated));
+          SafeCall(ManageRepositories, Err);
         }break;
         case miLoadTagsFile:
         {
