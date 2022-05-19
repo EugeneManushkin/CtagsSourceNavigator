@@ -806,6 +806,7 @@ static Strings LoadStrings(std::string const& fileName)
 static Strings LoadHistory()
 {
   auto result = config.history_len > 0 ? LoadStrings(ExpandEnvString(config.history_file)) : Strings();
+  result.erase(std::remove_if(result.begin(), result.end(), [](const std::string &file){ return !FileExists(ToString(file)); }), result.end());
   for(; result.size() > config.history_len; result.pop_front());
   return std::move(result);
 }
@@ -1082,6 +1083,12 @@ bool IsCtrlDel(FarKey const& key)
   return key.VirtualKeyCode == VK_DELETE && (key.ControlKeyState == LEFT_CTRL_PRESSED || key.ControlKeyState == RIGHT_CTRL_PRESSED);
 }
 
+bool IsCtrlP(FarKey const& key)
+{
+  return (key.VirtualKeyCode == 0x50 && key.ControlKeyState == LEFT_CTRL_PRESSED)
+      || (key.VirtualKeyCode == 0x50 && key.ControlKeyState == RIGHT_CTRL_PRESSED);
+}
+
 bool IsCtrlZ(FarKey const& key)
 {
   return (key.VirtualKeyCode == 0x5A && key.ControlKeyState == LEFT_CTRL_PRESSED)
@@ -1214,7 +1221,7 @@ static LookupResult LookupTagsMenu(TagsViewer const& viewer, TagInfo& tag, Forma
   return LookupResult::Cancel;
 }
 
-static MenuList GetRepoMenuList(std::vector<Tags::RepositoryInfo> const& repositories)
+static MenuList GetRepoMenuList(std::vector<Tags::RepositoryInfo> const& repositories, Strings const& history)
 {
   MenuList menuList;
   if (repositories.empty() || repositories.front().Type == Tags::RepositoryType::Permanent)
@@ -1222,44 +1229,77 @@ static MenuList GetRepoMenuList(std::vector<Tags::RepositoryInfo> const& reposit
 
   int i = 0;
   Tags::RepositoryType currentType = Tags::RepositoryType::Regular;
-  for (auto r = repositories.begin(); r != repositories.end(); ++r)
+  for (auto const& r : repositories)
   {
-    if (currentType != r->Type)
-      menuList.push_back(MI::Separator(r->Type == Tags::RepositoryType::Permanent ? MPermanentRepositories : -1));
+    if (currentType != r.Type)
+      menuList.push_back(MI::Separator(r.Type == Tags::RepositoryType::Permanent ? MPermanentRepositories : -1));
 
-    menuList.push_back(MI(ToString(r->Root), i++));
-    currentType = r->Type;
+    menuList.push_back(MI(ToString(r.Root), i++));
+    currentType = r.Type;
   }
+
+  menuList.push_back(MI::Separator(MTitleHistory));
+  for (auto const& h : history)
+  {
+    menuList.push_back(MI(ToString(h), i++));
+  }
+
+  if (history.empty())
+    menuList.push_back(MI(MHistoryEmpty, -1, 0, true));
 
   return std::move(menuList);
 }
 
 static void SavePermanents();
 static void LoadPermanents();
+static void AddPermanent(std::string const& tagsFile);
 
 static void ManageRepositories()
 {
-  std::vector<FarKey> const stopKeys = {{VK_DELETE, LEFT_CTRL_PRESSED}, {VK_DELETE, RIGHT_CTRL_PRESSED}};
+  std::vector<FarKey> const stopKeys = {{VK_DELETE, LEFT_CTRL_PRESSED}, {VK_DELETE, RIGHT_CTRL_PRESSED}, {0x50, LEFT_CTRL_PRESSED}, {0x50, RIGHT_CTRL_PRESSED}};
   Tags::RepositoryInfo repo;
   int selected = 0;
   while(repo.TagsPath.empty())
   {
     LoadPermanents();
     auto repositories = Storage->GetByType(~Tags::RepositoryType::Temporary);
-    std::stable_partition(repositories.begin(), repositories.end(), [](Tags::RepositoryInfo const& repo) {return repo.Type == Tags::RepositoryType::Regular;});
-    auto res = Menu(GetMsg(MUnloadTagsFile), GetRepoMenuList(repositories), selected, stopKeys);
+    auto regulars_count = std::distance(repositories.begin(), std::stable_partition(repositories.begin(), repositories.end(), [](Tags::RepositoryInfo const& repo) {return repo.Type == Tags::RepositoryType::Regular;}));
+    auto history = LoadHistory();
+    for (size_t i = 0; i < history.size() / 2; std::swap(history[i], history[history.size() - 1 - i]), ++i);
+    auto res = Menu(GetMsg(MUnloadTagsFile), GetRepoMenuList(repositories, history), selected, stopKeys);
     if (res.first == -1)
       return;
 
-    if (IsCtrlDel(res.second))
+    bool repository_selected = res.first < repositories.size();
+    size_t index = repository_selected ? res.first : res.first - repositories.size();
+    if (IsCtrlDel(res.second) && repository_selected)
     {
-      selected = res.first - res.first == repositories.size() - 1 ? 1 : 0;
-      Storage->Remove(repositories.at(res.first).TagsPath.c_str());
+      selected = index > 0 && (index + 1 == regulars_count || index + 1 == repositories.size()) ? res.first - 1 : res.first;
+      Storage->Remove(repositories.at(index).TagsPath.c_str());
       SavePermanents();
+    }
+    else if (IsCtrlDel(res.second))
+    {
+      selected = index > 0 && index + 1 == history.size() ? res.first - 1 : res.first;
+      history.erase(history.begin() + index);
+      for (size_t i = 0; i < history.size() / 2; std::swap(history[i], history[history.size() - 1 - i]), ++i);
+      SaveHistory(history);
+    }
+    else if (IsCtrlP(res.second))
+    {
+      selected = 0;
+      auto tagsPath = repository_selected ? repositories.at(index).TagsPath : history.at(index);
+      AddPermanent(tagsPath);
+    }
+    else if (repository_selected)
+    {
+      repo = repositories.at(index);
+      VisitTags(repo.TagsPath);
     }
     else
     {
-      repo = repositories.at(res.first);
+      auto tagsFile = history.at(index);
+      repo = SafeCall(LoadTags, Err, tagsFile, true).first ? Storage->GetInfo(tagsFile.c_str()) : repo;
     }
   }
 
@@ -2024,6 +2064,7 @@ static void AddPermanent(std::string const& tagsFile)
   LoadPermanents();
   LoadTagsImpl(tagsFile, Tags::RepositoryType::Permanent);
   SavePermanents();
+  VisitTags(tagsFile);
 }
 
 static void AddPermanentRepository(WideString const& fileName)

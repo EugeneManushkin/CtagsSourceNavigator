@@ -11,7 +11,7 @@
 "Tags file loaded"
 "Tags file not loaded"
 "Load tags file"
-"Enter - open repository root, Ctrl+Del - unload repository"
+"Enter - open, Ctrl+P - make permanent, Ctrl+Del - remove"
 "Index selected directory"
 "Update tags file"
 "Unable to update tags file"
