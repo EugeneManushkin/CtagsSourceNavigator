@@ -1311,11 +1311,10 @@ static std::tuple<size_t, size_t, size_t> GetMatchedOffsetRange(FILE* f, OffsetC
   return std::make_tuple(left, exact, right);
 }
 
-static std::vector<TagInfo> GetMatchedTags(TagFileInfo const* fi, FILE* f, OffsetCont const& offsets, MatchVisitor const& visitor, size_t maxCount)
+static std::vector<TagInfo> GetMatchedTagsImpl(TagFileInfo const* fi, FILE* f, OffsetCont const& offsets, MatchVisitor const& visitor, size_t maxCount)
 {
   std::vector<TagInfo> result;
   auto range = GetMatchedOffsetRange(&*f, offsets, visitor);
-  maxCount = !maxCount ? std::numeric_limits<size_t>::max() : maxCount;
   for(auto i = std::get<0>(range); i < std::get<1>(range) || (maxCount > 0 && i < std::get<2>(range)); ++i)
   {
     fseek(&*f, offsets[i], SEEK_SET);
@@ -1334,12 +1333,14 @@ static std::vector<TagInfo> GetMatchedTags(TagFileInfo const* fi, FILE* f, Offse
 
 static std::vector<TagInfo> GetMatchedTags(TagFileInfo const* fi, IndexType index, MatchVisitor const& visitor, size_t maxCount)
 {
-  if (visitor.GetPattern().empty() && !maxCount)
-    return std::vector<TagInfo>();
-
   OffsetCont offsets;
   auto f = fi->OpenTags(offsets, index);
-  return !f ? std::vector<TagInfo>() : GetMatchedTags(fi, &*f, offsets, visitor, maxCount);
+  return !f ? std::vector<TagInfo>() : GetMatchedTagsImpl(fi, &*f, offsets, visitor, maxCount);
+}
+
+static std::vector<TagInfo> GetMatchedTags(TagFileInfo const* fi, IndexType index, MatchVisitor const& visitor)
+{
+  return visitor.GetPattern().empty() ? std::vector<TagInfo>() : GetMatchedTags(fi, index, visitor, std::numeric_limits<size_t>::max());
 }
 
 OffsetCont GetMatchedOffsets(TagFileInfo const& fi, IndexType index, MatchVisitor const& visitor)
@@ -1529,7 +1530,7 @@ static TagsStat RefreshNamesCache(TagFileInfo* fi, FILE* f, OffsetCont const& of
   for (auto i = tagsWithFreq.begin(); i != tagsWithFreq.end(); ++i)
   {
     auto visitor = TagMatch(i->first);
-    auto foundTags = GetMatchedTags(fi, f, offsets, visitor, 0);
+    auto foundTags = GetMatchedTagsImpl(fi, f, offsets, visitor, std::numeric_limits<size_t>::max());
     if (!foundTags.empty())
       (cur++)->first = std::move(foundTags.back());
   }
@@ -1546,7 +1547,7 @@ static TagsStat RefreshFilesCache(TagFileInfo* fi, FILE* f, OffsetCont const& of
   {
     auto namePathLine = GetNamePathLine(i->first.file.c_str());
     auto visitor = FilenameMatch(std::move(std::get<0>(namePathLine)), std::move(std::get<1>(namePathLine)), FullCompare);
-    auto foundTags = GetMatchedTags(fi, f, offsets, visitor, 0);
+    auto foundTags = GetMatchedTagsImpl(fi, f, offsets, visitor, std::numeric_limits<size_t>::max());
     if (!foundTags.empty())
       (cur++)->first = MakeFileTag(std::move(foundTags.back()));
   }
@@ -1734,12 +1735,15 @@ namespace
 
     std::vector<TagInfo> FindByName(const char* name) const override
     {
-      return GetMatchedTags(&Info, IndexType::Names, NameMatch(name, FullCompare, CaseSensitive), 0);
+      return GetMatchedTags(&Info, IndexType::Names, NameMatch(name, FullCompare, CaseSensitive));
     }
 
     std::vector<TagInfo> FindByName(const char* part, size_t maxCount, bool caseInsensitive) const override
     {
-      return GetMatchedTags(&Info, caseInsensitive ? IndexType::NamesCaseInsensitive : IndexType::Names, NameMatch(part, PartialCompare, caseInsensitive), maxCount);
+      auto visitor = NameMatch(part, PartialCompare, caseInsensitive);
+      auto indexType = caseInsensitive ? IndexType::NamesCaseInsensitive : IndexType::Names;
+      return !maxCount ? GetMatchedTags(&Info, indexType, visitor)
+                       : GetMatchedTags(&Info, indexType, visitor, maxCount);
     }
 
     std::vector<TagInfo> FindFiles(const char* path) const override
@@ -1754,13 +1758,13 @@ namespace
 
     std::vector<TagInfo> FindClassMembers(const char* classname) const override
     {
-      return GetMatchedTags(&Info, IndexType::Classes, ClassMemberMatch(classname), 0);
+      return GetMatchedTags(&Info, IndexType::Classes, ClassMemberMatch(classname));
     }
 
     std::vector<TagInfo> FindByFile(const char* file) const override
     {
       auto relativePath = Info.GetRelativePath(file);
-      return !relativePath || !*relativePath ? std::vector<TagInfo>() : GetMatchedTags(&Info, IndexType::Paths, PathMatch(Info.IsFullPathRepo() ? file : relativePath), 0);
+      return !relativePath || !*relativePath ? std::vector<TagInfo>() : GetMatchedTags(&Info, IndexType::Paths, PathMatch(Info.IsFullPathRepo() ? file : relativePath));
     }
 
     void CacheTag(TagInfo const& tag, size_t cacheSize, bool flush) override
@@ -1817,7 +1821,9 @@ namespace
     std::vector<TagInfo> FindFilesImpl(const char* part, bool comparationType, size_t maxCount) const
     {
       auto namePathLine = GetNamePathLine(part);
-      auto tags = GetMatchedTags(&Info, IndexType::Filenames, FilenameMatch(std::move(std::get<0>(namePathLine)), std::move(std::get<1>(namePathLine)), comparationType), maxCount);
+      auto visitor = FilenameMatch(std::move(std::get<0>(namePathLine)), std::move(std::get<1>(namePathLine)), comparationType);
+      auto tags = !maxCount ? GetMatchedTags(&Info, IndexType::Filenames, visitor)
+                            : GetMatchedTags(&Info, IndexType::Filenames, visitor, maxCount);
       auto lineNum = std::get<2>(namePathLine);
       std::transform(std::make_move_iterator(tags.begin()), std::make_move_iterator(tags.end()), tags.begin(), [lineNum](TagInfo&& tag){ return MakeFileTag(std::move(tag), lineNum); });
       return std::move(tags);
