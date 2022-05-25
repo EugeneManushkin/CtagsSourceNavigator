@@ -1356,6 +1356,16 @@ OffsetCont GetMatchedOffsets(TagFileInfo const& fi, IndexType index, MatchVisito
   return std::move(offsets);
 }
 
+static std::vector<TagInfo> MatchTags(std::vector<TagInfo>&& tags, MatchVisitor const& visitor)
+{
+  tags.erase(std::remove_if(tags.begin(), tags.end(), [&visitor](TagInfo const& tag) {
+      auto str = tag.name + "\t" + tag.file + "\t";
+      char const* p = str.c_str();
+      return visitor.Compare(p) || !visitor.Filter(tag);
+  }), tags.end());
+  return std::move(tags);
+}
+
 class TagsLess
 {
 public:
@@ -1406,6 +1416,13 @@ std::vector<TagInfo> Tags::MoveOnTop(std::vector<TagInfo>&& tags, std::vector<Ta
     std::move(tagsOnTop.begin(), tagsOnTop.end(), tags.begin());
 
   return std::move(tags);
+}
+
+std::vector<TagInfo> MergeUnique(std::vector<TagInfo>&& into, std::vector<TagInfo>&& what)
+{
+  std::set<TagInfo> lookup(into.begin(), into.end());
+  std::copy_if(std::make_move_iterator(what.begin()), std::make_move_iterator(what.end()), std::back_inserter(into), [&lookup](TagInfo const& tag) {return lookup.count(tag) == 0; });
+  return std::move(into);
 }
 
 static std::tuple<std::string, std::string, int> GetNamePathLine(char const* path)
@@ -1730,22 +1747,25 @@ namespace
       return GetMatchedTags(&Info, IndexType::Names, NameMatch(name, FullCompare, CaseSensitive));
     }
 
-    std::vector<TagInfo> FindByName(const char* part, size_t maxCount, bool caseInsensitive) const override
+    std::vector<TagInfo> FindByName(const char* part, size_t maxCount, bool caseInsensitive, bool useCached) const override
     {
+      auto cachedTags = maxCount > 0 && useCached ? GetCachedTags(false, maxCount) : std::vector<TagInfo>();
       auto visitor = NameMatch(part, PartialCompare, caseInsensitive);
+      cachedTags = MatchTags(std::move(cachedTags), visitor);
       auto indexType = caseInsensitive ? IndexType::NamesCaseInsensitive : IndexType::Names;
-      return !maxCount ? GetMatchedTags(&Info, indexType, visitor)
-                       : GetMatchedTags(&Info, indexType, visitor, maxCount);
+      auto matched = !maxCount ? GetMatchedTags(&Info, indexType, visitor)
+                               : GetMatchedTags(&Info, indexType, visitor, maxCount - cachedTags.size());
+      return MergeUnique(std::move(cachedTags), std::move(matched));
     }
 
     std::vector<TagInfo> FindFiles(const char* path) const override
     {
-      return FindFilesImpl(path, FullCompare, 0);
+      return FindFilesImpl(path, FullCompare, 0, false);
     }
 
-    std::vector<TagInfo> FindFiles(const char* part, size_t maxCount) const override
+    std::vector<TagInfo> FindFiles(const char* part, size_t maxCount, bool useCached) const override
     {
-      return FindFilesImpl(part, PartialCompare, maxCount);
+      return FindFilesImpl(part, PartialCompare, maxCount, useCached);
     }
 
     std::vector<TagInfo> FindClassMembers(const char* classname) const override
@@ -1810,15 +1830,17 @@ namespace
     }
 
   private:
-    std::vector<TagInfo> FindFilesImpl(const char* part, bool comparationType, size_t maxCount) const
+    std::vector<TagInfo> FindFilesImpl(const char* part, bool comparationType, size_t maxCount, bool useCached) const
     {
+      auto cachedTags = maxCount > 0 && useCached ? GetCachedTags(true, maxCount) : std::vector<TagInfo>();
       auto namePathLine = GetNamePathLine(part);
       auto visitor = FilenameMatch(std::move(std::get<0>(namePathLine)), std::move(std::get<1>(namePathLine)), comparationType);
+      cachedTags = MatchTags(std::move(cachedTags), visitor);
       auto tags = !maxCount ? GetMatchedTags(&Info, IndexType::Filenames, visitor)
-                            : GetMatchedTags(&Info, IndexType::Filenames, visitor, maxCount);
+                            : GetMatchedTags(&Info, IndexType::Filenames, visitor, maxCount - cachedTags.size());
       auto lineNum = std::get<2>(namePathLine);
       std::transform(std::make_move_iterator(tags.begin()), std::make_move_iterator(tags.end()), tags.begin(), [lineNum](TagInfo&& tag){ return MakeFileTag(std::move(tag), lineNum); });
-      return std::move(tags);
+      return MergeUnique(std::move(cachedTags), std::move(tags));
     }
 
     TagFileInfo Info;

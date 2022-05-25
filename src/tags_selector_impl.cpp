@@ -76,7 +76,8 @@ namespace
     std::vector<TagInfo> GetByPart(Repository const& repo, bool getFiles, const char* part, bool unlimited) const
     {
       size_t limit = unlimited ? 0 : Limit;
-      return getFiles ? repo.FindFiles(part, limit) : repo.FindByName(part, limit, CaseInsensitive);
+      bool useCached = !!(SortOptions & Tags::SortingOptions::CachedTagsOnTop);
+      return getFiles ? repo.FindFiles(part, limit, useCached) : repo.FindByName(part, limit, CaseInsensitive, useCached);
     }
 
     std::vector<TagInfo> GetCachedTags(Repository const& repo, bool getFiles) const
