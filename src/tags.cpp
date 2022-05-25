@@ -1397,15 +1397,7 @@ std::vector<TagInfo> Tags::SortTags(std::vector<TagInfo>&& tags, char const* fil
 
 std::vector<TagInfo> Tags::MoveOnTop(std::vector<TagInfo>&& tags, std::vector<TagInfo>&& tagsOnTop)
 {
-  auto tag_less = [](TagInfo const& left, TagInfo const& right) {
-    if (left.kind != right.kind) return left.kind < right.kind;
-    if (left.lineno != right.lineno) return left.lineno < right.lineno;
-    if (auto cmp = left.info.compare(right.info)) return cmp < 0;
-    if (auto cmp = left.name.compare(right.name)) return cmp < 0;
-    if (auto cmp = left.file.compare(right.file)) return cmp < 0;
-    return left.re.compare(right.re) < 0;
-  };
-  std::set<TagInfo, decltype(tag_less)> topTags(tagsOnTop.begin(), tagsOnTop.end(), tag_less);
+  std::set<TagInfo> topTags(tagsOnTop.begin(), tagsOnTop.end());
   auto border = std::stable_partition(tags.begin(), tags.end(), [&topTags](TagInfo const& tag) { return topTags.count(tag) > 0; });
   topTags.clear();
   topTags.insert(tags.begin(), border);

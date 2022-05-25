@@ -6,21 +6,6 @@
 
 namespace
 {
-  struct TagLess
-  {
-    bool operator()(TagInfo const& left, TagInfo const& right) const
-    {
-      int cmp = 0;
-      return left.lineno != right.lineno ? left.lineno < right.lineno :
-             left.kind != right.kind ? left.kind < right.kind :
-             !!(cmp = left.name.compare(right.name)) ? cmp < 0 :
-             !!(cmp = left.file.compare(right.file)) ? cmp < 0 :
-             !!(cmp = left.info.compare(right.info)) ? cmp < 0 :
-             !!(cmp = left.re.compare(right.re)) ? cmp < 0 :
-             false;
-    }
-  };
-
   class TagsCacheImpl : public Tags::Internal::TagsCache
   {
   public:
@@ -50,7 +35,7 @@ namespace
     virtual void Insert(TagInfo const& tag, size_t freq) override
     {
       auto desiredTag = Tags.lower_bound(tag);
-      bool found = desiredTag != Tags.end() && !TagLess()(tag, desiredTag->first);
+      bool found = desiredTag != Tags.end() && !(tag < desiredTag->first);
       freq = !freq ? 1 : freq;
       freq += found ? desiredTag->second->first : 0;
       if (found && Capacity >= Tags.size())
@@ -104,7 +89,7 @@ namespace
     using FrequencyToTagInfo = std::multimap<size_t, TagInfo const*>;
     size_t Capacity;
     FrequencyToTagInfo Frequency;
-    std::map<TagInfo, FrequencyToTagInfo::iterator, TagLess> Tags;
+    std::map<TagInfo, FrequencyToTagInfo::iterator> Tags;
   };
 }
 
