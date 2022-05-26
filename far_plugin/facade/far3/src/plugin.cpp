@@ -1871,9 +1871,12 @@ static bool CreateTemporaryTags(WideString const& fileFullPath)
 {
   auto tempDirPath = GenerateTempPath();
   MkDir(tempDirPath);
-  if (SafeCall(IndexSingleFile, Err, fileFullPath, tempDirPath).first)
-    return !!LoadTagsImpl(ToStdString(JoinPath(tempDirPath, DefaultTagsFilename)), Tags::RepositoryType::Temporary);
+  auto tagsFile = ToStdString(JoinPath(tempDirPath, DefaultTagsFilename));
+  if (SafeCall(IndexSingleFile, Err, fileFullPath, tempDirPath).first &&
+      SafeCall(LoadTagsImpl, Err, tagsFile, Tags::RepositoryType::Temporary).second > 0)
+    return true;
 
+  Storage->Remove(tagsFile.c_str());
   RemoveDirWithFiles(tempDirPath);
   return false;
 }
