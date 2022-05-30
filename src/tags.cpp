@@ -1840,6 +1840,7 @@ namespace
                             : GetMatchedTags(&Info, IndexType::Filenames, visitor, maxCount - cachedTags.size());
       auto lineNum = std::get<2>(namePathLine);
       std::transform(std::make_move_iterator(tags.begin()), std::make_move_iterator(tags.end()), tags.begin(), [lineNum](TagInfo&& tag){ return MakeFileTag(std::move(tag), lineNum); });
+      std::transform(std::make_move_iterator(cachedTags.begin()), std::make_move_iterator(cachedTags.end()), cachedTags.begin(), [lineNum](TagInfo&& tag){ return MakeFileTag(std::move(tag), lineNum); });
       return MergeUnique(std::move(cachedTags), std::move(tags));
     }
 
