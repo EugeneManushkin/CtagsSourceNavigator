@@ -47,6 +47,11 @@ namespace
     return false;
   }
 
+  size_t NormalizeWeight(TagView const& view, FormatTagFlag formatFlag, size_t weight)
+  {
+    return view.ColumnCount(formatFlag) > 1 && weight < view.GetColumnLen(0, formatFlag) ? 0 : weight;
+  }
+
   class FilterTagsViewer : public TagsViewer
   {
   public:
@@ -66,13 +71,14 @@ namespace
         return std::move(result);
       }
   
-      std::multimap<std::string::difference_type, TagInfo const*> idx;
+      std::multimap<size_t, TagInfo const*> idx;
       for (size_t i = 0; i < View.Size(); ++i)
       {
+        auto const& view = View[i];
         std::smatch matchResult;
-        auto str = View[i].GetRaw(" ", formatFlag);
+        auto str = view.GetRaw(" ", formatFlag);
         if (std::regex_search(str, matchResult, regexFilter) && !matchResult.empty())
-          idx.insert(std::make_pair(matchResult.position(), View[i].GetTag()));
+          idx.insert(std::make_pair(NormalizeWeight(view, formatFlag, matchResult.position()), View[i].GetTag()));
       }
 
       for (auto const& v : idx) result.PushBack(v.second);
