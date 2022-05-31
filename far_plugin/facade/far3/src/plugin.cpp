@@ -1128,7 +1128,12 @@ static std::string JoinFilters(std::string const& left, std::string const& right
   return result.empty() && neverEmpty ? "\"\"" : std::move(result);
 }
 
-static LookupResult LookupTagsMenu(TagsViewer const& viewer, TagInfo& tag, FormatTagFlag formatFlag = FormatTagFlag::Default, intptr_t separatorPos = -1, std::string&& prevFilter = "")
+std::vector<TagInfo> GetTagsOnTop(Tags::Selector const& selector, bool getFiles = false)
+{
+  return config.cached_tags_on_top ? selector.GetCachedTags(getFiles) : std::vector<TagInfo>();
+}
+
+static LookupResult LookupTagsMenu(TagsViewer const& viewer, TagInfo& tag, std::vector<TagInfo> const& tagsOnTop, FormatTagFlag formatFlag = FormatTagFlag::Default, intptr_t separatorPos = -1, std::string&& prevFilter = "")
 {
   std::string filter;
   auto title = GetMsg(MSelectSymbol);
@@ -1211,7 +1216,7 @@ static LookupResult LookupTagsMenu(TagsViewer const& viewer, TagInfo& tag, Forma
     {
       LookupResult result = LookupResult::Ok;
       if ((!prevFilter.empty() && filter.empty())
-       || (result = LookupTagsMenu(*Tags::GetFilterTagsViewer(tagsView, !config.casesens), tag, formatFlag, -1, JoinFilters(prevFilter, filter, true))) == LookupResult::Cancel)
+       || (result = LookupTagsMenu(*Tags::GetFilterTagsViewer(tagsView, !config.casesens, tagsOnTop), tag, tagsOnTop, formatFlag, -1, JoinFilters(prevFilter, filter, true))) == LookupResult::Cancel)
         continue;
 
       return result;
@@ -2181,20 +2186,22 @@ static void Lookup(WideString const& file, bool getFiles, bool setPanelDir, bool
     return;
 
   TagInfo selectedTag;
-  if (LookupTagsMenu(*Tags::GetPartiallyMatchedViewer(GetSelector(ToStdString(file)), getFiles), selectedTag) == LookupResult::Ok)
+  auto selector = GetSelector(ToStdString(file));
+  auto tagsOnTop = GetTagsOnTop(*selector, getFiles);
+  if (LookupTagsMenu(*Tags::GetPartiallyMatchedViewer(std::move(selector), getFiles), selectedTag, tagsOnTop) == LookupResult::Ok)
     NavigateTo(&selectedTag, setPanelDir);
 }
 
-static void NavigateToTag(std::vector<TagInfo>&& ta, intptr_t separatorPos, FormatTagFlag formatFlag = FormatTagFlag::Default)
+static void NavigateToTag(std::vector<TagInfo>&& ta, intptr_t separatorPos, std::vector<TagInfo> const& tagsOnTop, FormatTagFlag formatFlag = FormatTagFlag::Default)
 {
   TagInfo tag;
-  if (!ta.empty() && LookupTagsMenu(*Tags::GetFilterTagsViewer(Tags::TagsView(std::move(ta)), !config.casesens), tag, formatFlag, separatorPos) == LookupResult::Ok)
+  if (!ta.empty() && LookupTagsMenu(*Tags::GetFilterTagsViewer(Tags::TagsView(std::move(ta)), !config.casesens, tagsOnTop), tag, tagsOnTop, formatFlag, separatorPos) == LookupResult::Ok)
     NavigateTo(&tag);
 }
 
-static void NavigateToTag(std::vector<TagInfo>&& ta, FormatTagFlag formatFlag)
+static void NavigateToTag(std::vector<TagInfo>&& ta, std::vector<TagInfo> const& tagsOnTop, FormatTagFlag formatFlag)
 {
-  NavigateToTag(std::move(ta), -1, formatFlag);
+  NavigateToTag(std::move(ta), -1, tagsOnTop, formatFlag);
 }
 
 static std::vector<TagInfo>::const_iterator AdjustToContext(std::vector<TagInfo>& tags, char const* fileName)
@@ -2216,7 +2223,8 @@ static std::vector<TagInfo>::const_iterator AdjustToContext(std::vector<TagInfo>
 
 static void GotoDeclaration(char const* fileName, std::string word)
 {
-  auto tags = GetSelector(fileName)->GetByName(word.c_str());
+  auto selector = GetSelector(fileName);
+  auto tags = selector->GetByName(word.c_str());
   if (tags.empty())
     return;
 
@@ -2227,16 +2235,17 @@ static void GotoDeclaration(char const* fileName, std::string word)
   if (tags.size() == 1)
     NavigateTo(&tags.back());
   else
-    NavigateToTag(std::move(tags), static_cast<intptr_t>(std::distance(tags.cbegin(), border)));
+    NavigateToTag(std::move(tags), static_cast<intptr_t>(std::distance(tags.cbegin(), border)), GetTagsOnTop(*selector));
 }
 
 static void GotoFile(char const* fileName, std::string path)
 {
-  auto tags = GetSelector(fileName)->GetFiles(path.c_str());
+  auto selector = GetSelector(fileName);
+  auto tags = selector->GetFiles(path.c_str());
   if (tags.size() == 1)
     NavigateTo(&tags.back());
   else if (!tags.empty())
-    NavigateToTag(std::move(tags), tags.size());
+    NavigateToTag(std::move(tags), tags.size(), GetTagsOnTop(*selector, true));
 }
 
 static void FindSymbol(char const* fileName)
@@ -2254,14 +2263,16 @@ static void CompleteName(char const* fileName, EditorInfo const& ei)
   if(word.empty())
     return;
 
-  auto tags = GetSelector(fileName)->GetByPart(word.c_str(), false, true);
+  auto selector = GetSelector(fileName);
+  auto tags = selector->GetByPart(word.c_str(), false, true);
   if(tags.empty())
     return;
 
   std::sort(tags.begin(), tags.end(), [](TagInfo const& left, TagInfo const& right) {return left.name < right.name;});
   tags.erase(std::unique(tags.begin(), tags.end(), [](TagInfo const& left, TagInfo const& right) {return left.name == right.name;}), tags.end());
   TagInfo tag = tags.back();
-  if (tags.size() > 1 && LookupTagsMenu(*Tags::GetFilterTagsViewer(Tags::TagsView(std::move(tags)), !config.casesens), tag, FormatTagFlag::DisplayOnlyName) != LookupResult::Ok)
+  auto tagsOnTop = tags.size() > 1 ? GetTagsOnTop(*selector) : std::vector<TagInfo>();
+  if (tags.size() > 1 && LookupTagsMenu(*Tags::GetFilterTagsViewer(Tags::TagsView(std::move(tags)), !config.casesens, tagsOnTop), tag, tagsOnTop, FormatTagFlag::DisplayOnlyName) != LookupResult::Ok)
     return;
 
   EditorGetString egs = {sizeof(EditorGetString)};
@@ -2349,7 +2360,10 @@ HANDLE WINAPI OpenW(const struct OpenInfo *info)
       }break;
       case miBrowseFile:
       {
-        SafeCall([&fileName]{ NavigateToTag(GetSelector(ToStdString(fileName).c_str())->GetByFile(ToStdString(fileName).c_str()), FormatTagFlag::NotDisplayFile); }, Err);
+        SafeCall([&fileName]{
+          auto selector = GetSelector(ToStdString(fileName).c_str());
+          NavigateToTag(selector->GetByFile(ToStdString(fileName).c_str()), GetTagsOnTop(*selector), FormatTagFlag::NotDisplayFile);
+        }, Err);
       }break;
       case miBrowseClass:
       {
@@ -2366,7 +2380,10 @@ HANDLE WINAPI OpenW(const struct OpenInfo *info)
         }
         auto options = GetSortOptions(config) & static_cast<SortingOptions>(~static_cast<int>(SortingOptions::SortByName));
         options = options | (config.sort_class_members_by_name ? SortingOptions::SortByName : SortingOptions::Default);
-        SafeCall([&fileName, &word]{ NavigateToTag(GetSelector(ToStdString(fileName).c_str())->GetClassMembers(word.c_str()), FormatTagFlag::Default); }, Err);
+        SafeCall([&fileName, &word]{
+          auto selector = GetSelector(ToStdString(fileName).c_str());
+          NavigateToTag(selector->GetClassMembers(word.c_str()), GetTagsOnTop(*selector), FormatTagFlag::Default);
+        }, Err);
       }break;
       case miLookupSymbol:
       {

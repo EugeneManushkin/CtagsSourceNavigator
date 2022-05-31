@@ -4,6 +4,7 @@
 
 #include <map>
 #include <regex>
+#include <set>
 
 namespace
 {
@@ -47,13 +48,21 @@ namespace
     return false;
   }
 
+  auto Less = [](TagInfo const* left, TagInfo const* right)
+  {
+    return *left < *right;
+  };
+
   class FilterTagsViewer : public TagsViewer
   {
   public:
-    FilterTagsViewer(TagsView const& view, bool caseInsensitive)
+    FilterTagsViewer(TagsView const& view, bool caseInsensitive, std::vector<TagInfo> const& tagsOnTop)
       : View(view)
       , CaseInsensitive(caseInsensitive)
+      , TagsOnTop(Less)
     {
+      for (auto const& tag : tagsOnTop)
+        TagsOnTop.insert(&tag);
     }
   
     TagsView GetView(char const* filter, FormatTagFlag formatFlag) const override
@@ -66,13 +75,14 @@ namespace
         return std::move(result);
       }
   
-      std::multimap<std::string::difference_type, TagInfo const*> idx;
+      std::multimap<size_t, TagInfo const*> idx;
       for (size_t i = 0; i < View.Size(); ++i)
       {
         std::smatch matchResult;
-        auto str = View[i].GetRaw(" ", formatFlag);
+        auto view = View[i];
+        auto str = view.GetRaw(" ", formatFlag);
         if (std::regex_search(str, matchResult, regexFilter) && !matchResult.empty())
-          idx.insert(std::make_pair(matchResult.position(), View[i].GetTag()));
+          idx.insert(std::make_pair(NormalizeWeight(view, formatFlag, matchResult.position()), view.GetTag()));
       }
 
       for (auto const& v : idx) result.PushBack(v.second);
@@ -80,8 +90,14 @@ namespace
     }
 
   private:
+    size_t NormalizeWeight(TagView const& view, FormatTagFlag formatFlag, size_t weight) const
+    {
+      return weight < view.GetColumnLen(0, formatFlag) && TagsOnTop.count(view.GetTag()) > 0 ? 0 : weight;
+    }
+
     TagsView const& View;
     bool CaseInsensitive;
+    std::set<TagInfo const*, decltype(Less)> TagsOnTop;
   };
 }
 
@@ -92,8 +108,8 @@ namespace Tags
     return std::unique_ptr<TagsViewer>(new PartiallyMatchViewer(std::move(selector), getFiles));
   }
 
-  std::unique_ptr<TagsViewer> GetFilterTagsViewer(TagsView const& view, bool caseInsensitive)
+  std::unique_ptr<TagsViewer> GetFilterTagsViewer(TagsView const& view, bool caseInsensitive, std::vector<TagInfo> const& tagsOnTop)
   {
-    return std::unique_ptr<TagsViewer>(new FilterTagsViewer(view, caseInsensitive));
+    return std::unique_ptr<TagsViewer>(new FilterTagsViewer(view, caseInsensitive, tagsOnTop));
   }
 }
