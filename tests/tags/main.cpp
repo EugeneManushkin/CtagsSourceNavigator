@@ -188,13 +188,27 @@ namespace
   }
 }
 
+bool operator == (TagInfo const& left, TagInfo const& right)
+{
+  return !(left < right) && !(right < left);
+}
+
+std::ostream& operator << (std::ostream& stream, TagInfo const& tag)
+{
+  stream << tag.kind << ":" << tag.name;
+  return stream;
+}
+
 namespace Tags
 {
 namespace TESTS
 {
   int const LoadSuccess = 0;
   size_t const DefaultMaxCount = 1;
+  auto const UnlimitedMaxCount = std::numeric_limits<size_t>::max();
   bool const Unlimited = true;
+  bool const GetNames = false;
+  auto const EmptyTags = std::vector<TagInfo>();
 
   class Tags : public ::testing::Test
   {
@@ -488,6 +502,31 @@ namespace TESTS
       EXPECT_NO_FATAL_FAILURE(TestFindFile(tagsFile, "some/path/header.h.extra.hpp:123456", "", 0));
       EXPECT_NO_FATAL_FAILURE(TestFindFile(tagsFile, "some/path/header.h.extra.hpp(123456)", "", 0));
     }
+
+    void ClearCache(std::string const& file)
+    {
+      auto selector = GetSelector(file.c_str(), true, SortingOptions::Default, UnlimitedMaxCount);
+      ASSERT_TRUE(!!selector);
+      auto tags = selector->GetCachedTags(false);
+      for (auto const& tag : tags) Storage->EraseCachedTag(tag, true);
+      tags = selector->GetCachedTags(true);
+      for (auto const& tag : tags) Storage->EraseCachedTag(tag, true);
+    }
+
+    void CacheNames(std::vector<std::string> const& names, std::string const& file)
+    {
+      for (size_t i = 0; i < names.size(); ++i)
+        for (size_t j = names.size() - i; j > 0; --j)
+          Storage->CacheTag(Find(names.at(i).c_str(), file.c_str()).at(0), names.size(), true);
+    }
+
+    void CheckExpectedNames(std::vector<std::string> const& expected, std::vector<TagInfo> const& tags)
+    {
+      for (int i = 0; i < expected.size(); ++i)
+      {
+        ASSERT_EQ(expected.at(i), tags.at(i).name);
+      }
+    }
   };
 
   TEST_F(Tags, LoadsEmptyRepos)
@@ -657,6 +696,71 @@ namespace TESTS
     Storage->CacheTag(Find("first", "cache_repos/tags").at(0), 3, true);
     ASSERT_NO_FATAL_FAILURE(LoadTagsFile("cache_repos/tags", RepositoryType::Regular, 3));
     ASSERT_GT(elapsed, Storage->GetInfo("cache_repos/tags").ElapsedSinceCached);
+  }
+
+  std::string const AlphabeticalRepo = "alphabetical_names_repo/tags";
+  std::string const AlphabeticalRepoFile = "alphabetical_names_repo/main.cpp";
+  std::vector<std::string> const AlphabeticalNames = {"a", "ab", "abc", "abcd", "abcde", "abcdef", "abcdefg", "abcdefgh", "abcdefghi"};
+
+  TEST_F(Tags, ReturnedSortedByNameIfNoCache)
+  {
+    std::vector<std::string> const limited = {"a", "ab", "abc"};
+    ASSERT_NO_FATAL_FAILURE(LoadTagsFileImpl(AlphabeticalRepo.c_str(), RepositoryType::Regular, AlphabeticalNames.size()));
+    ASSERT_NO_FATAL_FAILURE(ClearCache(AlphabeticalRepo));
+    auto selector = GetSelector(AlphabeticalRepo.c_str(), true, SortingOptions::SortByName | SortingOptions::CachedTagsOnTop, limited.size());
+
+    ASSERT_NO_FATAL_FAILURE(CheckExpectedNames(limited, selector->GetCachedTags(GetNames)));
+    ASSERT_NO_FATAL_FAILURE(CheckExpectedNames(limited, selector->GetByPart("", GetNames)));
+    ASSERT_EQ(EmptyTags, selector->GetByPart("", GetNames, Unlimited));
+    ASSERT_NO_FATAL_FAILURE(CheckExpectedNames(AlphabeticalNames, selector->GetByFile(AlphabeticalRepoFile.c_str())));
+  }
+
+  TEST_F(Tags, ReturnedSortedByNameIfCached)
+  {
+    std::vector<std::string> const limited = {"a", "ab", "abc"};
+    std::vector<std::string> const cached_names = {"abcdef", "abcde", "abcd"};
+    ASSERT_NO_FATAL_FAILURE(LoadTagsFileImpl(AlphabeticalRepo.c_str(), RepositoryType::Regular, AlphabeticalNames.size()));
+    ASSERT_NO_FATAL_FAILURE(ClearCache(AlphabeticalRepo));
+    ASSERT_NO_FATAL_FAILURE(CacheNames(cached_names, AlphabeticalRepo));
+    auto selector = GetSelector(AlphabeticalRepo.c_str(), true, SortingOptions::SortByName, cached_names.size());
+
+    ASSERT_NO_FATAL_FAILURE(CheckExpectedNames(cached_names, selector->GetCachedTags(GetNames)));
+    ASSERT_NO_FATAL_FAILURE(CheckExpectedNames(limited, selector->GetByPart("", GetNames)));
+    ASSERT_EQ(EmptyTags, selector->GetByPart("", GetNames, Unlimited));
+    ASSERT_NO_FATAL_FAILURE(CheckExpectedNames(AlphabeticalNames, selector->GetByFile(AlphabeticalRepoFile.c_str())));
+  }
+
+  TEST_F(Tags, ReturnedCachedTagsOnTop)
+  {
+    std::vector<std::string> const cached_names = {"abcdef", "abcde", "abcd"};
+    std::vector<std::string> const with_tags_on_top = {"abcdef", "abcde", "abcd", "a", "ab", "abc", "abcdefg", "abcdefgh", "abcdefghi"};
+    ASSERT_NO_FATAL_FAILURE(LoadTagsFileImpl(AlphabeticalRepo.c_str(), RepositoryType::Regular, AlphabeticalNames.size()));
+    ASSERT_NO_FATAL_FAILURE(ClearCache(AlphabeticalRepo));
+    ASSERT_NO_FATAL_FAILURE(CacheNames(cached_names, AlphabeticalRepo));
+    auto selector = GetSelector(AlphabeticalRepo.c_str(), true, SortingOptions::SortByName | SortingOptions::CachedTagsOnTop, cached_names.size());
+
+    ASSERT_NO_FATAL_FAILURE(CheckExpectedNames(cached_names, selector->GetCachedTags(GetNames)));
+    ASSERT_NO_FATAL_FAILURE(CheckExpectedNames(cached_names, selector->GetByPart("", GetNames)));
+    ASSERT_EQ(EmptyTags, selector->GetByPart("", GetNames, Unlimited));
+    ASSERT_NO_FATAL_FAILURE(CheckExpectedNames(with_tags_on_top, selector->GetByFile(AlphabeticalRepoFile.c_str())));
+  }
+
+  TEST_F(Tags, ReturnedPartiallyMatchedTagsWithCachedOnTop)
+  {
+    std::vector<std::string> const cached_names = {"abcdef", "abcde", "abcd"};
+    std::vector<std::string> const cached_names_limited = {"abcdef", "abcde"};
+    std::vector<std::string> const patially_matched = {"abcdef", "abcde", "abc"};
+    std::vector<std::string> const patially_matched_unlimited = {"abcdef", "abcde", "abc", "abcd", "abcdefg", "abcdefgh", "abcdefghi"};
+    std::vector<std::string> const by_file_matched = {"abcdef", "abcde", "a", "ab", "abc", "abcd", "abcdefg", "abcdefgh", "abcdefghi"};
+    ASSERT_NO_FATAL_FAILURE(LoadTagsFileImpl(AlphabeticalRepo.c_str(), RepositoryType::Regular, AlphabeticalNames.size()));
+    ASSERT_NO_FATAL_FAILURE(ClearCache(AlphabeticalRepo));
+    ASSERT_NO_FATAL_FAILURE(CacheNames(cached_names, AlphabeticalRepo));
+    auto selector = GetSelector(AlphabeticalRepo.c_str(), true, SortingOptions::SortByName | SortingOptions::CachedTagsOnTop, cached_names_limited.size());
+
+    ASSERT_NO_FATAL_FAILURE(CheckExpectedNames(cached_names_limited, selector->GetCachedTags(GetNames)));
+    ASSERT_NO_FATAL_FAILURE(CheckExpectedNames(patially_matched, selector->GetByPart("abc", GetNames)));
+    ASSERT_NO_FATAL_FAILURE(CheckExpectedNames(patially_matched_unlimited, selector->GetByPart("abc", GetNames, Unlimited)));
+    ASSERT_NO_FATAL_FAILURE(CheckExpectedNames(by_file_matched, selector->GetByFile(AlphabeticalRepoFile.c_str())));
   }
 }
 }
