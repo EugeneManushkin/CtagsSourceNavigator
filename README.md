@@ -17,9 +17,15 @@ This is a [Far Manager](https://www.farmanager.com/) plugin for browsing source 
 + Listing class members
 + Source code browsing history
 + Creating Ctags database for selected repository root
-+ Reindexing repository.
++ Reindexing single file or repository.
 + Hotkeys macro
 ## What's new 
+### 2.1.0.86
++ Implemented indexing current file (#79)
++ Most visited tags goes on top of each menu (#87, #88, #90). This behaviour may be disabled: **F11->Ctags Source Navigator->Plugin configuration->Recent tags in the first place**
++ Plugin become more convinient. Check out renewed "Manage repositories" menu where you can see loaded repositories history, go to repositories and make any repository permanent
++ Plugin become a bit faster. Fixed slow search of short names (#85)
++ Plugin become more stable. Fixed bugs: #77, #83, #84, #86, #89
 ### 2.1.0.68
 + Plugin become more stable. Fixed bugs: #70, #71, #75
 ### 2.1.0.63
@@ -30,11 +36,6 @@ This is a [Far Manager](https://www.farmanager.com/) plugin for browsing source 
 + **For those who love Lua**. If you would like to browse **not only functions** check out my new project: [Yet Another Lua TAgs](https://github.com/EugeneManushkin/Yalta). This is a Lua source code indexer
   that integrates with CtagsSourceNavigator plugin. Just download [latest release](https://github.com/EugeneManushkin/Yalta/releases), unpack it and put full path to **ctags_wrapper.bat** script to **Path to ctags.exe** in plugin configuration menu
   (**F11->Ctags Source Navigator->C Plugin configuration**)
-### 2.1.0.54
-+ Supported permanent repositories which are available for navigation and name lookup in any other repository or not indexed source file (#53)
-+ Improved repository management: you may navigate to the root of a loaded repository in 'Manage repositories' menu (#57)
-+ Improved platform error reporting
-+ Fixed view of tags with large name length (#60)
 ## Installation
 1. Download latest release from [release page](https://github.com/EugeneManushkin/CtagsSourceNavigator/releases)
 2. Extract downloaded archive to FarManager/Plugins folder
