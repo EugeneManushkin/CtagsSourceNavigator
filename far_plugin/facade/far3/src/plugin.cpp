@@ -1298,8 +1298,8 @@ static void ManageRepositories()
     }
     else if (repository_selected)
     {
-      repo = repositories.at(index);
-      VisitTags(repo.TagsPath);
+      auto selected = repositories.at(index);
+      repo = SafeCall(LoadTags, Err, selected.TagsPath, true).first ? selected : repo;
     }
     else
     {
