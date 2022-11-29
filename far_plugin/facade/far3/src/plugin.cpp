@@ -100,6 +100,7 @@ struct Config{
   static const size_t max_history_len;
   bool use_built_in_ctags;
   size_t reset_cache_counters_timeout_hours;
+  bool restore_last_visited_on_load;
 
 private:
   std::string wordchars;
@@ -123,6 +124,7 @@ Config::Config()
   , sort_class_members_by_name(false)
   , use_built_in_ctags(true)
   , reset_cache_counters_timeout_hours(12)
+  , restore_last_visited_on_load(true)
 {
   SetWordchars("0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz~$_");
 }
@@ -1255,6 +1257,14 @@ static MenuList GetRepoMenuList(std::vector<Tags::RepositoryInfo> const& reposit
   return std::move(menuList);
 }
 
+static WideString GetRepoLastVisitedDir(Tags::RepositoryInfo const& info)
+{
+  auto path = ToString(info.LastVisited);
+  path = FileExists(path) ? GetDirOfFile(path) : path;
+  auto attrs = GetFileAttributesW(path.c_str());
+  return attrs != INVALID_FILE_ATTRIBUTES ? path : ToString(info.Root);
+}
+
 static void SavePermanents();
 static void LoadPermanents();
 static void AddPermanent(std::string const& tagsFile);
@@ -1308,7 +1318,19 @@ static void ManageRepositories()
     }
   }
 
-  SetPanelDir(ToString(repo.Root), PANEL_ACTIVE);
+  auto dir = config.restore_last_visited_on_load ? GetRepoLastVisitedDir(repo) : ToString(repo.Root);
+  SetPanelDir(dir, PANEL_ACTIVE);
+}
+
+static void SetLastVisited(intptr_t editorID)
+{
+  auto file = GetFileNameFromEditor(editorID);
+  auto dir = ToStdString(GetDirOfFile(file));
+  auto owners = Storage->GetOwners(ToStdString(file).c_str());
+  for (auto const& owner : owners)
+  {
+    Storage->SetLastVisited(owner.TagsPath.c_str(), dir.c_str(), FlushTagsCache);
+  }
 }
 
 void WINAPI SetStartupInfoW(const struct PluginStartupInfo *Info)
@@ -2738,6 +2760,13 @@ intptr_t WINAPI ProcessEditorEventW(const struct ProcessEditorEventInfo *info)
 
     if (IsModalMode() && !SafeCall(OnCloseModalWindow, Err).first)
       NavigatorInstance.reset(new InvalidNavigator);
+  }
+  else if (info->Event == EE_GOTFOCUS)
+  {
+    static intptr_t LastFocusedID = -1;
+    auto prevID = LastFocusedID;
+    if ((LastFocusedID = info->EditorID) != prevID && !IsModalMode())
+      SafeCall(SetLastVisited, Facade::ExceptionHandler(), info->EditorID); // No error handler since I.Message is forbidden in EE_GOTFOCUS
   }
 
   return 0;
