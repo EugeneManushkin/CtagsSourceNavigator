@@ -31,6 +31,8 @@ namespace Tags
       virtual std::vector<TagInfo> GetCachedTags(bool getFiles, size_t maxCount) const = 0;
       virtual time_t ElapsedSinceCached() const = 0;
       virtual void ResetCacheCounters(bool flush) = 0;
+      virtual std::string GetLastVisited() const = 0;
+      virtual void SetLastVisited(std::string const& lastVisited, bool flush) = 0;
       virtual std::function<void()> UpdateTagsByFile(char const* file, const char* fileTagsPath) const = 0;
     };
   }

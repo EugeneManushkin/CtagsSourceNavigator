@@ -98,6 +98,15 @@ namespace
     {
     }
 
+    std::string GetLastVisited() const override
+    {
+      return std::string();
+    }
+
+    void SetLastVisited(std::string const& lastVisited, bool flush) override
+    {
+    }
+
     std::function<void()> UpdateTagsByFile(const char* file, const char* fileTagsPath) const override
     {
       return std::function<void()>();

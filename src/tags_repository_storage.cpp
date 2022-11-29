@@ -34,7 +34,7 @@ namespace
 
   RepositoryInfo ToRepositoryInfo(RepositoryRuntimeInfo const& info)
   {
-    return {info.Repository->TagsPath(), info.Repository->Root(), info.Type, info.Repository->ElapsedSinceCached()};
+    return {info.Repository->TagsPath(), info.Repository->Root(), info.Type, info.Repository->ElapsedSinceCached(), info.Repository->GetLastVisited()};
   }
 
   class RepositoryStorageImpl : public Tags::RepositoryStorage
@@ -96,6 +96,13 @@ namespace
       auto info = GetRuntimeInfo(tagsPath);
       if (!Empty(info))
         info.Repository->ResetCacheCounters(flush);
+    }
+
+    void SetLastVisited(char const* tagsPath, std::string const& lastVisited, bool flush) override
+    {
+      auto info = GetRuntimeInfo(tagsPath);
+      if (!Empty(info))
+        info.Repository->SetLastVisited(lastVisited, flush);
     }
 
     std::unique_ptr<Tags::Selector> GetSelector(char const* currentFile, bool caseInsensitive, Tags::SortingOptions sortOptions, size_t limit) override

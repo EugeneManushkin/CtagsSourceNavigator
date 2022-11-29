@@ -154,7 +154,7 @@ struct TagFileInfo{
     return getFiles ? FilesCache->Get(limit) : NamesCache->Get(limit);
   }
 
-  void FlushCachedTags();
+  void FlushCache();
 
   time_t ElapsedSinceCached() const
   {
@@ -166,6 +166,16 @@ struct TagFileInfo{
     NamesCache->ResetCounters();
     FilesCache->ResetCounters();
     CacheModTime = time(nullptr);
+  }
+
+  std::string GetLastVisited() const
+  {
+    return LastVisited;
+  }
+
+  void SetLastVisited(std::string const& lastVisited)
+  {
+    LastVisited = lastVisited;
   }
 
 private:
@@ -199,6 +209,7 @@ private:
   bool fullpathrepo;
   time_t IndexModTime;
   time_t CacheModTime;
+  std::string LastVisited;
   std::shared_ptr<Tags::Internal::TagsCache> NamesCache;
   std::shared_ptr<Tags::Internal::TagsCache> FilesCache;
   OffsetCont NamesOffsets;
@@ -833,7 +844,7 @@ OffsetCont TagFileInfo::GetOffsets(FILE* f, IndexType type) const
   return std::move(result);
 }
 
-void TagFileInfo::FlushCachedTags()
+void TagFileInfo::FlushCache()
 {
   auto f = OpenIndex("r+b");
   if (!f)
@@ -848,6 +859,7 @@ void TagFileInfo::FlushCachedTags()
   WriteTagsStat(&*f, CorrectStatFilePaths(*this, NamesCache->GetStat()));
   WriteTagsStat(&*f, CorrectStatFilePaths(*this, FilesCache->GetStat()));
   WriteTimeT(&*f, CacheModTime);
+  WriteString(&*f, LastVisited);
   Truncate(&*f, ftell(&*f));
   CloseIndexFile(std::move(f));
 }
@@ -1010,6 +1022,7 @@ bool TagFileInfo::LoadCache()
 {
   IndexModTime = 0;
   CacheModTime = 0;
+  LastVisited = "";
   auto f = FOpen(indexFile.c_str(), "r+b");
   if (!f || !ReadSignature(&*f))
     return false;
@@ -1044,7 +1057,8 @@ bool TagFileInfo::LoadCache()
     {
       NamesCache = TagsStatToTagsCache(MakeFullFilePaths(*this, std::move(namesStat)));
       FilesCache = TagsStatToTagsCache(MakeFullFilePaths(*this, std::move(filesStat)));
-      ReadTimeT(&*f, CacheModTime);
+      if (ReadTimeT(&*f, CacheModTime))
+        ReadString(&*f, LastVisited);
     }
   }
 
@@ -1783,14 +1797,14 @@ namespace
     {
       Info.CacheTag(tag, cacheSize);
       if (flush)
-        Info.FlushCachedTags();
+        Info.FlushCache();
     }
 
     void EraseCachedTag(TagInfo const& tag, bool flush) override
     {
       Info.EraseCachedTag(tag);
       if (flush)
-        Info.FlushCachedTags();
+        Info.FlushCache();
     }
 
     std::vector<TagInfo> GetCachedTags(bool getFiles, size_t maxCount) const override
@@ -1807,7 +1821,22 @@ namespace
     {
       Info.ResetCacheCounters();
       if (flush)
-        Info.FlushCachedTags();
+        Info.FlushCache();
+    }
+
+    std::string GetLastVisited() const override
+    {
+      return Info.GetLastVisited();
+    }
+
+    void SetLastVisited(std::string const& lastVisited, bool flush) override
+    {
+      if (lastVisited != Info.GetLastVisited())
+      {
+        Info.SetLastVisited(lastVisited);
+        if (flush)
+          Info.FlushCache();
+      }
     }
 
     std::function<void()> UpdateTagsByFile(char const* file, const char* fileTagsPath) const override
