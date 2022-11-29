@@ -77,3 +77,4 @@
 "Tags file corrupted due to internal error. Please reindex repository"
 "Indexing file..."
 "This menu is deprecated and will be removed in future releases.\nPlease use 'Manage repositories' menu instead"
+"Restore last visited directory on repo load"

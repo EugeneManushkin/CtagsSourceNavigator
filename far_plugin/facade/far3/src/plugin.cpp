@@ -904,6 +904,10 @@ static Config LoadConfig(std::string const& fileName)
       if (sscanf(val.c_str(), "%d", &timeout) == 1 && timeout >= 0)
         config.reset_cache_counters_timeout_hours = timeout;
     }
+    else if(key == "restorelastvisitedonload")
+    {
+      config.restore_last_visited_on_load = val == "true";
+    }
   }
 
   config.history_len = config.history_file.empty() ? 0 : config.history_len;
@@ -2667,7 +2671,7 @@ static intptr_t ConfigurePlugin()
   WideString menuTitle = WideString(GetMsg(MPlugin)) + L" " + PluginVersionString();
   struct InitDialogItem initItems[]={
 //    Type        X1  Y2  X2 Y2  F S           Flags D Data
-    DI_DOUBLEBOX, 3, ++y, 64,30, 0,0,              0,0,-1,menuTitle.c_str(),{},
+    DI_DOUBLEBOX, 3, ++y, 64,31, 0,0,              0,0,-1,menuTitle.c_str(),{},
     DI_TEXT,      5, ++y,  0, 0, 0,0,              0,0,MPathToExe,L"",{},
     DI_EDIT,      5, ++y, 62, 3, 1,0,              0,0,-1,ToString(config.exe),{"pathtoexe", true},
     DI_CHECKBOX,  5, ++y, 62,10, 1,config.use_built_in_ctags,0,0,MUseBuiltInCtags,L"",{"usebuiltinctags", false, true},
@@ -2694,6 +2698,7 @@ static intptr_t ConfigurePlugin()
     DI_EDIT,      5, ++y, 62, 9, 1,0,              0,0,-1,ToString(std::to_string(config.history_len)),{"historylen", true},
     DI_TEXT,      5, ++y,  0, 0, 0,0,              0,0,MPermanentsFile,L"",{},
     DI_EDIT,      5, ++y, 62, 7, 1,0,              0,0,-1,ToString(config.permanents),{"autoload"},
+    DI_CHECKBOX,  5, ++y, 62,10, 1,config.restore_last_visited_on_load,0,0,MRestoreLastVisitedOnLoad,L"",{"restorelastvisitedonload", false, true},
     DI_TEXT,      5, ++y, 62,10, 1,0,DIF_SEPARATOR|DIF_BOXCOLOR,0,-1,L"",{},
     DI_BUTTON,    0, ++y,  0, 0, 0,0,DIF_CENTERGROUP,1,MOk,L"",{},
     DI_BUTTON,    0,   y,  0, 0, 0,0,DIF_CENTERGROUP,0,MCancel,L"",{}

@@ -78,4 +78,5 @@ enum{
   MTagsCorrupted,
   MIndexingFile,
   MLoadTagsFromHistoryDeprecated,
+  MRestoreLastVisitedOnLoad,
 };
