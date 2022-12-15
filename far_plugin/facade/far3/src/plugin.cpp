@@ -38,12 +38,14 @@
 #define _FAR_NO_NAMELESS_UNIONS
 #include <facade/safe_call.h>
 #include <plugin_sdk/plugin.hpp>
+#include "error.h"
 #include "tags.h"
 #include "tags_repository_storage.h"
 #include "tags_selector.h"
 #include "tags_viewer.h"
 #include "text.h"
 #include "resource.h"
+#include "wide_string.h"
 
 #include <algorithm>
 #include <bitset>
@@ -59,6 +61,11 @@
 #include <list>
 #include <unordered_map>
 #include <unordered_set>
+
+using WideString = Far3::WideString;
+using Far3::ToString;
+using Far3::ToStdString;
+using Far3::Error;
 
 static struct PluginStartupInfo I;
 FarStandardFunctions FSF;
@@ -137,30 +144,7 @@ void Config::SetWordchars(std::string const& str)
 
 Config config;
 
-using WideString = std::basic_string<wchar_t>;
-
 static const wchar_t* GetMsg(int MsgId);
-WideString ToString(std::string const& str);
-//TODO: Make additional fields, replace throw std::exception with throw Error(code)
-class Error
-{
-public:
-  Error(int code, std::string const& fieldName = "", std::string const& fieldValue = "")
-    : Code(code)
-    , Field(std::move(fieldName), std::move(fieldValue))
-  {
-  }
-
-  WideString What() const
-  {
-    auto message = WideString(GetMsg(Code));
-    return Field.first.empty() ? message : message + L"\n" + ToString(Field.first) + L": " + ToString(Field.second);
-  }
-
-private:
-  int Code;
-  std::pair<std::string, std::string> Field;
-};
 
 GUID StringToGuid(const std::string& str)
 {
@@ -188,30 +172,6 @@ GUID StringToGuid(const std::string& str)
 ::GUID MenuGuid = StringToGuid("{a5b1037e-2f54-4609-b6dd-70cd47bd222b}");
 //TODO: determine MaxMenuWidth depending on max Far Manager window width
 size_t const MaxMenuWidth = 120;
-
-WideString ToString(std::string const& str)
-{
-  UINT const codePage = CP_ACP;
-  auto sz = MultiByteToWideChar(codePage, 0, str.c_str(), static_cast<int>(str.length()), nullptr, 0);
-  if (!sz)
-    return WideString();
-
-  std::vector<wchar_t> buffer(sz);
-  MultiByteToWideChar(codePage, 0, str.c_str(), static_cast<int>(str.length()), &buffer[0], sz);
-  return WideString(buffer.begin(), buffer.end());
-}
-
-std::string ToStdString(WideString const& str)
-{
-  UINT const codePage = CP_ACP;
-  auto sz = WideCharToMultiByte(codePage, 0, str.c_str(), static_cast<int>(str.length()), nullptr, 0, nullptr, nullptr);
-  if (!sz)
-    return std::string();
-
-  std::vector<char> buffer(sz);
-  WideCharToMultiByte(codePage, 0, str.c_str(), static_cast<int>(str.length()), &buffer[0], sz, nullptr, nullptr);
-  return std::string(buffer.begin(), buffer.end());
-}
 
 bool IsPathSeparator(WideString::value_type c)
 {
@@ -255,6 +215,12 @@ GetMsg(int MsgId)
   return I.GetMsg(&PluginGuid, MsgId);
 }
 
+static WideString ToString(Error const& e)
+{
+  auto message = WideString(GetMsg(e.Code));
+  return e.Field.first.empty() ? message : message + L"\n" + ToString(e.Field.first) + L": " + ToString(e.Field.second);
+}
+
 void Err(std::exception_ptr e)
 try
 {
@@ -266,7 +232,7 @@ catch (std::exception const& e)
 }
 catch(Error const& err)
 {
-  ErrorMessage(err.What());
+  ErrorMessage(ToString(err));
 }
 
 using Facade::SafeCall;
