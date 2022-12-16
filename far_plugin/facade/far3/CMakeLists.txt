@@ -15,7 +15,7 @@ if (MSVC)
 endif (MSVC)
 
 add_library(ctags SHARED ${SOURCES})
-target_link_libraries(ctags tags)
+target_link_libraries(ctags tags plugin)
 
 target_compile_definitions(ctags PUBLIC CTAGS_VERSION_MAJOR=${CTAGS_VERSION_MAJOR}
                                  PUBLIC CTAGS_VERSION_MINOR=${CTAGS_VERSION_MINOR}

@@ -38,6 +38,7 @@
 #define _FAR_NO_NAMELESS_UNIONS
 #include <facade/safe_call.h>
 #include <plugin_sdk/plugin.hpp>
+#include "current_editor_impl.h"
 #include "error.h"
 #include "tags.h"
 #include "tags_repository_storage.h"
@@ -69,6 +70,8 @@ using Far3::Error;
 
 static struct PluginStartupInfo I;
 FarStandardFunctions FSF;
+
+static std::shared_ptr<Plugin::CurrentEditor> CurrentEditor;
 
 static const wchar_t* APPNAME = CTAGS_PRODUCT_NAME;
 
@@ -1310,6 +1313,7 @@ void WINAPI SetStartupInfoW(const struct PluginStartupInfo *Info)
   I.FSF = &FSF;
   MigrateConfig();
   config = LoadConfig(ToStdString(GetConfigFilePath()));
+  CurrentEditor = Far3::CreateCurrentEditor(I, PluginGuid); //TODO: prevent loading plugin if failed
 }
 
 inline int isident(int chr)
@@ -1396,32 +1400,6 @@ static std::string GetStringLiteral()
 }
 */
 
-static void SetPos(WideString const& filename, intptr_t line, intptr_t col, intptr_t top, intptr_t left)
-{
-  if (I.Editor(filename.c_str(), L"", 0, 0, -1, -1,  EF_NONMODAL | EF_IMMEDIATERETURN | EF_OPENMODE_USEEXISTING, -1, -1, CP_DEFAULT) == EEC_OPEN_ERROR)
-    throw Error(MEFailedToOpen);
-
-  if (line < 0)
-    return;
-
-  EditorInfo ei = GetCurrentEditorInfo();
-  EditorSetPosition esp = {sizeof(EditorSetPosition)};
-  esp.CurLine = line;
-  esp.CurPos = col;
-  esp.CurTabPos = -1;
-  esp.TopScreenLine = top;
-  esp.LeftPos = left;
-  esp.Overtype = -1;
-  I.EditorControl(ei.EditorID, ECTL_SETPOSITION, 0, &esp);
-  I.EditorControl(ei.EditorID, ECTL_REDRAW, 0, nullptr);
-}
-
-static void OpenInNewWindow(WideString const& filename, intptr_t line, intptr_t col)
-{
-  if (I.Editor(filename.c_str(), L"", 0, 0, -1, -1,  EF_OPENMODE_NEWIFOPEN, line, col, CP_DEFAULT) == EEC_OPEN_ERROR)
-    throw Error(MEFailedToOpen);
-}
-
 static int EnsureLineInFile(int line, std::string const& file, std::string const& regex)
 {
   std::regex re = std::regex(regex);
@@ -1479,27 +1457,8 @@ static void OpenInNewWindow(TagInfo const& tag)
 {
   auto ensured = tag.name.empty() ? std::make_pair(true, -1) : SafeCall(EnsureLine, Err, tag.lineno, tag.file, tag.re);
   auto line = ensured.first ? ensured.second : -1;
-  if (!tag.name.empty() && line < 0)
-    return;
-
-  auto file = ToString(tag.file);
-  I.Editor(file.c_str(), L"", 0, 0, -1, -1,  EF_OPENMODE_NEWIFOPEN, line, line < 0 ? -1 : 1, CP_DEFAULT);
-}
-
-static bool IsModalMode()
-{
-  WindowInfo info = {sizeof(WindowInfo)};
-  return FindFarWindow(WideString(), -1, info) && !!(info.Flags & WIF_MODAL);
-}
-
-static bool IsOpenedInCurrentEditor(WideString const& file)
-{
-  EditorInfo ei = {sizeof(EditorInfo)};
-  if (!I.EditorControl(-1, ECTL_GETINFO, 0, &ei))
-    return false;
-
-  auto const editorFile = GetFileNameFromEditor(ei.EditorID);
-  return FSF.ProcessName(file.c_str(), const_cast<wchar_t*>(editorFile.c_str()), 0, PN_CMPNAME) != 0;
+  if (tag.name.empty() || line >= 0)
+    CurrentEditor->OpenModal({tag.file, line > 0 ? line - 1 : line, line < 0 ? -1 : 0});
 }
 
 class Navigator
@@ -1516,7 +1475,7 @@ public:
   virtual bool CanGoForward() const = 0;
   virtual Index NumPositions() const = 0;
   virtual Index CurrentPosition() const = 0;
-  virtual std::pair<WideString, intptr_t> GetPosition(Index index) const = 0;
+  virtual std::pair<std::string, int> GetPosition(Index index) const = 0;
   virtual void OnNewModalWindow() = 0;
   virtual void OnCloseModalWindow() = 0;
 };
@@ -1566,7 +1525,7 @@ public:
     return 0;
   }
 
-  virtual std::pair<WideString, intptr_t> GetPosition(Index) const override
+  virtual std::pair<std::string, int> GetPosition(Index) const override
   {
     throw std::logic_error("Navigation is disabled");
   }
@@ -1594,17 +1553,10 @@ public:
   bool CanGoForward() const;
   Index NumPositions() const;
   Index CurrentPosition() const;
-  std::pair<WideString, intptr_t> GetPosition(Index index) const;
+  std::pair<std::string, int> GetPosition(Index index) const;
 
 private:
-  struct Position
-  {
-    WideString File;
-    intptr_t Line;
-    intptr_t Pos;
-    intptr_t Top;
-    intptr_t Left;
-  };
+  using Position = Plugin::EditorState;
 
   bool GetPosition(Position& pos) const;
   void SavePosition(Position&& pos);
@@ -1634,7 +1586,7 @@ void PlainNavigator::Goto(TagInfo const& tag, bool setPanelDir)
   }
 
   CacheTag(tag);
-  Move(ToString(tag.file), line, setPanelDir);
+  Move(ToString(tag.file), line - 1, setPanelDir);
 }
 
 void PlainNavigator::Goto(Index index)
@@ -1642,7 +1594,7 @@ void PlainNavigator::Goto(Index index)
   auto const& newPosition = Stack.at(index);
   Position position;
   bool havePosition = Current == Stack.size() && GetPosition(position); 
-  SetPos(newPosition.File, newPosition.Line, newPosition.Pos, newPosition.Top, newPosition.Left);
+  CurrentEditor->OpenAsync(newPosition);
   if (havePosition)
     SavePosition(std::move(position));
 
@@ -1681,7 +1633,7 @@ PlainNavigator::Index PlainNavigator::CurrentPosition() const
   return Current;
 }
 
-std::pair<WideString, intptr_t> PlainNavigator::GetPosition(Index index) const
+std::pair<std::string, int> PlainNavigator::GetPosition(Index index) const
 {
   auto const& pos = Stack.at(index);
   return std::make_pair(pos.File, pos.Line);
@@ -1689,12 +1641,8 @@ std::pair<WideString, intptr_t> PlainNavigator::GetPosition(Index index) const
 
 bool PlainNavigator::GetPosition(Position& pos) const
 {
-  EditorInfo ei = {sizeof(EditorInfo)};
-  if (!I.EditorControl(-1, ECTL_GETINFO, 0, &ei))
-    return false;
-
-  pos = {GetFileNameFromEditor(ei.EditorID), ei.CurLine, ei.CurPos, ei.TopScreenLine, ei.LeftPos};
-  return true;
+  pos = CurrentEditor->GetState();
+  return !pos.File.empty();
 }
 
 void PlainNavigator::SavePosition(PlainNavigator::Position&& pos)
@@ -1707,12 +1655,13 @@ void PlainNavigator::SavePosition(PlainNavigator::Position&& pos)
 void PlainNavigator::Move(WideString const& file, int line, bool setPanelDir)
 {
   Position position;
-  bool needOpenInNewWindow = Modal && !IsOpenedInCurrentEditor(file);
+  Position newPosition = {ToStdString(file), line, 0, line > 0 ? line - 1 : line};
+  bool needOpenInNewWindow = Modal && !CurrentEditor->IsOpened(ToStdString(file).c_str());
   bool havePosition = !needOpenInNewWindow && GetPosition(position);
   if (needOpenInNewWindow)
-    OpenInNewWindow(file, line, line < 0 ? -1 : 1);
+    CurrentEditor->OpenModal(newPosition);
   else
-    SetPos(file, line > 0 ? line - 1 : line, 0, line > 1 ? line - 2 : line, 0);
+    CurrentEditor->OpenAsync(newPosition);
 
   if (!Modal && setPanelDir)
     SelectFile(file);
@@ -1780,7 +1729,7 @@ public:
     return Navigators.top().CurrentPosition();
   }
 
-  virtual std::pair<WideString, intptr_t> GetPosition(Index index) const override
+  virtual std::pair<std::string, int> GetPosition(Index index) const override
   {
     return Navigators.top().GetPosition(index);
   }
@@ -1825,7 +1774,7 @@ static void NavigationHistory()
   for (Navigator::Index i = 0; i < NavigatorInstance->NumPositions(); ++i)
   {
     auto pos = NavigatorInstance->GetPosition(i);
-    menuList.push_back(MI(pos.first + WideString(L":") + ToString(std::to_string(pos.second + 1)), static_cast<int>(i)));
+    menuList.push_back(MI(ToString(pos.first) + WideString(L":") + ToString(std::to_string(pos.second + 1)), static_cast<int>(i)));
   }
 
   auto selected = static_cast<int>(NavigatorInstance->CurrentPosition());
@@ -2720,7 +2669,7 @@ intptr_t WINAPI ProcessEditorEventW(const struct ProcessEditorEventInfo *info)
 {
   if (info->Event == EE_READ)
   {
-    if (IsModalMode() && !SafeCall(OnNewModalWindow, Err).first)
+    if (CurrentEditor->IsModal() && !SafeCall(OnNewModalWindow, Err).first)
       NavigatorInstance.reset(new InvalidNavigator);
   }
   else if (info->Event == EE_CLOSE)
@@ -2729,14 +2678,14 @@ intptr_t WINAPI ProcessEditorEventW(const struct ProcessEditorEventInfo *info)
     if (CountEditors(file) == 1)
       SafeCall(ClearTemporaryTagsByFile, Err, file);
 
-    if (IsModalMode() && !SafeCall(OnCloseModalWindow, Err).first)
+    if (CurrentEditor->IsModal() && !SafeCall(OnCloseModalWindow, Err).first)
       NavigatorInstance.reset(new InvalidNavigator);
   }
   else if (info->Event == EE_GOTFOCUS)
   {
     static intptr_t LastFocusedID = -1;
     auto prevID = LastFocusedID;
-    if ((LastFocusedID = info->EditorID) != prevID && !IsModalMode())
+    if ((LastFocusedID = info->EditorID) != prevID && !CurrentEditor->IsModal())
       SafeCall(SetLastVisited, Facade::ExceptionHandler(), info->EditorID); // No error handler since I.Message is forbidden in EE_GOTFOCUS
   }
 
