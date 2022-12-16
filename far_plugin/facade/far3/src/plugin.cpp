@@ -258,6 +258,12 @@ EditorInfo GetCurrentEditorInfo()
   return ei;
 }
 
+intptr_t GetCurrentEditorID()
+{
+  EditorInfo ei = {sizeof(EditorInfo)};
+  return !!I.EditorControl(-1, ECTL_GETINFO, 0, &ei) ? ei.EditorID : -1;
+}
+
 WideString GetFileNameFromEditor(intptr_t editorID)
 {
   size_t sz = I.EditorControl(editorID, ECTL_GETFILENAME, 0, nullptr);
@@ -1449,7 +1455,9 @@ int EnsureLine(int line, std::string const& file, std::string const& regex)
   if (regex.empty())
     return line;
 
-  auto id = FindEditorID(ToString(file));
+  auto id = !CurrentEditor->IsModal() ? FindEditorID(ToString(file))
+          : CurrentEditor->IsOpened(file.c_str()) ? GetCurrentEditorID()
+          : -1;
   return id < 0 ? EnsureLineInFile(line, file, regex) : EnsureLineInEditor(line, id, regex);
 }
 
