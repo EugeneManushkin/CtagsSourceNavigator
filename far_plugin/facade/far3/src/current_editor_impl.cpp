@@ -16,19 +16,19 @@ namespace
   using Far3::ToStdString;
   using Far3::Error;
 
-  EditorSetPosition MakeEditorSetPosition(Plugin::EditorState const& state)
+  EditorSetPosition MakeEditorSetPosition(Plugin::EditorPosition const& position)
   {
     EditorSetPosition result = {sizeof(EditorSetPosition)};
-    result.CurLine = state.Line;
-    result.CurPos = state.Pos;
+    result.CurLine = position.Line;
+    result.CurPos = position.Pos;
     result.CurTabPos = -1;
-    result.TopScreenLine = state.Top;
-    result.LeftPos = state.Left;
+    result.TopScreenLine = position.Top;
+    result.LeftPos = position.Left;
     result.Overtype = -1;
     return result;
   }
 
-  Plugin::EditorState MakeEditorState(std::string const& file, EditorInfo const& ei)
+  Plugin::EditorPosition MakeEditorPosition(std::string const& file, EditorInfo const& ei)
   {
     return {
         file
@@ -85,34 +85,34 @@ namespace
                         : false;
     }
 
-    Plugin::EditorState GetState() const override
+    Plugin::EditorPosition GetPosition() const override
     {
       auto info = GetInfo(I);
       auto id = info.second.EditorID;
-      return info.first ? MakeEditorState(ToStdString(GetEditorFileName(id, I)), info.second)
-                        : Plugin::EditorState();
+      return info.first ? MakeEditorPosition(ToStdString(GetEditorFileName(id, I)), info.second)
+                        : Plugin::EditorPosition();
     }
 
-    void OpenAsync(Plugin::EditorState const& state) override
+    void OpenAsync(Plugin::EditorPosition const& position) override
     {
-      auto filename = ToString(state.File);
+      auto filename = ToString(position.File);
       if (I.Editor(filename.c_str(), L"", 0, 0, -1, -1,  EF_NONMODAL | EF_IMMEDIATERETURN | EF_OPENMODE_USEEXISTING, -1, -1, CP_DEFAULT) == EEC_OPEN_ERROR)
-        throw Error(MEFailedToOpen, "File", state.File);
+        throw Error(MEFailedToOpen, "File", position.File);
     
-      if (state.Line >= 0)
+      if (position.Line >= 0)
       {
-        auto esp = MakeEditorSetPosition(state);
+        auto esp = MakeEditorSetPosition(position);
         auto id = GetInfo(I).second.EditorID;
         I.EditorControl(id, ECTL_SETPOSITION, 0, &esp);
         I.EditorControl(id, ECTL_REDRAW, 0, nullptr);
       }
     }
 
-    void OpenModal(Plugin::EditorState const& state) override
+    void OpenModal(Plugin::EditorPosition const& position) override
     {
-      auto filename = ToString(state.File);
-      if (I.Editor(filename.c_str(), L"", 0, 0, -1, -1,  EF_OPENMODE_NEWIFOPEN, state.Line + 1, state.Pos + 1, CP_DEFAULT) == EEC_OPEN_ERROR)
-        throw Error(MEFailedToOpen, "File", state.File);
+      auto filename = ToString(position.File);
+      if (I.Editor(filename.c_str(), L"", 0, 0, -1, -1,  EF_OPENMODE_NEWIFOPEN, position.Line + 1, position.Pos + 1, CP_DEFAULT) == EEC_OPEN_ERROR)
+        throw Error(MEFailedToOpen, "File", position.File);
     }
 
   private:

@@ -4,9 +4,9 @@
 
 namespace Plugin
 {
-  struct EditorState
+  struct EditorPosition
   {
-    EditorState(std::string const& file = "", int line = 0, int pos = -1, int top = 0, int left = -1)
+    EditorPosition(std::string const& file = "", int line = 0, int pos = -1, int top = 0, int left = -1)
       : File(file)
       , Line(line)
       , Pos(pos)
@@ -28,8 +28,8 @@ namespace Plugin
     virtual ~CurrentEditor() = default;
     virtual bool IsModal() const = 0;
     virtual bool IsOpened(char const* file) const = 0;
-    virtual EditorState GetState() const = 0;
-    virtual void OpenAsync(EditorState const& state) = 0;
-    virtual void OpenModal(EditorState const& state) = 0;
+    virtual EditorPosition GetPosition() const = 0;
+    virtual void OpenAsync(EditorPosition const& position) = 0;
+    virtual void OpenModal(EditorPosition const& position) = 0;
   };
 }

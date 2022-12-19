@@ -1564,7 +1564,7 @@ public:
   std::pair<std::string, int> GetPosition(Index index) const;
 
 private:
-  using Position = Plugin::EditorState;
+  using Position = Plugin::EditorPosition;
 
   bool GetPosition(Position& pos) const;
   void SavePosition(Position&& pos);
@@ -1649,7 +1649,7 @@ std::pair<std::string, int> PlainNavigator::GetPosition(Index index) const
 
 bool PlainNavigator::GetPosition(Position& pos) const
 {
-  pos = CurrentEditor->GetState();
+  pos = CurrentEditor->GetPosition();
   return !pos.File.empty();
 }
 
