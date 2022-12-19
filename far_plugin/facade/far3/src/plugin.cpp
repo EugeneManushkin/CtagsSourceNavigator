@@ -48,6 +48,8 @@
 #include "resource.h"
 #include "wide_string.h"
 
+#include <plugin/navigator.h>
+
 #include <algorithm>
 #include <bitset>
 #include <deque>
@@ -72,6 +74,8 @@ static struct PluginStartupInfo I;
 FarStandardFunctions FSF;
 
 static std::shared_ptr<Plugin::CurrentEditor> CurrentEditor;
+
+static std::unique_ptr<Plugin::Navigator> NavigatorInstance;
 
 static const wchar_t* APPNAME = CTAGS_PRODUCT_NAME;
 
@@ -1320,6 +1324,7 @@ void WINAPI SetStartupInfoW(const struct PluginStartupInfo *Info)
   MigrateConfig();
   config = LoadConfig(ToStdString(GetConfigFilePath()));
   CurrentEditor = Far3::CreateCurrentEditor(I, PluginGuid); //TODO: prevent loading plugin if failed
+  NavigatorInstance = Plugin::Navigator::Create(CurrentEditor); //TODO: prevent loading plugin if failed
 }
 
 inline int isident(int chr)
@@ -1461,132 +1466,34 @@ int EnsureLine(int line, std::string const& file, std::string const& regex)
   return id < 0 ? EnsureLineInFile(line, file, regex) : EnsureLineInEditor(line, id, regex);
 }
 
+static Plugin::EditorPosition MakeEditorPosition(std::string const& file, int line)
+{
+  return {
+      file
+    , line < 0 ? Plugin::EditorPosition::DefaultLine : line - 1
+    , line < 0 ? Plugin::EditorPosition::DefaultPos : 0
+    , line < 0 ? Plugin::EditorPosition::DefaultLine : std::max(line, 2) - 2
+  };
+}
+
 static void OpenInNewWindow(TagInfo const& tag)
 {
   auto ensured = tag.name.empty() ? std::make_pair(true, -1) : SafeCall(EnsureLine, Err, tag.lineno, tag.file, tag.re);
   auto line = ensured.first ? ensured.second : -1;
   if (tag.name.empty() || line >= 0)
-    CurrentEditor->OpenModal({
-      tag.file
-    , line <= 0 ? Plugin::EditorPosition::DefaultLine : line - 1
-    , line < 0 ? Plugin::EditorPosition::DefaultPos : 0
-    });
+    CurrentEditor->OpenModal(MakeEditorPosition(tag.file, line));
 }
 
-class Navigator
+static void CacheTag(TagInfo const& tag)
 {
-public:
-  using Index = size_t;
+  ResetCacheCountersOnTimeout(tag);
+  if (!tag.name.empty())
+    Storage->CacheTag(Tags::MakeFileTag(TagInfo(tag)), config.max_results, FlushTagsCache);
 
-  virtual ~Navigator() = default;
-  virtual void Goto(TagInfo const& tag, bool setPanelDir) = 0;
-  virtual void Goto(Index index) = 0;
-  virtual void GoBack() = 0;
-  virtual bool CanGoBack() const = 0;
-  virtual void GoForward() = 0;
-  virtual bool CanGoForward() const = 0;
-  virtual Index NumPositions() const = 0;
-  virtual Index CurrentPosition() const = 0;
-  virtual std::pair<std::string, int> GetPosition(Index index) const = 0;
-  virtual void OnNewModalWindow() = 0;
-  virtual void OnCloseModalWindow() = 0;
-};
-
-class InvalidNavigator : public Navigator
-{
-public:
-  using Index = Navigator::Index;
-
-  virtual void Goto(TagInfo const&, bool) override
-  {
-    throw std::logic_error("Navigation is disabled");
-  }
-
-  virtual void Goto(Index) override
-  {
-    throw std::logic_error("Navigation is disabled");
-  }
-
-  virtual void GoBack() override
-  {
-    throw std::logic_error("Navigation is disabled");
-  }
-
-  virtual bool CanGoBack() const override
-  {
-    return false;
-  }
-
-  virtual void GoForward() override
-  {
-    throw std::logic_error("Navigation is disabled");
-  }
-
-  virtual bool CanGoForward() const override
-  {
-    return false;
-  }
-
-  virtual Index NumPositions() const override
-  {
-    return 0;
-  }
-
-  virtual Index CurrentPosition() const override
-  {
-    return 0;
-  }
-
-  virtual std::pair<std::string, int> GetPosition(Index) const override
-  {
-    throw std::logic_error("Navigation is disabled");
-  }
-
-  virtual void OnNewModalWindow() override
-  {
-  }
-
-  virtual void OnCloseModalWindow() override
-  {
-  }
-};
-
-class PlainNavigator
-{
-public:
-  using Index = Navigator::Index;
-
-  PlainNavigator(bool modal);
-  void Goto(TagInfo const& tag, bool setPanelDir);
-  void Goto(Index index);
-  void GoBack();
-  bool CanGoBack() const;
-  void GoForward();
-  bool CanGoForward() const;
-  Index NumPositions() const;
-  Index CurrentPosition() const;
-  std::pair<std::string, int> GetPosition(Index index) const;
-
-private:
-  using Position = Plugin::EditorPosition;
-
-  bool GetPosition(Position& pos) const;
-  void SavePosition(Position&& pos);
-  void Move(WideString const& file, int line, bool setPanelDir);
-  void CacheTag(TagInfo const& tag);
-
-  std::deque<Position> Stack;
-  Index Current;
-  bool Modal;
-};
-
-PlainNavigator::PlainNavigator(bool modal)
-  : Current(Stack.size())
-  , Modal(modal)
-{
+  Storage->CacheTag(tag, config.max_results, FlushTagsCache);
 }
 
-void PlainNavigator::Goto(TagInfo const& tag, bool setPanelDir)
+static void NavigateTo(TagInfo const& tag, bool setPanelDir = false)
 {
   int line = tag.lineno;
   if (!tag.name.empty())
@@ -1598,176 +1505,9 @@ void PlainNavigator::Goto(TagInfo const& tag, bool setPanelDir)
   }
 
   CacheTag(tag);
-  Move(ToString(tag.file), line - 1, setPanelDir);
-}
-
-void PlainNavigator::Goto(Index index)
-{
-  auto const& newPosition = Stack.at(index);
-  Position position;
-  bool havePosition = Current == Stack.size() && GetPosition(position); 
-  CurrentEditor->OpenAsync(newPosition);
-  if (havePosition)
-    SavePosition(std::move(position));
-
-  Current = index;
-}
-
-void PlainNavigator::GoBack()
-{
-  if (CanGoBack())
-    Goto(Current - 1);
-}
-
-bool PlainNavigator::CanGoBack() const
-{
-  return !!Current;
-}
-
-void PlainNavigator::GoForward()
-{
-  if (CanGoForward())
-    Goto(Current + 1 == Stack.size() ? Current : Current + 1);
-}
-
-bool PlainNavigator::CanGoForward() const
-{
-  return Current != Stack.size();
-}
-
-PlainNavigator::Index PlainNavigator::NumPositions() const
-{
-  return Stack.size();
-}
-
-PlainNavigator::Index PlainNavigator::CurrentPosition() const
-{
-  return Current;
-}
-
-std::pair<std::string, int> PlainNavigator::GetPosition(Index index) const
-{
-  auto const& pos = Stack.at(index);
-  return std::make_pair(pos.File, pos.Line);
-}
-
-bool PlainNavigator::GetPosition(Position& pos) const
-{
-  pos = CurrentEditor->GetPosition();
-  return !pos.File.empty();
-}
-
-void PlainNavigator::SavePosition(PlainNavigator::Position&& pos)
-{
-  Stack.erase(Stack.begin() + Current, Stack.end());
-  Stack.push_back(std::move(pos));
-  Current = Stack.size();
-}
-
-void PlainNavigator::Move(WideString const& file, int line, bool setPanelDir)
-{
-  Position position;
-  Position newPosition = {ToStdString(file), line, 0, line > 0 ? line - 1 : line};
-  bool needOpenInNewWindow = Modal && !CurrentEditor->IsOpened(ToStdString(file).c_str());
-  bool havePosition = !needOpenInNewWindow && GetPosition(position);
-  if (needOpenInNewWindow)
-    CurrentEditor->OpenModal(newPosition);
-  else
-    CurrentEditor->OpenAsync(newPosition);
-
-  if (!Modal && setPanelDir)
-    SelectFile(file);
-
-  if (havePosition)
-    SavePosition(std::move(position));
-}
-
-void PlainNavigator::CacheTag(TagInfo const& tag)
-{
-  ResetCacheCountersOnTimeout(tag);
-  if (!tag.name.empty())
-    Storage->CacheTag(Tags::MakeFileTag(TagInfo(tag)), config.max_results, FlushTagsCache);
-
-  Storage->CacheTag(tag, config.max_results, FlushTagsCache);
-}
-
-class NavigatorImpl : public Navigator
-{
-public:
-  using Index = Navigator::Index;
-
-  NavigatorImpl()
-  {
-    Navigators.push(PlainNavigator(false));
-  }
-
-  virtual void Goto(TagInfo const& tag, bool setPanelDir) override
-  {
-    Navigators.top().Goto(tag, setPanelDir);
-  }
-
-  virtual void Goto(Index index) override
-  {
-    Navigators.top().Goto(index);
-  }
-
-  virtual void GoBack() override
-  {
-    Navigators.top().GoBack();
-  }
-
-  virtual bool CanGoBack() const override
-  {
-    return Navigators.top().CanGoBack();
-  }
-
-  virtual void GoForward() override
-  {
-    Navigators.top().GoForward();
-  }
-
-  virtual bool CanGoForward() const override
-  {
-    return Navigators.top().CanGoForward();
-  }
-
-  virtual Index NumPositions() const override
-  {
-    return Navigators.top().NumPositions();
-  }
-
-  virtual Index CurrentPosition() const override
-  {
-    return Navigators.top().CurrentPosition();
-  }
-
-  virtual std::pair<std::string, int> GetPosition(Index index) const override
-  {
-    return Navigators.top().GetPosition(index);
-  }
-
-  virtual void OnNewModalWindow() override
-  {
-    Navigators.push(PlainNavigator(true));
-  }
-
-  virtual void OnCloseModalWindow() override
-  {
-    if (Navigators.size() <= 1)
-      throw std::logic_error("No more modal navigators");
-
-    Navigators.pop();
-  }
-
-private:
-  std::stack<PlainNavigator> Navigators;
-};
-
-std::unique_ptr<Navigator> NavigatorInstance(new NavigatorImpl);
-
-static void NavigateTo(TagInfo const* info, bool setPanelDir = false)
-{
-  NavigatorInstance->Goto(*info, setPanelDir);
+  NavigatorInstance->Open(MakeEditorPosition(tag.file, line));
+  if (CurrentEditor->IsModal() && setPanelDir)
+    SelectFile(ToString(tag.file));
 }
 
 static void NavigateBack()
@@ -1783,27 +1523,30 @@ static void NavigateForward()
 static void NavigationHistory()
 {
   MenuList menuList;
-  for (Navigator::Index i = 0; i < NavigatorInstance->NumPositions(); ++i)
+  auto size = NavigatorInstance->HistorySize();
+  for (Plugin::Navigator::Index i = size; i > 0; --i)
   {
-    auto pos = NavigatorInstance->GetPosition(i);
-    menuList.push_back(MI(ToString(pos.first) + WideString(L":") + ToString(std::to_string(pos.second + 1)), static_cast<int>(i)));
+    auto pos = NavigatorInstance->GetHistoryPosition(i - 1);
+    auto num = size - i + 1;
+    char label = num < 10 ? '0' + static_cast<char>(num) : ' ';
+    menuList.push_back(MI(LabelToStr(label) + ToString(pos.File) + WideString(L":") + ToString(std::to_string(pos.Line + 1)), static_cast<int>(i - 1)));
   }
 
-  auto selected = static_cast<int>(NavigatorInstance->CurrentPosition());
-  selected = selected == NavigatorInstance->NumPositions() ? selected - 1 : selected;
-  auto index = Menu(GetMsg(MNavigationHistoryMenuTitle), menuList, selected);
+  auto selected = NavigatorInstance->CurrentHistoryIndex();
+  selected = selected == size && size > 0 ? size - 1 : selected;
+  auto index = Menu(GetMsg(MNavigationHistoryMenuTitle), menuList, static_cast<int>(selected));
   if (index >= 0)
-    NavigatorInstance->Goto(static_cast<Navigator::Index>(index));
+    NavigatorInstance->Open(NavigatorInstance->GetHistoryPosition(index));
 }
 
-void OnNewModalWindow()
+void OnNewEditor()
 {
-  NavigatorInstance->OnNewModalWindow();
+  NavigatorInstance->OnNewEditor();
 }
 
-void OnCloseModalWindow()
+void OnCloseEditor()
 {
-  NavigatorInstance->OnCloseModalWindow();
+  NavigatorInstance->OnCloseEditor();
 }
 
 static std::string RemoveFileMask(std::string const& args)
@@ -2142,14 +1885,14 @@ static void Lookup(WideString const& file, bool getFiles, bool setPanelDir, bool
   auto selector = GetSelector(ToStdString(file));
   auto tagsOnTop = GetTagsOnTop(*selector, getFiles);
   if (LookupTagsMenu(*Tags::GetPartiallyMatchedViewer(std::move(selector), getFiles), selectedTag, tagsOnTop) == LookupResult::Ok)
-    NavigateTo(&selectedTag, setPanelDir);
+    NavigateTo(selectedTag, setPanelDir);
 }
 
 static void NavigateToTag(std::vector<TagInfo>&& ta, intptr_t separatorPos, std::vector<TagInfo> const& tagsOnTop, FormatTagFlag formatFlag = FormatTagFlag::Default)
 {
   TagInfo tag;
   if (!ta.empty() && LookupTagsMenu(*Tags::GetFilterTagsViewer(Tags::TagsView(std::move(ta)), !config.casesens, tagsOnTop), tag, tagsOnTop, formatFlag, separatorPos) == LookupResult::Ok)
-    NavigateTo(&tag);
+    NavigateTo(tag);
 }
 
 static void NavigateToTag(std::vector<TagInfo>&& ta, std::vector<TagInfo> const& tagsOnTop, FormatTagFlag formatFlag)
@@ -2186,7 +1929,7 @@ static void GotoDeclaration(char const* fileName, std::string word)
     return;
 
   if (tags.size() == 1)
-    NavigateTo(&tags.back());
+    NavigateTo(tags.back());
   else
     NavigateToTag(std::move(tags), static_cast<intptr_t>(std::distance(tags.cbegin(), border)), GetTagsOnTop(*selector));
 }
@@ -2196,7 +1939,7 @@ static void GotoFile(char const* fileName, std::string path)
   auto selector = GetSelector(fileName);
   auto tags = selector->GetFiles(path.c_str());
   if (tags.size() == 1)
-    NavigateTo(&tags.back());
+    NavigateTo(tags.back());
   else if (!tags.empty())
     NavigateToTag(std::move(tags), tags.size(), GetTagsOnTop(*selector, true));
 }
@@ -2266,7 +2009,7 @@ HANDLE WINAPI OpenW(const struct OpenInfo *info)
       , MI(MCompleteSymbol,miComplete, '2')
       , MI(MUndoNavigation,miGoBack, '3', !NavigatorInstance->CanGoBack())
       , MI(MRepeatNavigation,miGoForward, 'F', !NavigatorInstance->CanGoForward())
-      , MI(MNavigationHistory,miNavigationHistory, 'H', !NavigatorInstance->NumPositions())
+      , MI(MNavigationHistory,miNavigationHistory, 'H', !NavigatorInstance->HistorySize())
       , MI::Separator()
       , MI(MBrowseClass,miBrowseClass, '4')
       , MI(MBrowseSymbolsInFile,miBrowseFile, '5')
@@ -2371,7 +2114,7 @@ HANDLE WINAPI OpenW(const struct OpenInfo *info)
       MenuList ml = {
            MI(MLookupSymbol, miLookupSymbol, '1')
          , MI(MSearchFile, miSearchFile, '2')
-         , MI(MNavigationHistory, miNavigationHistory, 'H', !NavigatorInstance->NumPositions())
+         , MI(MNavigationHistory, miNavigationHistory, 'H', !NavigatorInstance->HistorySize())
          , MI::Separator()
          , MI(MLoadTagsFile, miLoadTagsFile, '3')
          , MI(MLoadFromHistory, miLoadFromHistory, '4', !config.history_len)
@@ -2681,8 +2424,7 @@ intptr_t WINAPI ProcessEditorEventW(const struct ProcessEditorEventInfo *info)
 {
   if (info->Event == EE_READ)
   {
-    if (CurrentEditor->IsModal() && !SafeCall(OnNewModalWindow, Err).first)
-      NavigatorInstance.reset(new InvalidNavigator);
+    SafeCall(OnNewEditor, Err);
   }
   else if (info->Event == EE_CLOSE)
   {
@@ -2690,8 +2432,7 @@ intptr_t WINAPI ProcessEditorEventW(const struct ProcessEditorEventInfo *info)
     if (CountEditors(file) == 1)
       SafeCall(ClearTemporaryTagsByFile, Err, file);
 
-    if (CurrentEditor->IsModal() && !SafeCall(OnCloseModalWindow, Err).first)
-      NavigatorInstance.reset(new InvalidNavigator);
+    SafeCall(OnCloseEditor, Err);
   }
   else if (info->Event == EE_GOTFOCUS)
   {

@@ -32,8 +32,11 @@ namespace
     void PushPosition(Plugin::EditorPosition&& pos) override
     {
       Stack.resize(Current);
-      Stack.push_back(std::move(pos));
-      Current = Stack.size();
+      if (!pos.File.empty())
+      {
+        Stack.push_back(std::move(pos));
+        Current = Stack.size();
+      }
     }
 
     Plugin::EditorPosition Goto(Index index, Plugin::EditorPosition&& current) override
