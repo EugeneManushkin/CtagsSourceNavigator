@@ -6,7 +6,13 @@ namespace Plugin
 {
   struct EditorPosition
   {
-    EditorPosition(std::string const& file = "", int line = 0, int pos = -1, int top = 0, int left = -1)
+    enum
+    {
+      DefaultLine = -1,
+      DefaultPos = -1
+    };
+
+    EditorPosition(std::string const& file = "", int line = 0, int pos = DefaultPos, int top = 0, int left = DefaultLine)
       : File(file)
       , Line(line)
       , Pos(pos)

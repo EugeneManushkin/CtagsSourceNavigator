@@ -111,7 +111,9 @@ namespace
     void OpenModal(Plugin::EditorPosition const& position) override
     {
       auto filename = ToString(position.File);
-      if (I.Editor(filename.c_str(), L"", 0, 0, -1, -1,  EF_OPENMODE_NEWIFOPEN, position.Line + 1, position.Pos + 1, CP_DEFAULT) == EEC_OPEN_ERROR)
+      auto line = position.Line + (position.Line == Plugin::EditorPosition::DefaultLine ? 0 : 1);
+      auto pos = position.Pos + (position.Pos == Plugin::EditorPosition::DefaultPos ? 0 : 1);
+      if (I.Editor(filename.c_str(), L"", 0, 0, -1, -1,  EF_OPENMODE_NEWIFOPEN, line, pos, CP_DEFAULT) == EEC_OPEN_ERROR)
         throw Error(MEFailedToOpen, "File", position.File);
     }
 

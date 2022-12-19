@@ -1466,7 +1466,11 @@ static void OpenInNewWindow(TagInfo const& tag)
   auto ensured = tag.name.empty() ? std::make_pair(true, -1) : SafeCall(EnsureLine, Err, tag.lineno, tag.file, tag.re);
   auto line = ensured.first ? ensured.second : -1;
   if (tag.name.empty() || line >= 0)
-    CurrentEditor->OpenModal({tag.file, line > 0 ? line - 1 : line, line < 0 ? -1 : 0});
+    CurrentEditor->OpenModal({
+      tag.file
+    , line <= 0 ? Plugin::EditorPosition::DefaultLine : line - 1
+    , line < 0 ? Plugin::EditorPosition::DefaultPos : 0
+    });
 }
 
 class Navigator
