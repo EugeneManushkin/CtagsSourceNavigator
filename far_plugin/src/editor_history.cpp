@@ -31,22 +31,17 @@ namespace
 
     void PushPosition(Plugin::EditorPosition&& pos) override
     {
-      Stack.resize(Current);
-      if (!pos.File.empty())
+      Stack.resize(!Stack.empty() ? Current + 1 : 0);
+      if (!pos.File.empty() && pos != (!Stack.empty() ? Stack.back() : Plugin::EditorPosition()))
       {
         Stack.push_back(std::move(pos));
-        Current = Stack.size();
+        Current = Stack.size() - 1;
       }
     }
 
-    Plugin::EditorPosition Goto(Index index, Plugin::EditorPosition&& current) override
+    Plugin::EditorPosition Goto(Index index) override
     {
       auto result = Stack.at(index);
-      if (Current == Stack.size())
-        Stack.push_back(std::move(current));
-      else if (index + 1 == Stack.size())
-        Stack.pop_back();
-
       Current = index;
       return result;
     }

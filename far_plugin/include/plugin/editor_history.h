@@ -18,6 +18,6 @@ namespace Plugin
     virtual Index CurrentIndex() const = 0;
     virtual EditorPosition GetPosition(Index index) const = 0;
     virtual void PushPosition(EditorPosition&& pos) = 0;
-    virtual EditorPosition Goto(Index index, EditorPosition&& current = EditorPosition()) = 0;
+    virtual EditorPosition Goto(Index index) = 0;
   };
 }

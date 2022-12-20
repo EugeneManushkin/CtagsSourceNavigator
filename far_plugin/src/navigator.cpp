@@ -12,25 +12,41 @@ namespace
 
     NavigatorImpl(std::shared_ptr<Plugin::CurrentEditor> const& currentEditor)
       : Editor(currentEditor)
+      , SaveEnabled(true)
     {
       History.push(Plugin::EditorHistory::Create());
     }
 
     void GoBack() override
     {
-      if (CanGoBack())
-        Goto(History.top()->CurrentIndex() - 1);
+      auto curPos = Editor->GetPosition();
+      bool cursorChanged = IsCursorChanged(curPos);
+      if (History.top()->CurrentIndex() > 0 || cursorChanged)
+      {
+        auto index = History.top()->CurrentIndex() - (cursorChanged ? 0 : 1);
+        auto saveLock = DisableSave();
+        Editor->OpenAsync(History.top()->GetPosition(index));
+        if (cursorChanged && History.top()->CurrentIndex() + 1 == History.top()->Size())
+          History.top()->PushPosition(std::move(curPos));
+
+        History.top()->Goto(index);
+      }
     }
 
     bool CanGoBack() const override
     {
-      return History.top()->CurrentIndex() > 0;
+      return History.top()->CurrentIndex() > 0 || IsCursorChanged(Editor->GetPosition());
     }
 
     void GoForward() override
     {
       if (CanGoForward())
-        Goto(History.top()->CurrentIndex() + 1);
+      {
+        auto index = History.top()->CurrentIndex() + 1;
+        auto newPos = History.top()->GetPosition(index);
+        Editor->OpenAsync(newPos);
+        History.top()->Goto(index);
+      }
     }
 
     bool CanGoForward() const override
@@ -57,9 +73,10 @@ namespace
     {
       if (!Editor->IsModal() || Editor->IsOpened(newPos.File.c_str()))
       {
-        auto curPos = Editor->GetPosition();
+        History.top()->PushPosition(Editor->GetPosition());
+        auto saveLock = DisableSave();
         Editor->OpenAsync(newPos);
-        History.top()->PushPosition(std::move(curPos));
+        History.top()->PushPosition(Editor->GetPosition());
       }
       else
       {
@@ -71,6 +88,8 @@ namespace
     {
       if (Editor->IsModal())
         History.push(Plugin::EditorHistory::Create());
+
+      SaveCurrentPosition();
     }
 
     void OnCloseEditor() override
@@ -82,19 +101,37 @@ namespace
 
         History.pop();
       }
+      else
+      {
+        SaveCurrentPosition();
+      }
     }
 
   private:
-    void Goto(Index index)
+    bool IsCursorChanged(Plugin::EditorPosition const& pos) const
     {
-      auto curPos = Editor->GetPosition();
-      auto newPos = History.top()->GetPosition(index);
-      Editor->OpenAsync(newPos);
-      History.top()->Goto(index, std::move(curPos));
+      auto const& hist = *History.top();
+      auto const indexPos = hist.CurrentIndex() < hist.Size() ? hist.GetPosition(hist.CurrentIndex()) : Plugin::EditorPosition();
+      return !pos.File.empty()
+          && indexPos.File == pos.File
+          && indexPos.Line != pos.Line;
+    }
+
+    std::shared_ptr<void> DisableSave()
+    {
+      SaveEnabled = false;
+      return std::shared_ptr<void>(nullptr, [this](void*){ SaveEnabled = true; });
+    }
+
+    void SaveCurrentPosition()
+    {
+      if (SaveEnabled)
+        History.top()->PushPosition(Editor->GetPosition());
     }
 
     std::shared_ptr<Plugin::CurrentEditor> Editor;
     std::stack<std::unique_ptr<Plugin::EditorHistory>> History;
+    bool SaveEnabled;
   };
 
   class CheckedNavigator : public Plugin::Navigator

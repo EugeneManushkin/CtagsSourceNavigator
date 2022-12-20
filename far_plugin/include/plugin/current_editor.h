@@ -28,6 +28,19 @@ namespace Plugin
     int Left;
   };
 
+  inline bool operator == (Plugin::EditorPosition const& left, Plugin::EditorPosition const& right)
+  {
+    return
+        left.Line == right.Line
+     && left.File == right.File
+    ;
+  }
+
+  inline bool operator != (Plugin::EditorPosition const& left, Plugin::EditorPosition const& right)
+  {
+    return !(left == right);
+  }
+
   class CurrentEditor
   {
   public:
