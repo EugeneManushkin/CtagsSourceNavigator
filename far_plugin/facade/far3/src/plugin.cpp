@@ -1506,7 +1506,7 @@ static void NavigateTo(TagInfo const& tag, bool setPanelDir = false)
 
   CacheTag(tag);
   NavigatorInstance->Open(MakeEditorPosition(tag.file, line));
-  if (CurrentEditor->IsModal() && setPanelDir)
+  if (!CurrentEditor->IsModal() && setPanelDir)
     SelectFile(ToString(tag.file));
 }
 
