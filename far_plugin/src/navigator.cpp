@@ -123,7 +123,7 @@ namespace
     {
       SaveEnabled = false;
       auto enableSave = [this](void*){ SaveEnabled = true; };
-      std::unique_ptr<void, decltype(enableSave)> saveLock(nullptr, enableSave);
+      std::unique_ptr<void, decltype(enableSave)> saveLock(this, enableSave);
       Editor->OpenAsync(pos);
     }
 
