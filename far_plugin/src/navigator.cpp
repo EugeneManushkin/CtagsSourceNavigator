@@ -25,9 +25,6 @@ namespace
       {
         auto index = History.top()->CurrentIndex() - (cursorChanged ? 0 : 1);
         OpenAsync(History.top()->GetPosition(index));
-        if (cursorChanged && History.top()->CurrentIndex() + 1 == History.top()->Size())
-          History.top()->PushPosition(std::move(curPos));
-
         History.top()->Goto(index);
       }
     }
