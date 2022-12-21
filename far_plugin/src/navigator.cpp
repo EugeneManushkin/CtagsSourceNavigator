@@ -183,10 +183,15 @@ namespace
       return Navigator->GetHistoryPosition(index);
     }
 
-    void Open(Plugin::EditorPosition const& newPos) override
+    void Open(Plugin::EditorPosition const& newPos) override try
     {
       CheckValid();
       Navigator->Open(newPos);
+    }
+    catch(std::bad_alloc const&)
+    {
+      Valid = false;
+      throw;
     }
 
     void OnNewEditor() override try
