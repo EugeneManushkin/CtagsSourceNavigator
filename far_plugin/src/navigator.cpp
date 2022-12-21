@@ -21,14 +21,9 @@ namespace
 
     void GoBack() override
     {
-      auto curPos = Editor->GetPosition();
-      bool cursorChanged = IsCursorChanged(curPos);
+      bool cursorChanged = IsCursorChanged(Editor->GetPosition());
       if (History.top()->CurrentIndex() > 0 || cursorChanged)
-      {
-        auto index = History.top()->CurrentIndex() - (cursorChanged ? 0 : 1);
-        OpenAsync(History.top()->GetPosition(index));
-        History.top()->Goto(index);
-      }
+        Goto(History.top()->CurrentIndex() - (cursorChanged ? 0 : 1));
     }
 
     bool CanGoBack() const override
@@ -39,12 +34,7 @@ namespace
     void GoForward() override
     {
       if (CanGoForward())
-      {
-        auto index = History.top()->CurrentIndex() + 1;
-        auto newPos = History.top()->GetPosition(index);
-        OpenAsync(newPos);
-        History.top()->Goto(index);
-      }
+        Goto(History.top()->CurrentIndex() + 1);
     }
 
     bool CanGoForward() const override
@@ -127,6 +117,17 @@ namespace
       auto enableSave = [this](void*){ SaveEnabled = true; };
       std::unique_ptr<void, decltype(enableSave)> saveLock(this, enableSave);
       Editor->OpenAsync(pos);
+    }
+
+    void Goto(Index index) try
+    {
+      OpenAsync(History.top()->GetPosition(index));
+      History.top()->Goto(index);
+    }
+    catch(...)
+    {
+      History.top()->Erase(index);
+      throw;
     }
 
     std::shared_ptr<Plugin::CurrentEditor> Editor;

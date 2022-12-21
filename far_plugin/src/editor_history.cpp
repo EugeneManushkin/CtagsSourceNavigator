@@ -50,6 +50,12 @@ namespace
       return result;
     }
 
+    void Erase(Index index) override
+    {
+      Stack.erase(Stack.begin() + index);
+      Current -= Current < index || !Current ? 0 : 1;
+    }
+
   private:
     std::deque<Plugin::EditorPosition> Stack;
     Index Current;
