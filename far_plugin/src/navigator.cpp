@@ -24,8 +24,7 @@ namespace
       if (History.top()->CurrentIndex() > 0 || cursorChanged)
       {
         auto index = History.top()->CurrentIndex() - (cursorChanged ? 0 : 1);
-        auto saveLock = DisableSave();
-        Editor->OpenAsync(History.top()->GetPosition(index));
+        OpenAsync(History.top()->GetPosition(index));
         if (cursorChanged && History.top()->CurrentIndex() + 1 == History.top()->Size())
           History.top()->PushPosition(std::move(curPos));
 
@@ -44,7 +43,7 @@ namespace
       {
         auto index = History.top()->CurrentIndex() + 1;
         auto newPos = History.top()->GetPosition(index);
-        Editor->OpenAsync(newPos);
+        OpenAsync(newPos);
         History.top()->Goto(index);
       }
     }
@@ -74,8 +73,7 @@ namespace
       if (!Editor->IsModal() || Editor->IsOpened(newPos.File.c_str()))
       {
         auto curPos = Editor->GetPosition();
-        auto saveLock = DisableSave();
-        Editor->OpenAsync(newPos);
+        OpenAsync(newPos);
         History.top()->PushPosition(std::move(curPos));
         History.top()->PushPosition(Editor->GetPosition());
       }
@@ -118,16 +116,18 @@ namespace
           && indexPos.Line != pos.Line;
     }
 
-    std::shared_ptr<void> DisableSave()
-    {
-      SaveEnabled = false;
-      return std::shared_ptr<void>(nullptr, [this](void*){ SaveEnabled = true; });
-    }
-
     void SaveCurrentPosition()
     {
       if (SaveEnabled)
         History.top()->PushPosition(Editor->GetPosition());
+    }
+
+    void OpenAsync(Plugin::EditorPosition const& pos)
+    {
+      SaveEnabled = false;
+      auto enableSave = [this](void*){ SaveEnabled = true; };
+      std::unique_ptr<void, decltype(enableSave)> saveLock(nullptr, enableSave);
+      Editor->OpenAsync(pos);
     }
 
     std::shared_ptr<Plugin::CurrentEditor> Editor;
