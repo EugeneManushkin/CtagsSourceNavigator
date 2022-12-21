@@ -73,9 +73,10 @@ namespace
     {
       if (!Editor->IsModal() || Editor->IsOpened(newPos.File.c_str()))
       {
-        History.top()->PushPosition(Editor->GetPosition());
+        auto curPos = Editor->GetPosition();
         auto saveLock = DisableSave();
         Editor->OpenAsync(newPos);
+        History.top()->PushPosition(std::move(curPos));
         History.top()->PushPosition(Editor->GetPosition());
       }
       else
