@@ -1520,7 +1520,7 @@ static void NavigateForward()
   NavigatorInstance->GoForward();
 }
 
-static void NavigationHistory()
+static void NavigationHistory(bool setPanelDir)
 {
   MenuList menuList;
   auto size = NavigatorInstance->HistorySize();
@@ -1535,8 +1535,13 @@ static void NavigationHistory()
   auto selected = NavigatorInstance->CurrentHistoryIndex();
   selected = selected == size && size > 0 ? size - 1 : selected;
   auto index = Menu(GetMsg(MNavigationHistoryMenuTitle), menuList, static_cast<int>(selected));
-  if (index >= 0)
-    NavigatorInstance->Open(NavigatorInstance->GetHistoryPosition(index));
+  if (index < 0)
+    return;
+
+  auto pos = NavigatorInstance->GetHistoryPosition(index);
+  NavigatorInstance->Open(pos);
+  if (!CurrentEditor->IsModal() && setPanelDir)
+    SelectFile(ToString(pos.File));
 }
 
 void OnNewEditor()
@@ -2048,7 +2053,7 @@ HANDLE WINAPI OpenW(const struct OpenInfo *info)
       }break;
       case miNavigationHistory:
       {
-        SafeCall(NavigationHistory, Err);
+        SafeCall(NavigationHistory, Err, false);
       }break;
       case miComplete:
       {
@@ -2165,7 +2170,7 @@ HANDLE WINAPI OpenW(const struct OpenInfo *info)
         }break;
         case miNavigationHistory:
         {
-          SafeCall(NavigationHistory, Err);
+          SafeCall(NavigationHistory, Err, true);
         }break;
         case miReindexRepo:
         {
