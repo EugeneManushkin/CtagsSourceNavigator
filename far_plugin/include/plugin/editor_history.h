@@ -12,7 +12,7 @@ namespace Plugin
   public:
     using Index = size_t;
 
-    static std::unique_ptr<EditorHistory> Create();
+    static std::unique_ptr<EditorHistory> Create(size_t capacity);
     virtual ~EditorHistory() = default;
     virtual Index Size() const = 0;
     virtual Index CurrentIndex() const = 0;

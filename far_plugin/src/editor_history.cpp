@@ -9,8 +9,9 @@ namespace
   public:
     using Index = Plugin::EditorHistory::Index;
 
-    EditorHistoryImpl()
+    EditorHistoryImpl(size_t capacity)
       : Current(Stack.size())
+      , Capacity(capacity)
     {
     }
 
@@ -34,6 +35,9 @@ namespace
       Stack.resize(!Stack.empty() ? Current + 1 : 0);
       if (!pos.File.empty() && pos != (!Stack.empty() ? Stack.back() : Plugin::EditorPosition()))
       {
+        while (Capacity > 0 && Stack.size() >= Capacity)
+          Stack.pop_front();
+
         Stack.push_back(std::move(pos));
         Current = Stack.size() - 1;
       }
@@ -49,13 +53,14 @@ namespace
   private:
     std::deque<Plugin::EditorPosition> Stack;
     Index Current;
+    size_t Capacity;
   };
 }
 
 namespace Plugin
 {
-  std::unique_ptr<EditorHistory> EditorHistory::Create()
+  std::unique_ptr<EditorHistory> EditorHistory::Create(size_t capacity)
   {
-    return std::unique_ptr<EditorHistory>(new EditorHistoryImpl);
+    return std::unique_ptr<EditorHistory>(new EditorHistoryImpl(capacity));
   }
 }

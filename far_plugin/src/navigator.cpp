@@ -9,12 +9,14 @@ namespace
   {
   public:
     using Index = Navigator::Index;
+    static const size_t HistoryCapacity = 400;
+    static const size_t HistoryCapacityPerEditor = 50;
 
     NavigatorImpl(std::shared_ptr<Plugin::CurrentEditor> const& currentEditor)
       : Editor(currentEditor)
       , SaveEnabled(true)
     {
-      History.push(Plugin::EditorHistory::Create());
+      History.push(Plugin::EditorHistory::Create(HistoryCapacity));
     }
 
     void GoBack() override
@@ -83,7 +85,7 @@ namespace
     void OnNewEditor() override
     {
       if (Editor->IsModal())
-        History.push(Plugin::EditorHistory::Create());
+        History.push(Plugin::EditorHistory::Create(HistoryCapacityPerEditor));
 
       SaveCurrentPosition();
     }
