@@ -781,9 +781,11 @@ static std::string GetIntersection(char const* left, char const* right)
   if (!left || !*left)
     return std::string(right, GetFilename(right));
 
-  auto begining = left;
-  for (; *left && !IsFieldEnd(*right) && *left == *right; ++left, ++right);
-  return std::string(begining, left);
+  auto begining = right;
+  if (!!PathCompare(left, right, PartialCompare, CaseSensitive))
+    for (; right > begining && !IsPathSeparator(right[-1]); --right);
+
+  return std::string(begining, right);
 }
 
 static void WriteOffsets(FILE* f, std::vector<LineInfo*>::iterator begin, std::vector<LineInfo*>::iterator end)

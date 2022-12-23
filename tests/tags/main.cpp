@@ -503,6 +503,16 @@ namespace TESTS
       EXPECT_NO_FATAL_FAILURE(TestFindFile(tagsFile, "some/path/header.h.extra.hpp(123456)", "", 0));
     }
 
+    void TestRepositoryRoot(std::string const& tagsFile, std::string const& expecedRoot)
+    {
+      ASSERT_NO_FATAL_FAILURE(LoadTagsFile(tagsFile, RepositoryType::Regular, -1));
+      auto repos = Storage->GetByType(RepositoryType::Regular);
+      ASSERT_EQ(1, repos.size());
+      ASSERT_EQ(expecedRoot, repos.back().Root);
+      Storage->Remove(repos.back().TagsPath.c_str());
+      ASSERT_EQ(0, Storage->GetByType(RepositoryType::Regular).size());
+    }
+
     void ClearCache(std::string const& file)
     {
       auto selector = GetSelector(file.c_str(), true, SortingOptions::Default, UnlimitedMaxCount);
@@ -761,6 +771,15 @@ namespace TESTS
     ASSERT_NO_FATAL_FAILURE(CheckExpectedNames(patially_matched, selector->GetByPart("abc", GetNames)));
     ASSERT_NO_FATAL_FAILURE(CheckExpectedNames(patially_matched_unlimited, selector->GetByPart("abc", GetNames, Unlimited)));
     ASSERT_NO_FATAL_FAILURE(CheckExpectedNames(by_file_matched, selector->GetByFile(AlphabeticalRepoFile.c_str())));
+  }
+
+  TEST_F(Tags, LoadedPartiallyCoincidentalPathRepos)
+  {
+    ASSERT_NO_FATAL_FAILURE(TestRepositoryRoot("partially_coincidental_path_repos/a_vs_aa.tags", "D:\\tmp\\repository"));
+    ASSERT_NO_FATAL_FAILURE(TestRepositoryRoot("partially_coincidental_path_repos/a.b.c_vs_a.b_vs.a.tags", "D:\\tmp\\repository"));
+    ASSERT_NO_FATAL_FAILURE(TestRepositoryRoot("partially_coincidental_path_repos/main.cpp_vs_main.cppx.tags", "D:\\tmp\\repository"));
+    ASSERT_NO_FATAL_FAILURE(TestRepositoryRoot("partially_coincidental_path_repos/completely_different_paths.tags", "partially_coincidental_path_repos"));
+    ASSERT_NO_FATAL_FAILURE(TestRepositoryRoot("partially_coincidental_path_repos/different_slashes.tags", "D:\\tmp\\repository"));
   }
 }
 }
