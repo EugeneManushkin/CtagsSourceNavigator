@@ -588,11 +588,11 @@ static WideString GetSelectedItem(WideString const& DotDotSubst = L".")
 }
 
 static WideString GetCtagsUtilityPath();
-static bool IsRegularDirectory(WideString const& directory);
+static bool IsLocalDirectory(WideString const& directory);
 
 void TagDirectory(WideString const& dir)
 {
-  if (!IsRegularDirectory(dir))
+  if (!IsLocalDirectory(dir))
     throw std::runtime_error("Selected item is not a direcory");
 
   ExecuteScript(GetCtagsUtilityPath(), ToString(config.opt), dir, WideString(GetMsg(MTagingCurrentDirectory)) + L"\n" + dir);
@@ -628,11 +628,11 @@ static bool IsAsciiAlpha(WideString::value_type c)
   return ('A' <= c && c <= 'Z') || ('a' <= c && c <= 'z');
 }
 
-static bool IsRegularDirectory(WideString const& directory)
+static bool IsLocalDirectory(WideString const& directory)
 {
   return directory.length() > 2
       && IsAsciiAlpha(directory[0]) && directory[1] == ':'
-      && GetFileAttributesW(directory.c_str()) == FILE_ATTRIBUTE_DIRECTORY;
+      && !!(GetFileAttributesW(directory.c_str()) & FILE_ATTRIBUTE_DIRECTORY);
 }
 
 static bool FileExists(WideString const& file)
@@ -1627,7 +1627,7 @@ static void SearchInDirectory(WideString const& dir, SearchRequest const& reques
 static SearchResults SearchInParents(WideString const& fileName, SearchRequest const& request)
 {
   auto const dirOfFile = GetDirOfFile(fileName);
-  bool isRegular = IsRegularDirectory(dirOfFile) && !IsTempDirectory(dirOfFile);
+  bool isRegular = IsLocalDirectory(dirOfFile) && !IsTempDirectory(dirOfFile);
   SearchResults results;
   for (auto dir = GetDirOfFile(fileName); isRegular && !dir.empty(); dir = GetDirOfFile(dir))
     SearchInDirectory(dir, request, results);
