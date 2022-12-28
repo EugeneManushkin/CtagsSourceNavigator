@@ -17,6 +17,10 @@
 + Переиндексация редактируемого файла и репозитория
 + Макрос с горячими клавишами
 ## Что нового
+### 2.1.0.92
++ При открытии репозитория в меню "Manage Repositories" плагин переместит вас в ту папку где вы работали над проектом [#93](https://github.com/EugeneManushkin/CtagsSourceNavigator/issues/93)
++ Навигация полностью переработана. Опции "Go back" и "Go forward" стали более удобными и предсказуемыми [#94](https://github.com/EugeneManushkin/CtagsSourceNavigator/issues/94)
++ Плагин стал стабильнее. Пофикшено: [#95](https://github.com/EugeneManushkin/CtagsSourceNavigator/issues/95), [#96](https://github.com/EugeneManushkin/CtagsSourceNavigator/issues/96), [#97](https://github.com/EugeneManushkin/CtagsSourceNavigator/issues/97)
 ### 2.1.0.86
 + Теперь можно обновлять индекс редактируемого файла (#79)
 + Самые посещаемые теги выводятся в топе всех меню (#87, #88, #90). Это поведение можно отключить: **F11->Ctags Source Navigator->Plugin configuration->Recent tags in the first place**
@@ -25,13 +29,6 @@
 + Плагин стал стабильнее. Пофикшены баги: #77, #83, #84, #86, #89
 ### 2.1.0.68
 + Плагин стал стабильнее. Пофикшены баги: #70, #71, #75
-### 2.1.0.63
-+ Плагин находит git и svn репозитории. Просто перейдите в git репозиторий и начните пользоваться плагином либо вызовите меню "Reindex repository". Плагин найдет корень вашего репозитория и предложит его проиндексировать (#66)
-+ Кэш стал более удобным. Если вы не трогали репозиторий более 12 часов (конфигурируется в настройках), то при следующем изменении кэша поиска счетчики обнуляются, что дает возможность новым результатам поиска попадать в топ списка (#67)
-+ Пофикшены баги (#62 #68)
-+ **Для тех кто любит Lua**. Если вы хотите искать в коде **не только функции**, то предлагаю воспользоваться [Yet Another Lua TAgs](https://github.com/EugeneManushkin/Yalta). Это индексер исходного кода на Lua
-  который интегрируется с CtagsSourceNavigator. Скачайте [последний релиз](https://github.com/EugeneManushkin/Yalta/releases), распакуйте его и пропишите полный путь к скрипту **ctags_wrapper.bat** в меню конфигурации
-  плагина **Path to ctags.exe** (**F11->Ctags Source Navigator->C Plugin configuration**)
 ## Установка
 1. Загрузите последний релиз со [страницы релизов](https://github.com/EugeneManushkin/CtagsSourceNavigator/releases)
 2. Извлеките содержимое архива в папку FarManager/Plugins/ctags
@@ -40,6 +37,12 @@
    copy ctags_hotkeys.lua "%FARPROFILE%\Macros\scripts"
    ```
    После копирования скрипта перезапустите Far Manager
+### Используйте кастомный ctags индексатор
+   Плагин поддерживает [Universal Ctags](https://ctags.io/), [Exuberant Ctags](http://ctags.sourceforge.net/) и ctags из проекта [Cygwin](http://www.cygwin.com/).
+   Откройте **F9->Options->Plugins configuration->Ctags Source Navigator**, поместите путь до ctags.exe в едитбокс 'Path to ctags.exe' и нажмите OK.
+### Если вы Lua разработчик, вам понравится [Yet Another Lua TAgs](https://github.com/EugeneManushkin/Yalta)
+   Эту штуку легко интегрировать в плагин как кастомный ctags индексатор. Скачайте [свежий релиз](https://github.com/EugeneManushkin/Yalta/releases), распакуйте его и
+   пропишите полный путь до скрипта ctags_wrapper.bat расположенного в \<распакованный_релиз_yalta\>\yalta\ctags_wrapper.bat в 'Path to ctags.exe' меню конфигурации плагина.
 ## Использование
 1. Используйте плагин в непроиндексированных файлах. Плагин автоматически проиндексирует текущий открытый файл при вызове меню плагина
 2. Проиндексируйте репозиторий. Для этого вы можете использовать ctags плагин: перейдите в папку репозитория, переместите курсор на папку, которую вы хотите индексировать,

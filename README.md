@@ -20,6 +20,10 @@ This is a [Far Manager](https://www.farmanager.com/) plugin for browsing source 
 + Reindexing single file or repository.
 + Hotkeys macro
 ## What's new 
+### 2.1.0.92
++ Opening a repository in "Manage Repositories" menu moves you to last visited directory [#93](https://github.com/EugeneManushkin/CtagsSourceNavigator/issues/93)
++ Navigation history is reworked. "Go back" and "Go forward" options become more convinient [#94](https://github.com/EugeneManushkin/CtagsSourceNavigator/issues/94)
++ Plugin become more stable. Fixed bugs: [#95](https://github.com/EugeneManushkin/CtagsSourceNavigator/issues/95), [#96](https://github.com/EugeneManushkin/CtagsSourceNavigator/issues/96), [#97](https://github.com/EugeneManushkin/CtagsSourceNavigator/issues/97)
 ### 2.1.0.86
 + Implemented indexing current file (#79)
 + Most visited tags goes on top of each menu (#87, #88, #90). This behaviour may be disabled: **F11->Ctags Source Navigator->Plugin configuration->Recent tags in the first place**
@@ -28,14 +32,6 @@ This is a [Far Manager](https://www.farmanager.com/) plugin for browsing source 
 + Plugin become more stable. Fixed bugs: #77, #83, #84, #86, #89
 ### 2.1.0.68
 + Plugin become more stable. Fixed bugs: #70, #71, #75
-### 2.1.0.63
-+ Plugin detects git and svn repositories. CD to a git repository and just start using plugin or select "Reindex repository" menu. Plugin will detect the root of a repository and suggest to index it (#66)
-+ Cache become more convinient. After a specified time (12 hours by default) the cache is not used all counters are reset so newly searched names will go to the top of the list.
-  The reset counters time may be configured or disabled in plugin configuration menu (#67)
-+ Fixed bugs (#62 #68)
-+ **For those who love Lua**. If you would like to browse **not only functions** check out my new project: [Yet Another Lua TAgs](https://github.com/EugeneManushkin/Yalta). This is a Lua source code indexer
-  that integrates with CtagsSourceNavigator plugin. Just download [latest release](https://github.com/EugeneManushkin/Yalta/releases), unpack it and put full path to **ctags_wrapper.bat** script to **Path to ctags.exe** in plugin configuration menu
-  (**F11->Ctags Source Navigator->C Plugin configuration**)
 ## Installation
 1. Download latest release from [release page](https://github.com/EugeneManushkin/CtagsSourceNavigator/releases)
 2. Extract downloaded archive to FarManager/Plugins folder
@@ -47,6 +43,9 @@ This is a [Far Manager](https://www.farmanager.com/) plugin for browsing source 
 ### Use custom ctags utility
    You may either install [Universal Ctags](https://ctags.io/), [Exuberant Ctags](http://ctags.sourceforge.net/) or use ctags utility from [Cygwin](http://www.cygwin.com/) project.
    Go to **F9->Options->Plugins configuration->Ctags Source Navigator**, put the full path to ctags.exe in 'Path to ctags.exe' edit box, press OK button.
+### BTW if you are Lua developer check out [Yet Another Lua TAgs](https://github.com/EugeneManushkin/Yalta)
+   It easily integrates with the plugin. Just download [latest release](https://github.com/EugeneManushkin/Yalta/releases), unzip it and put full path to
+   ctags_wrapper.bat script located in \<unpacked_release_folder\>\yalta\ctags_wrapper.bat to 'Path to ctags.exe' in plugin configuration menu.
 ## Usage
 #### 1. Navigate to source code in not indexed files
 You may use the plugin in an opened file even if it is not indexed by ctags utility. Plugin will automatically index currently edited file and let you search names in it
