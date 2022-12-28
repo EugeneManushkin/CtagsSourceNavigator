@@ -14,5 +14,5 @@ move %TEMP_DIR%\ctags.exe %BINARY_DIR%\%CTAGS_UTIL_DIR% || exit /b 1
 move %TEMP_DIR%\license %BINARY_DIR%\%CTAGS_UTIL_DIR% || exit /b 1
 
 cd %BINARY_DIR% || exit /b 1
-7z a ctags-%CTAGS_VERSION%-%ARCH%.zip * || exit /b 1
+7z a -mx9 ctags-%CTAGS_VERSION%-%ARCH%.zip * || exit /b 1
 move ctags-%CTAGS_VERSION%-%ARCH%.zip "%APPVEYOR_BUILD_FOLDER%" || exit /b 1
