@@ -5,6 +5,11 @@
 
 namespace
 {
+  bool IsValid(Plugin::EditorPosition const& pos)
+  {
+    return !pos.File.empty();
+  }
+
   class NavigatorImpl : public Plugin::Navigator
   {
   public:
@@ -22,24 +27,36 @@ namespace
     void GoBack() override
     {
       bool cursorChanged = IsCursorChanged(Editor->GetPosition());
-      if (History.top()->CurrentIndex() > 0 || cursorChanged)
-        Goto(History.top()->CurrentIndex() - (cursorChanged ? 0 : 1));
+      if (CurrentHistoryIndex() > 0 || cursorChanged)
+      {
+        auto index = CurrentHistoryIndex() - (cursorChanged ? 0 : 1);
+        auto curPos = index == HistorySize() - 1 ? Editor->GetPosition() : Plugin::EditorPosition();
+        Goto(index);
+        Top = IsValid(curPos) ? curPos : Top;
+      }
     }
 
     bool CanGoBack() const override
     {
-      return History.top()->CurrentIndex() > 0 || IsCursorChanged(Editor->GetPosition());
+      return CurrentHistoryIndex() > 0 || IsCursorChanged(Editor->GetPosition());
     }
 
     void GoForward() override
     {
-      if (CanGoForward())
-        Goto(History.top()->CurrentIndex() + 1);
+      if (CurrentHistoryIndex() < HistorySize() - 1)
+      {
+        Goto(CurrentHistoryIndex() + 1);
+      }
+      else if (IsValid(Top))
+      {
+        OpenAsync(Top);
+        Top = Plugin::EditorPosition();
+      }
     }
 
     bool CanGoForward() const override
     {
-      return History.top()->CurrentIndex() < History.top()->Size() - 1;
+      return CurrentHistoryIndex() < HistorySize() - 1 || IsValid(Top);
     }
 
     Index HistorySize() const override
@@ -63,8 +80,8 @@ namespace
       {
         auto curPos = Editor->GetPosition();
         OpenAsync(newPos);
-        History.top()->PushPosition(std::move(curPos));
-        History.top()->PushPosition(Editor->GetPosition());
+        PushPosition(std::move(curPos));
+        PushPosition(Editor->GetPosition());
       }
       else
       {
@@ -100,15 +117,21 @@ namespace
     {
       auto const& hist = *History.top();
       auto const indexPos = hist.CurrentIndex() < hist.Size() ? hist.GetPosition(hist.CurrentIndex()) : Plugin::EditorPosition();
-      return !pos.File.empty()
+      return IsValid(pos)
           && indexPos.File == pos.File
           && indexPos.Line != pos.Line;
+    }
+
+    void PushPosition(Plugin::EditorPosition&& pos)
+    {
+      History.top()->PushPosition(std::move(pos));
+      Top = Plugin::EditorPosition();
     }
 
     void SaveCurrentPosition()
     {
       if (SaveEnabled)
-        History.top()->PushPosition(Editor->GetPosition());
+        PushPosition(Editor->GetPosition());
     }
 
     void OpenAsync(Plugin::EditorPosition const& pos)
@@ -133,6 +156,7 @@ namespace
     std::shared_ptr<Plugin::CurrentEditor> Editor;
     std::stack<std::unique_ptr<Plugin::EditorHistory>> History;
     bool SaveEnabled;
+    Plugin::EditorPosition Top;
   };
 
   class CheckedNavigator : public Plugin::Navigator
