@@ -1046,6 +1046,8 @@ std::vector<FarKey> GetFarKeys(std::string const& filterkeys)
   fk.push_back({0x5A, RIGHT_CTRL_PRESSED});
   fk.push_back({0x52, LEFT_CTRL_PRESSED});
   fk.push_back({0x52, RIGHT_CTRL_PRESSED});
+  fk.push_back({VK_RETURN, LEFT_CTRL_PRESSED});
+  fk.push_back({VK_RETURN, RIGHT_CTRL_PRESSED});
   fk.push_back(FarKey());
   return fk;
 }
@@ -1085,6 +1087,11 @@ bool IsCtrlR(FarKey const& key)
   return key.VirtualKeyCode == 0x52 && (key.ControlKeyState == LEFT_CTRL_PRESSED || key.ControlKeyState == RIGHT_CTRL_PRESSED);
 }
 
+bool IsCtrlEnter(FarKey const& key)
+{
+  return key.VirtualKeyCode == VK_RETURN && (key.ControlKeyState == LEFT_CTRL_PRESSED || key.ControlKeyState == RIGHT_CTRL_PRESSED);
+}
+
 using Tags::FormatTagFlag;
 
 static std::vector<WideString> GetMenuStrings(Tags::TagsView const& tagsView, size_t menuWidth, FormatTagFlag formatFlag)
@@ -1103,6 +1110,7 @@ using Tags::TagsViewer;
 enum class LookupResult
 {
   Ok = 0,
+  Goto,
   Cancel,
   Exit,
 };
@@ -1116,6 +1124,11 @@ static std::string JoinFilters(std::string const& left, std::string const& right
 std::vector<TagInfo> GetTagsOnTop(Tags::Selector const& selector, bool getFiles = false)
 {
   return config.cached_tags_on_top ? selector.GetCachedTags(getFiles) : std::vector<TagInfo>();
+}
+
+static bool LookupOk(LookupResult result)
+{
+  return result == LookupResult::Ok || result == LookupResult::Goto;
 }
 
 static LookupResult LookupTagsMenu(TagsViewer const& viewer, TagInfo& tag, std::vector<TagInfo> const& tagsOnTop, FormatTagFlag formatFlag = FormatTagFlag::Default, intptr_t separatorPos = -1, std::string&& prevFilter = "")
@@ -1154,6 +1167,11 @@ static LookupResult LookupTagsMenu(TagsViewer const& viewer, TagInfo& tag, std::
     {
       tag = *selectedTag;
       return LookupResult::Ok;
+    }
+    if (IsCtrlEnter(fk[bkey]))
+    {
+      tag = *selectedTag;
+      return LookupResult::Goto;
     }
     if (IsCtrlC(fk[bkey]))
     {
@@ -1889,14 +1907,17 @@ static void Lookup(WideString const& file, bool getFiles, bool setPanelDir, bool
   TagInfo selectedTag;
   auto selector = GetSelector(ToStdString(file));
   auto tagsOnTop = GetTagsOnTop(*selector, getFiles);
-  if (LookupTagsMenu(*Tags::GetPartiallyMatchedViewer(std::move(selector), getFiles), selectedTag, tagsOnTop) == LookupResult::Ok)
+  auto menuResult = LookupTagsMenu(*Tags::GetPartiallyMatchedViewer(std::move(selector), getFiles), selectedTag, tagsOnTop);
+  if (setPanelDir && menuResult == LookupResult::Goto)
+    SelectFile(ToString(selectedTag.file));
+  else if (LookupOk(menuResult))
     NavigateTo(selectedTag, setPanelDir);
 }
 
 static void NavigateToTag(std::vector<TagInfo>&& ta, intptr_t separatorPos, std::vector<TagInfo> const& tagsOnTop, FormatTagFlag formatFlag = FormatTagFlag::Default)
 {
   TagInfo tag;
-  if (!ta.empty() && LookupTagsMenu(*Tags::GetFilterTagsViewer(Tags::TagsView(std::move(ta)), !config.casesens, tagsOnTop), tag, tagsOnTop, formatFlag, separatorPos) == LookupResult::Ok)
+  if (!ta.empty() && LookupOk(LookupTagsMenu(*Tags::GetFilterTagsViewer(Tags::TagsView(std::move(ta)), !config.casesens, tagsOnTop), tag, tagsOnTop, formatFlag, separatorPos)))
     NavigateTo(tag);
 }
 
@@ -1973,7 +1994,7 @@ static void CompleteName(char const* fileName, EditorInfo const& ei)
   tags.erase(std::unique(tags.begin(), tags.end(), [](TagInfo const& left, TagInfo const& right) {return left.name == right.name;}), tags.end());
   TagInfo tag = tags.back();
   auto tagsOnTop = tags.size() > 1 ? GetTagsOnTop(*selector) : std::vector<TagInfo>();
-  if (tags.size() > 1 && LookupTagsMenu(*Tags::GetFilterTagsViewer(Tags::TagsView(std::move(tags)), !config.casesens, tagsOnTop), tag, tagsOnTop, FormatTagFlag::DisplayOnlyName) != LookupResult::Ok)
+  if (tags.size() > 1 && !LookupOk(LookupTagsMenu(*Tags::GetFilterTagsViewer(Tags::TagsView(std::move(tags)), !config.casesens, tagsOnTop), tag, tagsOnTop, FormatTagFlag::DisplayOnlyName)))
     return;
 
   EditorGetString egs = {sizeof(EditorGetString)};
