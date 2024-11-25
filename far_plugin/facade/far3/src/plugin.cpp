@@ -998,24 +998,6 @@ int Menu(const wchar_t *title, MenuList const& lst, int sel = 0)
   return Menu(title, lst, sel, std::vector<FarKey>()).first;
 }
 
-HKL GetAsciiLayout()
-{
-  auto sz = GetKeyboardLayoutList(0, nullptr);
-  if (!sz)
-    return 0;
-
-  std::vector<HKL> layouts(sz);
-  GetKeyboardLayoutList(sz, &layouts[0]);
-  uintptr_t const englishLanguage = 0x09;
-  for (auto const& layout : layouts)
-  {
-    if ((reinterpret_cast<uintptr_t>(layout) & 0xff) == englishLanguage)
-      return layout;
-  }
-
-  return 0;
-}
-
 inline std::string GetFilterKeys()
 {
   return "1234567890abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_$\\\x08\x09-_=|;':\",./<>?[]()+*&^%#@!~";
@@ -1024,11 +1006,10 @@ inline std::string GetFilterKeys()
 std::vector<FarKey> GetFarKeys(std::string const& filterkeys)
 {
   std::vector<FarKey> fk;
-  auto const asciiLayout = GetAsciiLayout();
   //TODO: consider using static virtual key code array
   for(auto filterKey : filterkeys)
   {
-    auto virtualKey = VkKeyScanExA(filterKey, asciiLayout);
+    auto virtualKey = VkKeyScanA(filterKey);
     if (virtualKey != 0xffff)
       fk.push_back(ToFarKey(virtualKey));
   }
