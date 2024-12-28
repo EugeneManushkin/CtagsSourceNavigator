@@ -16,15 +16,19 @@ namespace
   class SelectorImpl : public Tags::Selector
   {
   public:
-    SelectorImpl(std::vector<RepositoryPtr>&& repositories, char const* currentFile, bool caseInsensitive, Tags::SortingOptions sortOptions, size_t limit)
+    SelectorImpl(std::vector<RepositoryPtr>&& repositories, char const* currentFile, bool caseInsensitive, Tags::SortingOptions sortOptions, size_t limit, size_t limitExactMatched)
       : Repositories(std::move(repositories))
       , CurrentFile(currentFile)
       , CaseInsensitive(caseInsensitive)
       , SortOptions(sortOptions)
       , Limit(limit)
+      , LimitExactMatched(limitExactMatched)
     {
       if (!Limit)
         throw std::invalid_argument("Limit parameter must be greated zero");
+
+      if (!LimitExactMatched)
+        throw std::invalid_argument("LimitExactMatched parameter must be greated zero");
     }
 
     std::vector<TagInfo> GetByName(const char* name) const override
@@ -76,9 +80,10 @@ namespace
 
     std::vector<TagInfo> GetByPart(Repository const& repo, bool getFiles, const char* part, bool unlimited) const
     {
-      size_t limit = unlimited ? 0 : Limit;
+      size_t maxCount = unlimited ? 0 : Limit;
+      size_t maxExactMatched = unlimited ? 0 : LimitExactMatched;
       bool useCached = !!(SortOptions & Tags::SortingOptions::CachedTagsOnTop);
-      return getFiles ? repo.FindFiles(part, limit, useCached) : repo.FindByName(part, limit, CaseInsensitive, useCached);
+      return getFiles ? repo.FindFiles(part, maxCount, useCached) : repo.FindByName(part, maxCount, maxExactMatched, CaseInsensitive, useCached);
     }
 
     std::vector<TagInfo> GetCachedTags(Repository const& repo, bool getFiles) const
@@ -92,6 +97,7 @@ namespace
     bool CaseInsensitive;
     Tags::SortingOptions SortOptions;
     size_t Limit;
+    size_t LimitExactMatched;
   };
 }
 
@@ -99,9 +105,9 @@ namespace Tags
 {
   namespace Internal
   {
-    std::unique_ptr<Selector> CreateSelector(std::vector<RepositoryPtr>&& repositories, char const* currentFile, bool caseInsensitive, SortingOptions sortOptions, size_t limit)
+    std::unique_ptr<Selector> CreateSelector(std::vector<RepositoryPtr>&& repositories, char const* currentFile, bool caseInsensitive, SortingOptions sortOptions, size_t limit, size_t limitExactMatched)
     {
-      return std::unique_ptr<Selector>(new SelectorImpl(std::move(repositories), currentFile, caseInsensitive, sortOptions, limit));
+      return std::unique_ptr<Selector>(new SelectorImpl(std::move(repositories), currentFile, caseInsensitive, sortOptions, limit, limitExactMatched));
     }
   }
 }

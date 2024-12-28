@@ -107,6 +107,7 @@ struct Config{
   size_t history_len;
   bool casesens;
   size_t max_results;
+  size_t max_exact_matched;
   bool cur_file_first;
   bool cached_tags_on_top;
   bool index_edited_file;
@@ -132,6 +133,7 @@ Config::Config()
   , history_len(10)
   , casesens(true)
   , max_results(10)
+  , max_exact_matched(1500)
   , cur_file_first(true)
   , cached_tags_on_top(true)
   , index_edited_file(true)
@@ -907,7 +909,7 @@ inline SortingOptions GetSortOptions(Config const& config)
 
 static std::unique_ptr<Tags::Selector> GetSelector(std::string const& file)
 {
-  return Storage->GetSelector(file.c_str(), !config.casesens, GetSortOptions(config), config.max_results);
+  return Storage->GetSelector(file.c_str(), !config.casesens, GetSortOptions(config), config.max_results, config.max_exact_matched);
 }
 
 static size_t LoadTagsImpl(std::string const& tagsFile, Tags::RepositoryType type = Tags::RepositoryType::Regular)

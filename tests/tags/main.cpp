@@ -205,6 +205,7 @@ namespace TESTS
 {
   int const LoadSuccess = 0;
   size_t const DefaultMaxCount = 1;
+  size_t const DefaultMaxExactMatched = 1;
   auto const UnlimitedMaxCount = std::numeric_limits<size_t>::max();
   bool const Unlimited = true;
   bool const GetNames = false;
@@ -215,9 +216,9 @@ namespace TESTS
   protected:
     std::unique_ptr<RepositoryStorage> Storage;
 
-    std::unique_ptr<Selector> GetSelector(char const* file, bool caseInsensitive, SortingOptions sortOptions = SortingOptions::Default, size_t maxCount = DefaultMaxCount)
+    std::unique_ptr<Selector> GetSelector(char const* file, bool caseInsensitive, SortingOptions sortOptions = SortingOptions::Default, size_t maxCount = DefaultMaxCount, size_t maxExactMatched = DefaultMaxExactMatched)
     {
-      return Storage->GetSelector(file, caseInsensitive, sortOptions, maxCount);
+      return Storage->GetSelector(file, caseInsensitive, sortOptions, maxCount, maxExactMatched);
     }
 
     std::vector<TagInfo> Find(const char* name, const char* file, SortingOptions sortOptions = SortingOptions::Default)

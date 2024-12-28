@@ -53,7 +53,7 @@ namespace Tags
     virtual void EraseCachedTag(TagInfo const& tag, bool flush) = 0;
     virtual void ResetCacheCounters(char const* tagsPath, bool flush) = 0;
     virtual void SetLastVisited(char const* tagsPath, std::string const& lastVisited, bool flush) = 0;
-    virtual std::unique_ptr<Selector> GetSelector(char const* currentFile, bool caseInsensitive, SortingOptions sortOptions, size_t limit) = 0;
+    virtual std::unique_ptr<Selector> GetSelector(char const* currentFile, bool caseInsensitive, SortingOptions sortOptions, size_t limit, size_t limitExactMatched) = 0;
     virtual std::function<void()> UpdateTagsByFile(const char* tagsPath, char const* file, const char* fileTagsPath) const = 0;
   };
 }

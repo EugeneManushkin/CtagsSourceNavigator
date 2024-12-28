@@ -105,7 +105,7 @@ namespace
         info.Repository->SetLastVisited(lastVisited, flush);
     }
 
-    std::unique_ptr<Tags::Selector> GetSelector(char const* currentFile, bool caseInsensitive, Tags::SortingOptions sortOptions, size_t limit) override
+    std::unique_ptr<Tags::Selector> GetSelector(char const* currentFile, bool caseInsensitive, Tags::SortingOptions sortOptions, size_t limit, size_t limitExactMatched) override
     {
       std::vector<RepositoryPtr> repositories;
       std::vector<RepositoryPtr> permanents;
@@ -118,7 +118,7 @@ namespace
       if (!repositories.empty())
         std::copy(permanents.begin(), permanents.end(), std::back_inserter(repositories));
 
-      return Tags::Internal::CreateSelector(std::move(repositories), currentFile, caseInsensitive, sortOptions, limit);
+      return Tags::Internal::CreateSelector(std::move(repositories), currentFile, caseInsensitive, sortOptions, limit, limitExactMatched);
     }
 
     std::function<void()> UpdateTagsByFile(const char* tagsPath, char const* file, const char* fileTagsPath) const override

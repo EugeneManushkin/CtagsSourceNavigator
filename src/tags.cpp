@@ -1763,7 +1763,7 @@ namespace
       return GetMatchedTags(&Info, IndexType::Names, NameMatch(name, FullCompare, CaseSensitive));
     }
 
-    std::vector<TagInfo> FindByName(const char* part, size_t maxCount, bool caseInsensitive, bool useCached) const override
+    std::vector<TagInfo> FindByName(const char* part, size_t maxCount, size_t maxExactMatched, bool caseInsensitive, bool useCached) const override
     {
       auto cachedTags = maxCount > 0 && useCached ? GetCachedTags(false, maxCount) : std::vector<TagInfo>();
       auto visitor = NameMatch(part, PartialCompare, caseInsensitive);
