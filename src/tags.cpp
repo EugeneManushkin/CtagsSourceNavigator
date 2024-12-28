@@ -1327,11 +1327,11 @@ static std::tuple<size_t, size_t, size_t> GetMatchedOffsetRange(FILE* f, OffsetC
   return std::make_tuple(left, exact, right);
 }
 
-static std::vector<TagInfo> GetMatchedTagsImpl(TagFileInfo const* fi, FILE* f, OffsetCont const& offsets, MatchVisitor const& visitor, size_t maxCount)
+static std::vector<TagInfo> GetMatchedTagsImpl(TagFileInfo const* fi, FILE* f, OffsetCont const& offsets, MatchVisitor const& visitor, size_t maxCount, size_t maxExactMatched = std::numeric_limits<size_t>::max())
 {
   std::vector<TagInfo> result;
   auto range = GetMatchedOffsetRange(&*f, offsets, visitor);
-  for(auto i = std::get<0>(range); i < std::get<1>(range) || (maxCount > 0 && i < std::get<2>(range)); ++i)
+  for(auto i = std::get<0>(range); (maxExactMatched > 0 && i < std::get<1>(range)) || (maxCount > 0 && i < std::get<2>(range)); ++i)
   {
     fseek(&*f, offsets[i], SEEK_SET);
     std::string line;
@@ -1342,16 +1342,17 @@ static std::vector<TagInfo> GetMatchedTagsImpl(TagFileInfo const* fi, FILE* f, O
     {
       result.push_back(std::move(tag));
       maxCount -= maxCount > 0 ? 1 : 0;
+      maxExactMatched -= maxExactMatched > 0 && i < std::get<1>(range) ? 1 : 0;
     }
   }
   return std::move(result);
 }
 
-static std::vector<TagInfo> GetMatchedTags(TagFileInfo const* fi, IndexType index, MatchVisitor const& visitor, size_t maxCount)
+static std::vector<TagInfo> GetMatchedTags(TagFileInfo const* fi, IndexType index, MatchVisitor const& visitor, size_t maxCount, size_t maxExactMatched = std::numeric_limits<size_t>::max())
 {
   OffsetCont offsets;
   auto f = fi->OpenTags(offsets, index);
-  return !f ? std::vector<TagInfo>() : GetMatchedTagsImpl(fi, &*f, offsets, visitor, maxCount);
+  return !f ? std::vector<TagInfo>() : GetMatchedTagsImpl(fi, &*f, offsets, visitor, maxCount, maxExactMatched);
 }
 
 static std::vector<TagInfo> GetMatchedTags(TagFileInfo const* fi, IndexType index, MatchVisitor const& visitor)
@@ -1770,7 +1771,8 @@ namespace
       cachedTags = MatchTags(std::move(cachedTags), visitor);
       auto indexType = caseInsensitive ? IndexType::NamesCaseInsensitive : IndexType::Names;
       auto matched = !maxCount ? GetMatchedTags(&Info, indexType, visitor)
-                               : GetMatchedTags(&Info, indexType, visitor, maxCount - cachedTags.size());
+                               : GetMatchedTags(&Info, indexType, visitor, maxCount - cachedTags.size()
+                                                                         , maxExactMatched);
       return MergeUnique(std::move(cachedTags), std::move(matched));
     }
 
