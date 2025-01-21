@@ -107,6 +107,8 @@ struct Config{
   size_t history_len;
   bool casesens;
   size_t max_results;
+  size_t threshold;
+  size_t threshold_filter_len;
   bool cur_file_first;
   bool cached_tags_on_top;
   bool index_edited_file;
@@ -132,6 +134,8 @@ Config::Config()
   , history_len(10)
   , casesens(true)
   , max_results(10)
+  , threshold(1500)
+  , threshold_filter_len(2)
   , cur_file_first(true)
   , cached_tags_on_top(true)
   , index_edited_file(true)
@@ -1112,7 +1116,7 @@ static bool LookupOk(LookupResult result)
   return result == LookupResult::Ok || result == LookupResult::Goto;
 }
 
-static LookupResult LookupTagsMenu(TagsViewer const& viewer, TagInfo& tag, std::vector<TagInfo> const& tagsOnTop, FormatTagFlag formatFlag = FormatTagFlag::Default, intptr_t separatorPos = -1, std::string&& prevFilter = "")
+static LookupResult LookupTagsMenu(TagsViewer const& viewer, TagInfo& tag, std::vector<TagInfo> const& tagsOnTop, FormatTagFlag formatFlag = FormatTagFlag::Default, intptr_t separatorPos = -1, std::string&& prevFilter = "", bool throttle_search = false)
 {
   std::string filter;
   auto title = GetMsg(MSelectSymbol);
@@ -1122,7 +1126,9 @@ static LookupResult LookupTagsMenu(TagsViewer const& viewer, TagInfo& tag, std::
   intptr_t selected = -1;
   while(true)
   {
-    auto tagsView = viewer.GetView(filter.c_str(), formatFlag);
+    size_t threshold_filter_len = config.threshold_filter_len > 0 ? config.threshold_filter_len : std::numeric_limits<size_t>::max();
+    size_t threshold = throttle_search && filter.length() <= threshold_filter_len ? config.threshold : 0;
+    auto tagsView = viewer.GetView(filter.c_str(), formatFlag, threshold);
     auto menuStrings = GetMenuStrings(tagsView, GetMenuWidth(), formatFlag);
     std::vector<FarMenuItem> menu;
     intptr_t counter = 0;
@@ -1889,7 +1895,7 @@ static void Lookup(WideString const& file, bool getFiles, bool setPanelDir, bool
   TagInfo selectedTag;
   auto selector = GetSelector(ToStdString(file));
   auto tagsOnTop = GetTagsOnTop(*selector, getFiles);
-  auto menuResult = LookupTagsMenu(*Tags::GetPartiallyMatchedViewer(std::move(selector), getFiles), selectedTag, tagsOnTop);
+  auto menuResult = LookupTagsMenu(*Tags::GetPartiallyMatchedViewer(std::move(selector), getFiles), selectedTag, tagsOnTop, FormatTagFlag::Default, -1, "", true);
   if (setPanelDir && menuResult == LookupResult::Goto)
     SelectFile(ToString(selectedTag.file));
   else if (LookupOk(menuResult))

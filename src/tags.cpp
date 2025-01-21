@@ -1327,11 +1327,11 @@ static std::tuple<size_t, size_t, size_t> GetMatchedOffsetRange(FILE* f, OffsetC
   return std::make_tuple(left, exact, right);
 }
 
-static std::vector<TagInfo> GetMatchedTagsImpl(TagFileInfo const* fi, FILE* f, OffsetCont const& offsets, MatchVisitor const& visitor, size_t maxCount)
+static std::vector<TagInfo> GetMatchedTagsImpl(TagFileInfo const* fi, FILE* f, OffsetCont const& offsets, MatchVisitor const& visitor, size_t maxCount, size_t maxTotal = std::numeric_limits<size_t>::max())
 {
   std::vector<TagInfo> result;
   auto range = GetMatchedOffsetRange(&*f, offsets, visitor);
-  for(auto i = std::get<0>(range); i < std::get<1>(range) || (maxCount > 0 && i < std::get<2>(range)); ++i)
+  for(auto i = std::get<0>(range); result.size() < maxTotal && (i < std::get<1>(range) || (result.size() < maxCount && i < std::get<2>(range))); ++i)
   {
     fseek(&*f, offsets[i], SEEK_SET);
     std::string line;
@@ -1339,24 +1339,21 @@ static std::vector<TagInfo> GetMatchedTagsImpl(TagFileInfo const* fi, FILE* f, O
     TagFields fields;
     auto tag = ParseLine(line.c_str(), fields) ? MakeTag(fields, *fi) : TagInfo();
     if (!tag.Owner.TagsFile.empty() && visitor.Filter(tag))
-    {
       result.push_back(std::move(tag));
-      maxCount -= maxCount > 0 ? 1 : 0;
-    }
   }
   return std::move(result);
 }
 
-static std::vector<TagInfo> GetMatchedTags(TagFileInfo const* fi, IndexType index, MatchVisitor const& visitor, size_t maxCount)
+static std::vector<TagInfo> GetMatchedTags(TagFileInfo const* fi, IndexType index, MatchVisitor const& visitor, size_t maxCount, size_t maxTotal)
 {
   OffsetCont offsets;
   auto f = fi->OpenTags(offsets, index);
-  return !f ? std::vector<TagInfo>() : GetMatchedTagsImpl(fi, &*f, offsets, visitor, maxCount);
+  return !f ? std::vector<TagInfo>() : GetMatchedTagsImpl(fi, &*f, offsets, visitor, maxCount, maxTotal);
 }
 
-static std::vector<TagInfo> GetMatchedTags(TagFileInfo const* fi, IndexType index, MatchVisitor const& visitor)
+static std::vector<TagInfo> GetMatchedTags(TagFileInfo const* fi, IndexType index, MatchVisitor const& visitor, size_t maxTotal = std::numeric_limits<size_t>::max())
 {
-  return visitor.GetPattern().empty() ? std::vector<TagInfo>() : GetMatchedTags(fi, index, visitor, std::numeric_limits<size_t>::max());
+  return visitor.GetPattern().empty() ? std::vector<TagInfo>() : GetMatchedTags(fi, index, visitor, maxTotal, maxTotal);
 }
 
 OffsetCont GetMatchedOffsets(TagFileInfo const& fi, IndexType index, MatchVisitor const& visitor)
@@ -1763,14 +1760,16 @@ namespace
       return GetMatchedTags(&Info, IndexType::Names, NameMatch(name, FullCompare, CaseSensitive));
     }
 
-    std::vector<TagInfo> FindByName(const char* part, size_t maxCount, bool caseInsensitive, bool useCached) const override
+    std::vector<TagInfo> FindByName(const char* part, size_t maxCount, size_t maxTotal, bool caseInsensitive, bool useCached) const override
     {
+      maxCount = maxTotal > 0 ? std::min(maxCount, maxTotal) : maxCount;
+      maxTotal = maxTotal == 0 ? std::numeric_limits<size_t>::max() : maxTotal;
       auto cachedTags = maxCount > 0 && useCached ? GetCachedTags(false, maxCount) : std::vector<TagInfo>();
       auto visitor = NameMatch(part, PartialCompare, caseInsensitive);
       cachedTags = MatchTags(std::move(cachedTags), visitor);
       auto indexType = caseInsensitive ? IndexType::NamesCaseInsensitive : IndexType::Names;
-      auto matched = !maxCount ? GetMatchedTags(&Info, indexType, visitor)
-                               : GetMatchedTags(&Info, indexType, visitor, maxCount - cachedTags.size());
+      auto matched = !maxCount ? GetMatchedTags(&Info, indexType, visitor, maxTotal - cachedTags.size())
+                               : GetMatchedTags(&Info, indexType, visitor, maxCount - cachedTags.size(), maxTotal - cachedTags.size());
       return MergeUnique(std::move(cachedTags), std::move(matched));
     }
 
@@ -1868,7 +1867,7 @@ namespace
       auto visitor = FilenameMatch(std::move(std::get<0>(namePathLine)), std::move(std::get<1>(namePathLine)), comparationType);
       cachedTags = MatchTags(std::move(cachedTags), visitor);
       auto tags = !maxCount ? GetMatchedTags(&Info, IndexType::Filenames, visitor)
-                            : GetMatchedTags(&Info, IndexType::Filenames, visitor, maxCount - cachedTags.size());
+                            : GetMatchedTags(&Info, IndexType::Filenames, visitor, maxCount - cachedTags.size(), std::numeric_limits<size_t>::max());
       auto lineNum = std::get<2>(namePathLine);
       std::transform(std::make_move_iterator(tags.begin()), std::make_move_iterator(tags.end()), tags.begin(), [lineNum](TagInfo&& tag){ return MakeFileTag(std::move(tag), lineNum); });
       std::transform(std::make_move_iterator(cachedTags.begin()), std::make_move_iterator(cachedTags.end()), cachedTags.begin(), [lineNum](TagInfo&& tag){ return MakeFileTag(std::move(tag), lineNum); });
