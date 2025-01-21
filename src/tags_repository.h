@@ -21,7 +21,7 @@ namespace Tags
       virtual std::string TagsPath() const = 0;
       virtual std::string Root() const = 0;
       virtual std::vector<TagInfo> FindByName(const char* name) const = 0;
-      virtual std::vector<TagInfo> FindByName(const char* part, size_t maxCount, bool caseInsensitive, bool useCached) const = 0;
+      virtual std::vector<TagInfo> FindByName(const char* part, size_t maxCount, size_t maxTotal, bool caseInsensitive, bool useCached) const = 0;
       virtual std::vector<TagInfo> FindFiles(const char* path) const = 0;
       virtual std::vector<TagInfo> FindFiles(const char* part, size_t maxCount, bool useCached) const = 0;
       virtual std::vector<TagInfo> FindClassMembers(const char* classname) const = 0;

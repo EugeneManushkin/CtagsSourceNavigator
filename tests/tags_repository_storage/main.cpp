@@ -51,7 +51,7 @@ namespace
       return std::vector<TagInfo>();
     }
 
-    std::vector<TagInfo> FindByName(const char* part, size_t maxCount, bool caseInsensitive, bool useCached) const override
+    std::vector<TagInfo> FindByName(const char* part, size_t maxCount, size_t maxTotal, bool caseInsensitive, bool useCached) const override
     {
       return std::vector<TagInfo>();
     }
