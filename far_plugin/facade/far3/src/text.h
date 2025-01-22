@@ -79,4 +79,6 @@ enum{
   MIndexingFile,
   MLoadTagsFromHistoryDeprecated,
   MRestoreLastVisitedOnLoad,
+  MThreshold,
+  MThresholdFilterLen,
 };
