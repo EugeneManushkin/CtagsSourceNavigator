@@ -80,3 +80,4 @@
 "Restore last visited directory on repo load"
 "Search threshold (0 - no threshold)"
 "Apply threshold if filter length (0 - apply always)"
+"(and more...)"
