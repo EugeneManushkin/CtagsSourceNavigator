@@ -81,4 +81,5 @@ enum{
   MRestoreLastVisitedOnLoad,
   MThreshold,
   MThresholdFilterLen,
+  MAndMore,
 };

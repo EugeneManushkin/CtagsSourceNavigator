@@ -1139,7 +1139,7 @@ static LookupResult LookupTagsMenu(TagsViewer const& viewer, TagInfo& tag, std::
   while(true)
   {
     size_t threshold_filter_len = config.threshold_filter_len > 0 ? config.threshold_filter_len : std::numeric_limits<size_t>::max();
-    size_t threshold = throttle_search && filter.length() <= threshold_filter_len ? config.threshold : 0;
+    size_t threshold = throttle_search && !!filter.length() && filter.length() <= threshold_filter_len ? config.threshold : 0;
     auto tagsView = viewer.GetView(filter.c_str(), formatFlag, threshold);
     auto menuStrings = GetMenuStrings(tagsView, GetMenuWidth(), formatFlag);
     std::vector<FarMenuItem> menu;
@@ -1158,6 +1158,7 @@ static LookupResult LookupTagsMenu(TagsViewer const& viewer, TagInfo& tag, std::
     auto displayFilter = JoinFilters(prevFilter, filter);
     WideString ftitle = !displayFilter.empty() ? L"[Filter: " + ToString(displayFilter) + L"]" : WideString(L" [") + title + L"]";
     ftitle += L": " + ToString(std::to_string(tagsView.Size()));
+    ftitle += !!threshold && tagsView.Size() == threshold ? (WideString(L" ") + GetMsg(MAndMore)) : WideString();
     selected = -1;
     auto res = I.Menu(&PluginGuid, &CtagsMenuGuid,-1,-1,0,FMENU_WRAPMODE|FMENU_SHOWAMPERSAND,ftitle.c_str(),
                      GetMsg(MLookupMenuBottom),L"content",&fk[0],&bkey, menu.empty() ? nullptr : &menu[0],menu.size());
