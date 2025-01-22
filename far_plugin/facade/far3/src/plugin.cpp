@@ -861,6 +861,18 @@ static Config LoadConfig(std::string const& fileName)
       if (sscanf(val.c_str(), "%d", &maxresults) == 1 && maxresults > 0)
         config.max_results = maxresults;
     }
+    else if(key == "threshold")
+    {
+      int threshold = 0;
+      if (sscanf(val.c_str(), "%d", &threshold) == 1 && threshold >= 0)
+        config.threshold = threshold;
+    }
+    else if(key == "thresholdfilterlen")
+    {
+      int thresholdfilterlen = 0;
+      if (sscanf(val.c_str(), "%d", &thresholdfilterlen) == 1 && thresholdfilterlen >= 0)
+        config.threshold_filter_len = thresholdfilterlen;
+    }
     else if(key == "curfilefirst")
     {
       config.cur_file_first = val == "true";
@@ -2355,7 +2367,7 @@ static intptr_t ConfigurePlugin()
   WideString menuTitle = WideString(GetMsg(MPlugin)) + L" " + PluginVersionString();
   struct InitDialogItem initItems[]={
 //    Type        X1  Y2  X2 Y2  F S           Flags D Data
-    DI_DOUBLEBOX, 3, ++y, 64,31, 0,0,              0,0,-1,menuTitle.c_str(),{},
+    DI_DOUBLEBOX, 3, ++y, 64,36, 0,0,              0,0,-1,menuTitle.c_str(),{},
     DI_TEXT,      5, ++y,  0, 0, 0,0,              0,0,MPathToExe,L"",{},
     DI_EDIT,      5, ++y, 62, 3, 1,0,              0,0,-1,ToString(config.exe),{"pathtoexe", true},
     DI_CHECKBOX,  5, ++y, 62,10, 1,config.use_built_in_ctags,0,0,MUseBuiltInCtags,L"",{"usebuiltinctags", false, true},
@@ -2364,6 +2376,11 @@ static intptr_t ConfigurePlugin()
     DI_TEXT,      5, ++y, 62,10, 1,0,DIF_SEPARATOR|DIF_BOXCOLOR,0,-1,L"",{},
     DI_TEXT,      5, ++y,  0, 0, 0,0,              0,0,MMaxResults,L"",{},
     DI_EDIT,      5, ++y, 62, 9, 1,0,              0,0,-1,ToString(std::to_string(config.max_results)),{"maxresults", true},
+    DI_TEXT,      5, ++y,  0, 0, 0,0,              0,0,MThreshold,L"",{},
+    DI_EDIT,      5, ++y, 62, 9, 1,0,              0,0,-1,ToString(std::to_string(config.threshold)),{"threshold", true},
+    DI_TEXT,      5, ++y,  0, 0, 0,0,              0,0,MThresholdFilterLen,L"",{},
+    DI_EDIT,      5, ++y, 62, 9, 1,0,              0,0,-1,ToString(std::to_string(config.threshold_filter_len)),{"thresholdfilterlen", true},
+    DI_TEXT,      5, ++y, 62,10, 1,0,DIF_SEPARATOR|DIF_BOXCOLOR,0,-1,L"",{},
     DI_TEXT,      5, ++y,  0, 0, 0,0,              0,0,MResetCountersAfter,L"",{},
     DI_EDIT,      5, ++y, 62, 9, 1,0,              0,0,-1,ToString(std::to_string(config.reset_cache_counters_timeout_hours)),{"resetcachecounterstimeouthours", true},
     DI_CHECKBOX,  5, ++y, 62,10, 1,config.casesens,0,0,MCaseSensFilt,L"",{"casesensfilt", false, true},
