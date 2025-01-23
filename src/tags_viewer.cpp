@@ -22,9 +22,9 @@ namespace
     {
     }
   
-    TagsView GetView(char const* filter, FormatTagFlag, size_t threshold) const override
+    TagsView GetView(char const* filter, FormatTagFlag, size_t threshold, bool& thresholdReached) const override
     {
-      return TagsView(!*filter ? Selector->GetCachedTags(GetFiles) : Selector->GetByPart(filter, GetFiles, false, threshold));
+      return TagsView(!*filter ? Selector->GetCachedTags(GetFiles) : Selector->GetByPart(filter, GetFiles, false, threshold, thresholdReached));
     }
   
   private:
@@ -65,7 +65,7 @@ namespace
         TagsOnTop.insert(&tag);
     }
   
-    TagsView GetView(char const* filter, FormatTagFlag formatFlag, size_t) const override
+    TagsView GetView(char const* filter, FormatTagFlag formatFlag, size_t, bool&) const override
     {
       TagsView result;
       std::regex regexFilter;

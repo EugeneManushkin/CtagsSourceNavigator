@@ -47,9 +47,21 @@ namespace
       return ForEach([&file](Repository const& repo){ return repo.FindByFile(file); } );
     }
 
-    std::vector<TagInfo> GetByPart(const char* part, bool getFiles, bool unlimited, size_t threshold) const override
+    std::vector<TagInfo> GetByPart(const char* part, bool getFiles, bool unlimited) const override
     {
-      return ForEach([this, part, getFiles, unlimited, threshold](Repository const& repo) { return GetByPart(repo, getFiles, part, unlimited, threshold); }, true, true, getFiles);
+      return ForEach([this, part, getFiles, unlimited](Repository const& repo) { bool unused; return GetByPart(repo, getFiles, part, unlimited, 0, unused); }, true, true, getFiles);
+    }
+
+    std::vector<TagInfo> GetByPart(const char* part, bool getFiles, bool unlimited, size_t threshold, bool& thresholdReached) const override
+    {
+      auto func = [this, part, getFiles, unlimited, threshold, &thresholdReached](Repository const& repo)
+      {
+          bool reached = false;
+          auto result = GetByPart(repo, getFiles, part, unlimited, threshold, reached);
+          if (reached) thresholdReached = true;
+          return result;
+      };
+      return ForEach(std::move(func), true, true, getFiles);
     }
 
     std::vector<TagInfo> GetCachedTags(bool getFiles) const override
@@ -74,18 +86,22 @@ namespace
       return std::move(result);
     }
 
-    std::vector<TagInfo> GetByPart(Repository const& repo, bool getFiles, const char* part, bool unlimited, size_t threshold) const
+    std::vector<TagInfo> GetByPart(Repository const& repo, bool getFiles, const char* part, bool unlimited, size_t threshold, bool& thresholdReached) const
     {
       size_t maxCount = unlimited ? 0 : Limit;
-      size_t maxTotal = threshold;
+      size_t maxTotal = !threshold ? 0 : threshold + 1;
       bool useCached = !!(SortOptions & Tags::SortingOptions::CachedTagsOnTop);
-      return getFiles ? repo.FindFiles(part, maxCount, useCached) : repo.FindByName(part, maxCount, maxTotal, CaseInsensitive, useCached);
+      auto result = getFiles ? repo.FindFiles(part, maxCount, useCached) : repo.FindByName(part, maxCount, maxTotal, CaseInsensitive, useCached);
+      thresholdReached = !getFiles && !!threshold && result.size() == threshold + 1;
+      result.resize(thresholdReached ? threshold : result.size());
+      return result;
     }
 
     std::vector<TagInfo> GetCachedTags(Repository const& repo, bool getFiles) const
     {
       auto tags = repo.GetCachedTags(getFiles, Limit);
-      return tags.empty() ? GetByPart(repo, getFiles, "", false, 0) : std::move(tags);
+      bool unused;
+      return tags.empty() ? GetByPart(repo, getFiles, "", false, 0, unused) : std::move(tags);
     }
 
     std::vector<RepositoryPtr> Repositories;
