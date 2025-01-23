@@ -13,7 +13,7 @@ namespace Tags
   {
   public:
     virtual ~TagsViewer() = default;
-    virtual TagsView GetView(char const* filter, FormatTagFlag formatFlag, size_t threshold = 0) const = 0;
+    virtual TagsView GetView(char const* filter, FormatTagFlag formatFlag, size_t threshold, bool& thresholdReached) const = 0;
   };
 
   std::unique_ptr<TagsViewer> GetPartiallyMatchedViewer(std::unique_ptr<Selector>&& selector, bool getFiles);
