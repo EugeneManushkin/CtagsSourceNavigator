@@ -1014,7 +1014,7 @@ int Menu(const wchar_t *title, MenuList const& lst, int sel = 0)
   return Menu(title, lst, sel, std::vector<FarKey>()).first;
 }
 
-inline std::string GetFilterKeys()
+std::string GetFilterKeys()
 {
   return "1234567890abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_$\\\x08\x09-_=|;':\",./<>?[]()+*&^%#@!~";
 }
@@ -1022,7 +1022,6 @@ inline std::string GetFilterKeys()
 std::vector<FarKey> GetFarKeys(std::string const& filterkeys)
 {
   std::vector<FarKey> fk;
-  //TODO: consider using static virtual key code array
   for(auto filterKey : filterkeys)
   {
     auto virtualKey = VkKeyScanA(filterKey);
@@ -1133,8 +1132,8 @@ static LookupResult LookupTagsMenu(TagsViewer const& viewer, TagInfo& tag, std::
   std::string filter;
   auto title = GetMsg(MSelectSymbol);
 //TODO: Support platform path chars
-  std::string filterkeys = GetFilterKeys();
-  std::vector<FarKey> fk = GetFarKeys(filterkeys);
+  static std::string filterkeys = GetFilterKeys();
+  static std::vector<FarKey> fk = GetFarKeys(filterkeys);
   intptr_t selected = -1;
   while(true)
   {
