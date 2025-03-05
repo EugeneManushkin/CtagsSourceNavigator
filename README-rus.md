@@ -17,6 +17,11 @@
 + Переиндексация редактируемого файла и репозитория
 + Макрос с горячими клавишами
 ## Что нового
+### 2.1.0.99
++ Команда 'Go back' перемещает курсор едитора на последний посещенный тег [#98](https://github.com/EugeneManushkin/CtagsSourceNavigator/issues/98)
++ Нажатие Ctrl+Enter в меню поиска по тегам перемещает текущую панель на файл в котором расположен тег [#99](https://github.com/EugeneManushkin/CtagsSourceNavigator/issues/99)
++ Для коротких фильтров выдача тегов ограничивается до 1500 (можно сконфигурировать либо отключить в конфиге плагина). [#103](https://github.com/EugeneManushkin/CtagsSourceNavigator/issues/103)
++ Пофикшены баги: [#101](https://github.com/EugeneManushkin/CtagsSourceNavigator/issues/101), [#107](https://github.com/EugeneManushkin/CtagsSourceNavigator/issues/107)
 ### 2.1.0.92
 + При открытии репозитория в меню "Manage Repositories" плагин переместит вас в ту папку где вы работали над проектом [#93](https://github.com/EugeneManushkin/CtagsSourceNavigator/issues/93)
 + Навигация полностью переработана. Опции "Go back" и "Go forward" стали более удобными и предсказуемыми [#94](https://github.com/EugeneManushkin/CtagsSourceNavigator/issues/94)
@@ -27,8 +32,6 @@
 + Плагин стал чуть чуть удобнее. Зацените обновленное меню "Manage repositories", теперь там можно смотреть историю заргуженых репозиториев, перемещаться в корень репозиторя, и делать любой репозиторий библиотечным (permanent)
 + Плагин стал немного быстрее. Пофикшен медленный поиск коротких имен (#85)
 + Плагин стал стабильнее. Пофикшены баги: #77, #83, #84, #86, #89
-### 2.1.0.68
-+ Плагин стал стабильнее. Пофикшены баги: #70, #71, #75
 ## Установка
 1. Загрузите последний релиз со [страницы релизов](https://github.com/EugeneManushkin/CtagsSourceNavigator/releases)
 2. Извлеките содержимое архива в папку FarManager/Plugins/ctags

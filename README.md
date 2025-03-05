@@ -19,6 +19,11 @@ This is a [Far Manager](https://www.farmanager.com/) plugin for browsing source 
 + Reindexing single file or repository.
 + Hotkeys macro
 ## What's new 
+### 2.1.0.99
++ Go back command moves editor position to last followed tag [#98](https://github.com/EugeneManushkin/CtagsSourceNavigator/issues/98)
++ Ctrl+Enter shortcut in search menu navigates Far Manager to file where selected item is located [#99](https://github.com/EugeneManushkin/CtagsSourceNavigator/issues/99)
++ Limit total search list to 1500 (may be configured or disabled) for short filters [#103](https://github.com/EugeneManushkin/CtagsSourceNavigator/issues/103)
++ Fixed bugs: [#101](https://github.com/EugeneManushkin/CtagsSourceNavigator/issues/101), [#107](https://github.com/EugeneManushkin/CtagsSourceNavigator/issues/107)
 ### 2.1.0.92
 + Opening a repository in "Manage Repositories" menu moves you to last visited directory [#93](https://github.com/EugeneManushkin/CtagsSourceNavigator/issues/93)
 + Navigation history is reworked. "Go back" and "Go forward" options become more convinient [#94](https://github.com/EugeneManushkin/CtagsSourceNavigator/issues/94)
@@ -29,8 +34,6 @@ This is a [Far Manager](https://www.farmanager.com/) plugin for browsing source 
 + Plugin become more convinient. Check out renewed "Manage repositories" menu where you can see loaded repositories history, go to repositories and make any repository permanent
 + Plugin become a bit faster. Fixed slow search of short names (#85)
 + Plugin become more stable. Fixed bugs: #77, #83, #84, #86, #89
-### 2.1.0.68
-+ Plugin become more stable. Fixed bugs: #70, #71, #75
 ## Installation
 1. Download latest release from [release page](https://github.com/EugeneManushkin/CtagsSourceNavigator/releases)
 2. Extract downloaded archive to FarManager/Plugins folder
