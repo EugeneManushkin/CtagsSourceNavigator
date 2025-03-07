@@ -3,30 +3,36 @@ environment:
   CTAGS_VERSION_MINOR: 1
   CTAGS_BUILD: 99
   CTAGS_VERSION: $(CTAGS_VERSION_MAJOR).$(CTAGS_VERSION_MINOR).0.$(CTAGS_BUILD)
-  BUILD_ROOT: '%APPVEYOR_BUILD_FOLDER%\build'
+  BUILD_ROOT: '%APPVEYOR_BUILD_FOLDER%\.temp'
+  PROD_DIR: '%APPVEYOR_BUILD_FOLDER%\.temp\ctags'
   CTAGS_UTIL_DATE: 2019-03-31
   CTAGS_UTIL_REV: 95975bd1
   CTAGS_UTIL_DIR: util
+  CMAKE_CONFIGURATION: Release
   matrix:
     - compiler: msbuild
-      CONFIGURATION: Release
       ARCH: x86
       CMAKE_GENERATOR: '$(CMAKE_GENERATOR_BASE)'
     - compiler: msbuild
-      CONFIGURATION: Release
       ARCH: x64
       CMAKE_GENERATOR: '$(CMAKE_GENERATOR_BASE) Win64'
 
 version: $(CTAGS_VERSION_MAJOR).$(CTAGS_VERSION_MINOR).0.$(CTAGS_BUILD)-{build}
+clone_depth: 1
+matrix:
+  fast_finish: true
 
 install:
   - git submodule update --init --recursive
 
 build_script:
-  - '%APPVEYOR_BUILD_FOLDER%\appveyor\build.bat'
+  - '%APPVEYOR_BUILD_FOLDER%\build\build\run.bat'
 
 test_script:
-  - '%APPVEYOR_BUILD_FOLDER%\appveyor\test.bat'
+  - '%APPVEYOR_BUILD_FOLDER%\build\test\run.bat'
+
+after_test:
+  - '%APPVEYOR_BUILD_FOLDER%\build\package\run.bat'
 
 artifacts:
-  - path: ctags-*.zip
+  - path: .temp\ctags-*.zip
