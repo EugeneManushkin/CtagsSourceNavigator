@@ -18,6 +18,10 @@ version: '{build}'
 clone_depth: 1
 matrix:
   fast_finish: true
+skip_tags: true
+branches:
+  only:
+    - master
 
 install:
   - git submodule update --init --recursive
