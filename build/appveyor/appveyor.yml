@@ -1,9 +1,5 @@
 environment:
-  CTAGS_VERSION_MAJOR: 2
-  CTAGS_VERSION_MINOR: 1
-  CTAGS_VERSION_REVISION: 0
-  CTAGS_VERSION_BUILD: 99
-  CTAGS_VERSION: $(CTAGS_VERSION_MAJOR).$(CTAGS_VERSION_MINOR).$(CTAGS_VERSION_REVISION).$(CTAGS_VERSION_BUILD)
+  CTAGS_VERSION_BUILD: $(APPVEYOR_BUILD_NUMBER)
   BUILD_ROOT: '%APPVEYOR_BUILD_FOLDER%\.temp'
   PROD_DIR: '%APPVEYOR_BUILD_FOLDER%\.temp\ctags'
   CTAGS_UTIL_DATE: 2019-03-31
@@ -18,7 +14,7 @@ environment:
       ARCH: x64
       CMAKE_GENERATOR: '$(CMAKE_GENERATOR_BASE) Win64'
 
-version: $(CTAGS_VERSION_MAJOR).$(CTAGS_VERSION_MINOR).$(CTAGS_VERSION_REVISION).$(CTAGS_VERSION_BUILD)-{build}
+version: '{build}'
 clone_depth: 1
 matrix:
   fast_finish: true
@@ -32,8 +28,9 @@ build_script:
 test_script:
   - '%APPVEYOR_BUILD_FOLDER%\build\test\run.bat'
 
-after_test:
-  - '%APPVEYOR_BUILD_FOLDER%\build\package\run.bat'
+after_test: |
+  FOR /F %%G IN ('%APPVEYOR_BUILD_FOLDER%\build\version\run.bat') DO set CTAGS_VERSION=%%G
+  %APPVEYOR_BUILD_FOLDER%\build\package\run.bat
 
 artifacts:
   - path: .temp\ctags-*.zip
