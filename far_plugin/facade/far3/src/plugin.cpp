@@ -2320,7 +2320,10 @@ static void SaveConfig(InitDialogItem const* dlgItems, size_t count)
 
 static WideString PluginVersionString()
 {
-  return ToString(std::to_string(CTAGS_VERSION_MAJOR) + "." + std::to_string(CTAGS_VERSION_MINOR) + ".0." + std::to_string(CTAGS_BUILD));
+  return ToString(std::to_string(CTAGS_VERSION_MAJOR) + "." +
+                  std::to_string(CTAGS_VERSION_MINOR) + "." +
+                  std::to_string(CTAGS_VERSION_REVISION) + "." +
+                  std::to_string(CTAGS_VERSION_BUILD));
 }
 
 WideString get_text(HANDLE hDlg, intptr_t ctrl_id) {
@@ -2445,7 +2448,7 @@ void WINAPI GetGlobalInfoW(struct GlobalInfo *info)
 {
   info->StructSize = sizeof(*info);
   info->MinFarVersion = MAKEFARVERSION(3, 0, 0, 0, VS_RELEASE);
-  info->Version = MAKEFARVERSION(CTAGS_VERSION_MAJOR, CTAGS_VERSION_MINOR, 0, CTAGS_BUILD, VS_RELEASE);
+  info->Version = MAKEFARVERSION(CTAGS_VERSION_MAJOR, CTAGS_VERSION_MINOR, CTAGS_VERSION_REVISION, CTAGS_VERSION_BUILD, VS_RELEASE);
   info->Guid = PluginGuid;
   info->Title = APPNAME;
   info->Description = CTAGS_FILE_DESCR;

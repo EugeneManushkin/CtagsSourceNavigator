@@ -19,7 +19,8 @@ target_link_libraries(ctags tags plugin)
 
 target_compile_definitions(ctags PUBLIC CTAGS_VERSION_MAJOR=${CTAGS_VERSION_MAJOR}
                                  PUBLIC CTAGS_VERSION_MINOR=${CTAGS_VERSION_MINOR}
-                                 PUBLIC CTAGS_BUILD=${CTAGS_BUILD}
+                                 PUBLIC CTAGS_VERSION_REVISION=${CTAGS_VERSION_REVISION}
+                                 PUBLIC CTAGS_VERSION_BUILD=${CTAGS_VERSION_BUILD}
                                  PUBLIC CTAGS_UTIL_DIR="${CTAGS_UTIL_DIR}"
                                  PUBLIC CTAGS_GIT_COMMIT="${CTAGS_GIT_COMMIT}"
 )
