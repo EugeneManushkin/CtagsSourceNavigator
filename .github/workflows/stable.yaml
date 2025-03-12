@@ -1,0 +1,81 @@
+name: Stable workflow
+run-name: "${{ github.event.ref }}: ${{ github.event.head_commit.message }}"
+on:
+  push:
+    branches: "master"
+env:
+  CTAGS_VERSION_BUILD: 0
+  CTAGS_UTIL_DATE: 2019-03-31
+  CTAGS_UTIL_REV: 95975bd1
+  CTAGS_UTIL_DIR: util
+  PROD_DIR_NAME: prod
+
+jobs:
+  GetVersion:
+    runs-on: windows-2022
+    outputs:
+      version: ${{ steps.version.outputs.setter }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - id: version
+        run: |
+          $outp = & ${{ github.workspace }}\build\version\run.bat
+          echo "setter=$outp" >> "$ENV:GITHUB_OUTPUT"
+
+  Windows:
+    needs: GetVersion
+    runs-on: windows-2022
+    env:
+      CMAKE_CONFIGURATION: Release
+      CMAKE_GENERATOR: "Visual Studio 17 2022"
+    defaults:
+      run:
+        shell: cmd
+    strategy:
+      matrix:
+        ARCH: [x86, x64]
+        CTAGS_VERSION: ["${{ needs.GetVersion.outputs.version }}"]
+        include:
+          - ARCH: x86
+            CMAKE_ARCHITECTURE: Win32
+          - ARCH: x64
+            CMAKE_ARCHITECTURE: x64
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: "recursive"
+
+      - name: Build
+        run: |
+          ${{ github.workspace }}\build\build\run.bat
+        env:
+          CMAKE_ARCHITECTURE_ARG: -A ${{ matrix.CMAKE_ARCHITECTURE }}
+          BUILD_ROOT: ${{ runner.temp }}
+          PROD_DIR: ${{ runner.temp }}\${{ env.PROD_DIR_NAME }}
+
+      - name: Test
+        run: |
+          ${{ github.workspace }}\build\test\run.bat
+        env:
+          BUILD_ROOT: ${{ runner.temp }}
+
+      - name: Package
+        run: |
+          ${{ github.workspace }}\build\package\run.bat
+        env:
+          ARCH: ${{ matrix.ARCH }}
+          BUILD_ROOT: ${{ runner.temp }}
+          PROD_DIR: ${{ runner.temp }}\${{ env.PROD_DIR_NAME }}
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ctags-${{ matrix.CTAGS_VERSION }}-${{ matrix.ARCH }}
+          path: ${{ runner.temp }}\${{ env.PROD_DIR_NAME }}\**
+          compression-level: 9
+          retention-days: 1
+          if-no-files-found: error
