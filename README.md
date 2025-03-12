@@ -1,5 +1,6 @@
 # Ctags Source Navigator
 [![Build status](https://ci.appveyor.com/api/projects/status/0gnelckc0b62ka35?svg=true)](https://ci.appveyor.com/project/EugeneManushkin/ctagssourcenavigator)
+[![Stable branch](https://github.com/EugeneManushkin/CtagsSourceNavigator/actions/workflows/stable.yaml/badge.svg)](https://github.com/EugeneManushkin/CtagsSourceNavigator/actions/workflows/stable.yaml)
 
 This is a [Far Manager](https://www.farmanager.com/) plugin for browsing source code indexed by [Ctags](https://en.wikipedia.org/wiki/Ctags) utility.
 ## Useful links

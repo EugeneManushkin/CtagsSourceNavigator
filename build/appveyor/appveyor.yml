@@ -22,6 +22,9 @@ skip_tags: true
 branches:
   only:
     - master
+skip_commits:
+  files:
+    - .github/workflows/*
 
 install:
   - git submodule update --init --recursive
@@ -34,7 +37,8 @@ test_script:
 
 after_test: |
   FOR /F %%G IN ('%APPVEYOR_BUILD_FOLDER%\build\version\run.bat') DO set CTAGS_VERSION=%%G
-  %APPVEYOR_BUILD_FOLDER%\build\package\run.bat
+  %APPVEYOR_BUILD_FOLDER%\build\package\run.bat || exit /b 1
+  %APPVEYOR_BUILD_FOLDER%\build\package\pack.bat || exit /b 1
 
 artifacts:
   - path: .temp\ctags-*.zip
