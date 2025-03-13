@@ -1,5 +1,5 @@
 name: Stable branch
-run-name: "${{ github.event.ref }}: ${{ github.event.head_commit.message }}"
+run-name: "${{ github.event.ref || github.event.pull_request.head.ref }}: ${{ github.event.head_commit.message || github.event.pull_request.title}}"
 on:
   push:
     branches: "master"
