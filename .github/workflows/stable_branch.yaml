@@ -1,8 +1,11 @@
-name: Stable workflow
+name: Stable branch
 run-name: "${{ github.event.ref }}: ${{ github.event.head_commit.message }}"
 on:
   push:
     branches: "master"
+  pull_request:
+    paths:
+      - '.github/workflows/stable_branch.yaml'
 env:
   CTAGS_VERSION_BUILD: 0
   CTAGS_UTIL_DATE: 2019-03-31

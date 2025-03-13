@@ -1,4 +1,4 @@
-name: Pull request workflow
+name: Pull request
 run-name: "PR #${{ github.event.pull_request.number }}: ${{ github.event.pull_request.title }}"
 on: [pull_request]
 env:
