@@ -81,3 +81,6 @@
 "Search threshold (0 - no threshold)"
 "Apply threshold if filter length (0 - apply always)"
 "(and more...)"
+"Failed to get number of keyboard layouts (system call 'GetKeyboardLayoutList' failed)"
+"Failed to get keyboard layouts (system call 'GetKeyboardLayoutList' failed)"
+"Internal error: no keyboard layout containing entire set of filter keys"
