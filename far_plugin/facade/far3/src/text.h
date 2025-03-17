@@ -82,4 +82,7 @@ enum{
   MThreshold,
   MThresholdFilterLen,
   MAndMore,
+  MFailedGetKeyboardLayoutListSize,
+  MFailedGetKeyboardLayoutList,
+  MNoKeyboardLayout,
 };

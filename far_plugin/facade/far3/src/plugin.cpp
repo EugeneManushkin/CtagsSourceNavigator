@@ -1014,20 +1014,51 @@ int Menu(const wchar_t *title, MenuList const& lst, int sel = 0)
   return Menu(title, lst, sel, std::vector<FarKey>()).first;
 }
 
-std::string GetFilterKeys()
+std::vector<HKL> GetKeyboardLayouts()
 {
-  return "1234567890abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_$\\\x08\x09-_=|;':\",./<>?[]()+*&^%#@!~";
+  auto sz = GetKeyboardLayoutList(0, nullptr);
+  if (!sz)
+    throw Error(MFailedGetKeyboardLayoutListSize, "GetLastError", std::to_string(GetLastError()));
+
+  std::vector<HKL> result(sz);
+  if (!GetKeyboardLayoutList(sz, &result[0]))
+    throw Error(MFailedGetKeyboardLayoutList, "GetLastError", std::to_string(GetLastError()));
+
+  return result;
+}
+
+std::vector<uint16_t> GetVirtualKeys(std::string const& filterkeys, HKL layout)
+{
+  std::vector<uint16_t> result;
+  for(auto filterKey : filterkeys)
+  {
+    auto virtualKey = VkKeyScanExA(filterKey, layout);
+    if (virtualKey == -1)
+      break;
+
+    result.push_back(virtualKey);
+  }
+
+  return result;
+}
+
+std::vector<uint16_t> GetVirtualKeys(std::string const& filterkeys)
+{
+  for (auto const& layout : GetKeyboardLayouts())
+  {
+    auto result = GetVirtualKeys(filterkeys, layout);
+    if (result.size() == filterkeys.size())
+      return result;
+  }
+  throw Error(MNoKeyboardLayout, "filter_keys", filterkeys);
 }
 
 std::vector<FarKey> GetFarKeys(std::string const& filterkeys)
 {
-  std::vector<FarKey> fk;
-  for(auto filterKey : filterkeys)
-  {
-    auto virtualKey = VkKeyScanA(filterKey);
-    if (virtualKey != 0xffff)
-      fk.push_back(ToFarKey(virtualKey));
-  }
+  const auto virtualKeys = GetVirtualKeys(filterkeys);
+  std::vector<FarKey> fk(virtualKeys.size());
+  std::transform(virtualKeys.begin(), virtualKeys.end(), fk.begin(), ToFarKey);
+
   fk.push_back({VK_INSERT, SHIFT_PRESSED});
   fk.push_back({0x56, LEFT_CTRL_PRESSED});
   fk.push_back({0x56, RIGHT_CTRL_PRESSED});
@@ -1132,7 +1163,7 @@ static LookupResult LookupTagsMenu(TagsViewer const& viewer, TagInfo& tag, std::
   std::string filter;
   auto title = GetMsg(MSelectSymbol);
 //TODO: Support platform path chars
-  static std::string filterkeys = GetFilterKeys();
+  static std::string filterkeys = "1234567890abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_$\\\x08\x09-_=|;':\",./<>?[]()+*&^%#@!~";
   static std::vector<FarKey> fk = GetFarKeys(filterkeys);
   intptr_t selected = -1;
   while(true)
