@@ -1,4 +1,4 @@
-#include "wide_string.h"
+#include <far3/wide_string.h>
 
 #define NOMINMAX
 #define WIN32_LEAN_AND_MEAN

@@ -17,51 +17,35 @@
   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 */
 
-#define _WINCON_
-#define NOMINMAX
-#include <windows.h>
-#undef _WINCON_
-#pragma pack(push,4)
-#include <wincon.h>
-#pragma pack(pop)
-
-#include <fstream>
-#include <stdio.h>
-#include <string.h>
-#include <sys/stat.h>
-#include <time.h>
-#include <ctype.h>
-#include <memory>
-
-#define FARAPI(type) extern "C" type __declspec(dllexport) WINAPI
-#pragma comment(lib,"user32.lib")
-#define _FAR_NO_NAMELESS_UNIONS
-#include <facade/safe_call.h>
-#include <plugin_sdk/plugin.hpp>
-#include "current_editor_impl.h"
-#include "error.h"
-#include "tags.h"
-#include "tags_repository_storage.h"
-#include "tags_selector.h"
-#include "tags_viewer.h"
 #include "text.h"
 #include "resource.h"
-#include "wide_string.h"
+
+#include <facade/safe_call.h>
+#include <far3/current_editor_impl.h>
+#include <far3/error.h>
+#include <far3/plugin_sdk/api.h>
+#include <far3/wide_string.h>
 
 #include <plugin/navigator.h>
+#include <tags.h>
+#include <tags_repository_storage.h>
+#include <tags_selector.h>
+#include <tags_viewer.h>
 
-#include <algorithm>
+#include <shellapi.h>
+#define NOMINMAX
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+
 #include <bitset>
 #include <deque>
+#include <fstream>
 #include <functional>
 #include <iomanip>
-#include <iterator>
 #include <regex>
 #include <sstream> 
-#include <stack>
 #include <string>
 #include <vector>
-#include <list>
 #include <unordered_map>
 #include <unordered_set>
 

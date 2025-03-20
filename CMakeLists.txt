@@ -1,5 +1,7 @@
 cmake_minimum_required(VERSION 3.0)
 
+project(CtagsSourceNavigator)
+
 include(version.cmake)
 set (CTAGS_VERSION_BUILD 0 CACHE STRING "Plugin build number")
 set (CTAGS_UTIL_DIR util CACHE STRING "Directory with downloaded ctags utility")
@@ -16,6 +18,7 @@ if (MSVC)
 endif(MSVC)
 
 add_library(tags STATIC ${SOURCES})
+target_include_directories(tags PUBLIC src)
 
 execute_process(COMMAND git rev-parse HEAD
                 WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}

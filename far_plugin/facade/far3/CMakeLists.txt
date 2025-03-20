@@ -1,12 +1,21 @@
-include_directories(
-    include
-    ${CMAKE_SOURCE_DIR}/src
-    ${CMAKE_SOURCE_DIR}/far_plugin/facade/include
-)
-
-file(GLOB SOURCES
+file(GLOB SOURCES_STATIC
     "src/*.h"
     "src/*.cpp"
+)
+
+add_library(ctags_static ${SOURCES_STATIC})
+target_link_libraries(ctags_static tags plugin facade)
+target_include_directories(ctags_static PUBLIC include)
+target_compile_definitions(ctags_static
+                                 PUBLIC CTAGS_VERSION_MAJOR=${CTAGS_VERSION_MAJOR}
+                                 PUBLIC CTAGS_VERSION_MINOR=${CTAGS_VERSION_MINOR}
+                                 PUBLIC CTAGS_VERSION_REVISION=${CTAGS_VERSION_REVISION}
+                                 PUBLIC CTAGS_VERSION_BUILD=${CTAGS_VERSION_BUILD}
+                                 PUBLIC CTAGS_UTIL_DIR="${CTAGS_UTIL_DIR}"
+                                 PUBLIC CTAGS_GIT_COMMIT="${CTAGS_GIT_COMMIT}"
+)
+
+set(SOURCES
     "src/exported_calls.def"
 )
 
@@ -15,15 +24,7 @@ if (MSVC)
 endif (MSVC)
 
 add_library(ctags SHARED ${SOURCES})
-target_link_libraries(ctags tags plugin)
-
-target_compile_definitions(ctags PUBLIC CTAGS_VERSION_MAJOR=${CTAGS_VERSION_MAJOR}
-                                 PUBLIC CTAGS_VERSION_MINOR=${CTAGS_VERSION_MINOR}
-                                 PUBLIC CTAGS_VERSION_REVISION=${CTAGS_VERSION_REVISION}
-                                 PUBLIC CTAGS_VERSION_BUILD=${CTAGS_VERSION_BUILD}
-                                 PUBLIC CTAGS_UTIL_DIR="${CTAGS_UTIL_DIR}"
-                                 PUBLIC CTAGS_GIT_COMMIT="${CTAGS_GIT_COMMIT}"
-)
+target_link_libraries(ctags ctags_static)
 
 set(PLUGIN_DIR ${CMAKE_BINARY_DIR}/$<CONFIG>/ctags CACHE STRING "Plugin release folder")
 file(GLOB README_FILES "${CMAKE_SOURCE_DIR}/README*.md")
