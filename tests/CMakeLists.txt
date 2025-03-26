@@ -20,3 +20,4 @@ add_test(TARGET "safe_call_tests" SRC "safe_call/*.cpp" LIB "facade")
 #NOTE: this option is in fact disables overriding CMAKE_CXX_ flags inside googletest cmake scripts and allow to control runtime by global flags
 option(gtest_force_shared_crt "Use shared (DLL) run-time lib even when Google Test is built as static lib." ON)
 add_subdirectory(googletest)
+add_subdirectory(facade)
