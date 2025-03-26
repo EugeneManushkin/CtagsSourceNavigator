@@ -8,4 +8,7 @@ tag_view_tests.exe || exit /b 1
 tags_repository_storage_tests.exe || exit /b 1
 safe_call_tests.exe || exit /b 1
 
+cd "%BUILD_ROOT%"\tests\facade\far3\%CMAKE_CONFIGURATION%
+break_keys.exe || exit /b 1
+
 @echo Done.
