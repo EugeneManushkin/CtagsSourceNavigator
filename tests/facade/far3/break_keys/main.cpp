@@ -45,24 +45,51 @@ namespace Far3
 
     struct BreakKeysTestParam
     {
+      BreakKeysTestParam(std::string const& name, FarKey const& key, char expected)
+        : Name(name)
+        , Key(key)
+        , ExpectedChar(static_cast<unsigned char>(expected))
+        , ExpectedEvent(KeyEvent::NoEvent)
+      {}
+
+      BreakKeysTestParam(std::string const& name, FarKey const& key, KeyEvent expected)
+        : Name(name)
+        , Key(key)
+        , ExpectedChar(-1)
+        , ExpectedEvent(expected)
+      {}
+
       std::string Name;
       FarKey Key;
       int ExpectedChar;
       KeyEvent ExpectedEvent;
     };
 
+    std::ostream& operator << (std::ostream& stream, BreakKeysTestParam const& param)
+    {
+      return stream
+        << "key:0x" << std::hex << param.Key.VirtualKeyCode << std::dec
+        << ", ctrl:0x" << std::hex << param.Key.ControlKeyState << std::dec
+        << ", char:" << param.ExpectedChar << "('" << static_cast<char>(static_cast<unsigned char>(param.ExpectedChar)) << "')"
+        << ", event:" << static_cast<int>(param.ExpectedEvent);
+    }
+
+    enum NumKeys
+    {
+      VK_0 = 0x30,
+      VK_1 = 0x31,
+      VK_2 = 0x32,
+      VK_3 = 0x33,
+      VK_4 = 0x34,
+      VK_5 = 0x35,
+      VK_6 = 0x36,
+      VK_7 = 0x37,
+      VK_8 = 0x38,
+      VK_9 = 0x39,
+    };
+
     BreakKeysTestParam BreakKeysTestParams[] = {
-        {"VK_0", {0x30, 0}, '0'}
-      , {"VK_1", {0x31, 0}, '1'}
-      , {"VK_2", {0x32, 0}, '2'}
-      , {"VK_3", {0x33, 0}, '3'}
-      , {"VK_4", {0x34, 0}, '4'}
-      , {"VK_5", {0x35, 0}, '5'}
-      , {"VK_6", {0x36, 0}, '6'}
-      , {"VK_7", {0x37, 0}, '7'}
-      , {"VK_8", {0x38, 0}, '8'}
-      , {"VK_9", {0x39, 0}, '9'}
-      , {"VK_a", {0x41, 0}, 'a'}
+        {"VK_a", {0x41, 0}, 'a'}
       , {"VK_b", {0x42, 0}, 'b'}
       , {"VK_c", {0x43, 0}, 'c'}
       , {"VK_d", {0x44, 0}, 'd'}
@@ -114,6 +141,65 @@ namespace Far3
       , {"VK_X", {0x58, SHIFT_PRESSED}, 'X'}
       , {"VK_Y", {0x59, SHIFT_PRESSED}, 'Y'}
       , {"VK_Z", {0x5A, SHIFT_PRESSED}, 'Z'}
+
+      , {"VK_0", {VK_0, 0}, '0'}
+      , {"VK_1", {VK_1, 0}, '1'}
+      , {"VK_2", {VK_2, 0}, '2'}
+      , {"VK_3", {VK_3, 0}, '3'}
+      , {"VK_4", {VK_4, 0}, '4'}
+      , {"VK_5", {VK_5, 0}, '5'}
+      , {"VK_6", {VK_6, 0}, '6'}
+      , {"VK_7", {VK_7, 0}, '7'}
+      , {"VK_8", {VK_8, 0}, '8'}
+      , {"VK_9", {VK_9, 0}, '9'}
+      , {"exclamation", {VK_1, SHIFT_PRESSED}, '!'}
+      , {"at", {VK_2, SHIFT_PRESSED}, '@'}
+      , {"sharp", {VK_3, SHIFT_PRESSED}, '#'}
+      , {"dollar", {VK_4, SHIFT_PRESSED}, '$'}
+      , {"percent", {VK_5, SHIFT_PRESSED}, '%'}
+      , {"hat", {VK_6, SHIFT_PRESSED}, '^'}
+      , {"ampersand", {VK_7, SHIFT_PRESSED}, '&'}
+      , {"multiply", {VK_8, SHIFT_PRESSED}, '*'}
+      , {"parenthesis_open", {VK_9, SHIFT_PRESSED}, '('}
+      , {"parenthesis_close", {VK_0, SHIFT_PRESSED}, ')'}
+      , {"equal", {VK_OEM_PLUS}, '='}
+      , {"plus", {VK_OEM_PLUS, SHIFT_PRESSED}, '+'}
+      , {"minus", {VK_OEM_MINUS}, '-'}
+      , {"underscore", {VK_OEM_MINUS, SHIFT_PRESSED}, '_'}
+      , {"comma", {VK_OEM_COMMA}, ','}
+      , {"dot", {VK_OEM_PERIOD}, '.'}
+      , {"less", {VK_OEM_COMMA, SHIFT_PRESSED}, '<'}
+      , {"greater", {VK_OEM_PERIOD, SHIFT_PRESSED}, '>'}
+      , {"semicolon", {VK_OEM_1}, ';'}
+      , {"colon", {VK_OEM_1, SHIFT_PRESSED}, ':'}
+      , {"slash", {VK_OEM_2}, '/'}
+      , {"question", {VK_OEM_2, SHIFT_PRESSED}, '?'}
+      , {"tilde", {VK_OEM_3, SHIFT_PRESSED}, '~'}
+      , {"square_open", {VK_OEM_4}, '['}
+      , {"square_close", {VK_OEM_6}, ']'}
+      , {"backslash", {VK_OEM_5}, '\\'}
+      , {"pipe_sign", {VK_OEM_5, SHIFT_PRESSED}, '|'}
+      , {"quot", {VK_OEM_7}, '\''}
+      , {"double_quot", {VK_OEM_7, SHIFT_PRESSED}, '"'}
+
+      , {"Tab", {VK_TAB}, KeyEvent::Tab}
+      , {"Backspace", {VK_BACK}, KeyEvent::Backspace}
+      , {"F4", {VK_F4}, KeyEvent::F4}
+      , {"LCtrlIns", {VK_INSERT, LEFT_CTRL_PRESSED}, KeyEvent::CtrlC}
+      , {"RCtrlIns", {VK_INSERT, RIGHT_CTRL_PRESSED}, KeyEvent::CtrlC}
+      , {"LCtrlC", {0x43, LEFT_CTRL_PRESSED}, KeyEvent::CtrlC}
+      , {"RCtrlC", {0x43, RIGHT_CTRL_PRESSED}, KeyEvent::CtrlC}
+      , {"ShiftIns", {VK_INSERT, SHIFT_PRESSED}, KeyEvent::CtrlV}
+      , {"LCtrlV", {0x56, LEFT_CTRL_PRESSED}, KeyEvent::CtrlV}
+      , {"RCtrlV", {0x56, RIGHT_CTRL_PRESSED}, KeyEvent::CtrlV}
+      , {"LCtrlR", {0x52, LEFT_CTRL_PRESSED}, KeyEvent::CtrlR}
+      , {"RCtrlR", {0x52, RIGHT_CTRL_PRESSED}, KeyEvent::CtrlR}
+      , {"LCtrlZ", {0x5A, LEFT_CTRL_PRESSED}, KeyEvent::CtrlZ}
+      , {"RCtrlZ", {0x5A, RIGHT_CTRL_PRESSED}, KeyEvent::CtrlZ}
+      , {"LCtrlDel", {VK_DELETE, LEFT_CTRL_PRESSED}, KeyEvent::CtrlDel}
+      , {"RCtrlDel", {VK_DELETE, RIGHT_CTRL_PRESSED}, KeyEvent::CtrlDel}
+      , {"LCtrlEnter", {VK_RETURN, LEFT_CTRL_PRESSED}, KeyEvent::CtrlEnter}
+      , {"RCtrlEnter", {VK_RETURN, RIGHT_CTRL_PRESSED}, KeyEvent::CtrlEnter}
     };
 
     std::string BreakKeysTestParamName(const testing::TestParamInfo<BreakKeysTestParam>& info)
