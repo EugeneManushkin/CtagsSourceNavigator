@@ -161,7 +161,7 @@ namespace
         builder.PutChar(c, *this);
     }
 
-    std::string const specialChars = "1234567890_$\\-_=|;':\",./<>?[]()+*&^%#@!~";
+    std::string const specialChars = "1234567890!@#$%^&*()=+-_,.<>;:/?~[]\\|'\"";
     for (auto c : specialChars)
     {
       builder.PutChar(c, *this);
