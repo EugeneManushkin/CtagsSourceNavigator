@@ -85,4 +85,5 @@ enum{
   MFailedGetKeyboardLayoutListSize,
   MFailedGetKeyboardLayoutList,
   MNoKeyboardLayout,
+  MNoLatinKeyboardLayout,
 };

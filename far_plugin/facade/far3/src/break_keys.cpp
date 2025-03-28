@@ -4,6 +4,7 @@
 #include <far3/error.h>
 #include <far3/plugin_sdk/api.h>
 
+#include <algorithm>
 #include <cstdint>
 #include <limits>
 #include <unordered_map>
@@ -28,26 +29,20 @@ namespace
     return result;
   }
 
-  std::vector<HKL> GetLatinKeyboardLayout()
+  bool Supports(HKL layout, std::string const& characters)
   {
-    std::vector<HKL> layouts = GetKeyboardLayouts();
-    std::unordered_map<HKL, int> layoutsScores;
-    std::pair<HKL, int> maxScore;
+    auto not_scanned = [layout](char const& c){return ::VkKeyScanExA(static_cast<CharType>(c), layout) == -1;};
+    return std::find_if(characters.cbegin(), characters.cend(), not_scanned) == characters.cend();
+  }
+
+  HKL GetLatinKeyboardLayout(std::vector<HKL> const& layouts)
+  {
     std::string const latins = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
-    for (auto c : latins)
-    {
-      for (auto layout : layouts)
-      {
-        auto& score = layoutsScores[layout];
-        score += ::VkKeyScanExA(static_cast<CharType>(c), layout) == -1 ? 0 : 1;
-        maxScore = score > maxScore.second ? std::make_pair(layout, score) : maxScore;
-      }
-    }
+    auto found = std::find_if(layouts.cbegin(), layouts.cend(), [&latins](HKL layout){return Supports(layout, latins);});
+    if (found == layouts.cend())
+      throw Far3::Error(MNoLatinKeyboardLayout, "latin_keys", latins);
 
-    if (maxScore.second != latins.size())
-      throw Far3::Error(MNoKeyboardLayout, "filter_keys", latins);
-
-    return {maxScore.first};
+    return *found;
   }
 
   DWORD WINAPI GetKeyboardLayoutThread(void* param)
@@ -157,7 +152,9 @@ namespace
 
   void BreakKeysImpl::PutChars()
   {
-    LocalesBuilder builder(OnlyLatin ? GetLatinKeyboardLayout() : GetKeyboardLayouts());
+    auto layouts = GetKeyboardLayouts();
+    auto latinLayout = GetLatinKeyboardLayout(layouts);
+    LocalesBuilder builder(OnlyLatin ? std::vector<HKL>{latinLayout} : std::move(layouts));
     for (int c = std::numeric_limits<CharType>::min(); c <= std::numeric_limits<CharType>::max(); ++c)
     {
       if (::IsCharAlphaA(static_cast<CharType>(c)))
