@@ -84,3 +84,4 @@
 "Failed to get number of keyboard layouts (system call 'GetKeyboardLayoutList' failed)"
 "Failed to get keyboard layouts (system call 'GetKeyboardLayoutList' failed)"
 "Internal error: no keyboard layout containing entire set of filter keys"
+"No keyboard layout containing entire set of latin keys"
