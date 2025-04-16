@@ -1059,6 +1059,8 @@ std::vector<FarKey> GetFarKeys(std::string const& filterkeys)
   fk.push_back({0x52, RIGHT_CTRL_PRESSED});
   fk.push_back({VK_RETURN, LEFT_CTRL_PRESSED});
   fk.push_back({VK_RETURN, RIGHT_CTRL_PRESSED});
+  fk.push_back({VK_TAB});
+  fk.push_back({VK_BACK});
   fk.push_back(FarKey());
   return fk;
 }
@@ -1069,6 +1071,13 @@ bool IsCtrlC(FarKey const& key)
       || (key.VirtualKeyCode == VK_INSERT && key.ControlKeyState == RIGHT_CTRL_PRESSED)
       || (key.VirtualKeyCode == 0x43 && key.ControlKeyState == LEFT_CTRL_PRESSED)
       || (key.VirtualKeyCode == 0x43 && key.ControlKeyState == RIGHT_CTRL_PRESSED);
+}
+
+bool IsCtrlV(FarKey const& key)
+{
+  return (key.VirtualKeyCode == VK_INSERT && key.ControlKeyState == SHIFT_PRESSED)
+      || (key.VirtualKeyCode == 0x56 && key.ControlKeyState == LEFT_CTRL_PRESSED)
+      || (key.VirtualKeyCode == 0x56 && key.ControlKeyState == RIGHT_CTRL_PRESSED);
 }
 
 bool IsF4(FarKey const& key)
@@ -1101,6 +1110,16 @@ bool IsCtrlR(FarKey const& key)
 bool IsCtrlEnter(FarKey const& key)
 {
   return key.VirtualKeyCode == VK_RETURN && (key.ControlKeyState == LEFT_CTRL_PRESSED || key.ControlKeyState == RIGHT_CTRL_PRESSED);
+}
+
+bool IsTab(FarKey const& key)
+{
+  return key.VirtualKeyCode == VK_TAB;
+}
+
+bool IsBackspace(FarKey const& key)
+{
+  return key.VirtualKeyCode == VK_BACK;
 }
 
 using Tags::FormatTagFlag;
@@ -1142,14 +1161,36 @@ static bool LookupOk(LookupResult result)
   return result == LookupResult::Ok || result == LookupResult::Goto;
 }
 
+static std::vector<FarMenuItem> MakeMenuItems(const std::vector<WideString>& menuStrings, intptr_t separatorPos)
+{
+  std::vector<FarMenuItem> result;
+  for (size_t i = 0; i < menuStrings.size(); ++i)
+  {
+    result.push_back(FarMenuItem({MIF_NONE, menuStrings[i].c_str()}));
+    result.back().UserData = i;
+    if (i == separatorPos)
+      result.push_back(FarMenuItem({MIF_SEPARATOR}));
+  }
+
+  return result;
+}
+
+static void ResetSelected(std::vector<FarMenuItem>& menu, intptr_t selected)
+{
+  for (size_t i = 0; i < menu.size(); ++i)
+  {
+    auto& flags = menu[i].Flags;
+    flags = i == selected ? MIF_SELECTED : (flags & ~MIF_SELECTED);
+  }
+}
+
 static LookupResult LookupTagsMenu(TagsViewer const& viewer, TagInfo& tag, std::vector<TagInfo> const& tagsOnTop, FormatTagFlag formatFlag = FormatTagFlag::Default, intptr_t separatorPos = -1, std::string&& prevFilter = "", bool throttle_search = false)
 {
   std::string filter;
   auto title = GetMsg(MSelectSymbol);
 //TODO: Support platform path chars
-  static std::string filterkeys = "1234567890abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_$\\\x08\x09-_=|;':\",./<>?[]()+*&^%#@!~";
+  static std::string filterkeys = "1234567890abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_$\\-_=|;':\",./<>?[]()+*&^%#@!~";
   static std::vector<FarKey> fk = GetFarKeys(filterkeys);
-  intptr_t selected = -1;
   while(true)
   {
     size_t threshold_filter_len = config.threshold_filter_len > 0 ? config.threshold_filter_len : std::numeric_limits<size_t>::max();
@@ -1157,90 +1198,80 @@ static LookupResult LookupTagsMenu(TagsViewer const& viewer, TagInfo& tag, std::
     bool thresholdReached = false;
     auto tagsView = viewer.GetView(filter.c_str(), formatFlag, threshold, thresholdReached);
     auto menuStrings = GetMenuStrings(tagsView, GetMenuWidth(), formatFlag);
-    std::vector<FarMenuItem> menu;
-    intptr_t counter = 0;
-    for (auto const& i : menuStrings)
-    {
-      FarMenuItem item = {counter == selected ? MIF_SELECTED : MIF_NONE, i.c_str()};
-      item.UserData = counter++;
-      menu.push_back(item);
-    }
-
-    if (filter.empty() && separatorPos > 0 && static_cast<size_t>(separatorPos) < menu.size())
-      menu.insert(menu.begin() + separatorPos, FarMenuItem({MIF_SEPARATOR}));
-
-    intptr_t bkey = -1;
+    std::vector<FarMenuItem> menu = MakeMenuItems(menuStrings, filter.empty() ? separatorPos : -1);
     auto displayFilter = JoinFilters(prevFilter, filter);
     WideString ftitle = !displayFilter.empty() ? L"[Filter: " + ToString(displayFilter) + L"]" : WideString(L" [") + title + L"]";
     ftitle += L": " + ToString(std::to_string(tagsView.Size()));
     ftitle += thresholdReached ? (WideString(L" ") + GetMsg(MAndMore)) : WideString();
-    selected = -1;
-    auto res = I.Menu(&PluginGuid, &CtagsMenuGuid,-1,-1,0,FMENU_WRAPMODE|FMENU_SHOWAMPERSAND,ftitle.c_str(),
-                     GetMsg(MLookupMenuBottom),L"content",&fk[0],&bkey, menu.empty() ? nullptr : &menu[0],menu.size());
-    if(res==-1 && bkey==-1) return LookupResult::Cancel;
-    auto selectedTag = res >= 0 ? tagsView[menu[res].UserData].GetTag() : nullptr;
-    if(bkey==-1)
+    intptr_t selected = -1;
+    while(true)
     {
-      tag = *selectedTag;
-      return LookupResult::Ok;
-    }
-    if (IsCtrlEnter(fk[bkey]))
-    {
-      tag = *selectedTag;
-      return LookupResult::Goto;
-    }
-    if (IsCtrlC(fk[bkey]))
-    {
-      if (selectedTag)
-        SetClipboardText(selectedTag->name.empty() ? selectedTag->file : selectedTag->name);
+      ResetSelected(menu, selected);
+      intptr_t bkey = -1;
+      selected = I.Menu(&PluginGuid, &CtagsMenuGuid,-1,-1,0,FMENU_WRAPMODE|FMENU_SHOWAMPERSAND,ftitle.c_str(),
+                       GetMsg(MLookupMenuBottom),L"content",&fk[0],&bkey, menu.empty() ? nullptr : &menu[0],menu.size());
+      if(selected == -1 && bkey == -1) return LookupResult::Cancel;
+      auto selectedTag = selected >= 0 ? tagsView[menu[selected].UserData].GetTag() : nullptr;
+      if(bkey==-1)
+      {
+        tag = *selectedTag;
+        return LookupResult::Ok;
+      }
+      if (selectedTag && IsCtrlEnter(fk[bkey]))
+      {
+        tag = *selectedTag;
+        return LookupResult::Goto;
+      }
+      if (IsCtrlC(fk[bkey]))
+      {
+        if (selectedTag)
+          SetClipboardText(selectedTag->name.empty() ? selectedTag->file : selectedTag->name);
 
-      return LookupResult::Exit;
-    }
-    if (IsF4(fk[bkey]))
-    {
-      OpenInNewWindow(*selectedTag);
-      selected = res;
-      continue;
-    }
-    if (IsCtrlDel(fk[bkey]))
-    {
-      ResetCacheCountersOnTimeout(*selectedTag);
-      Storage->EraseCachedTag(*selectedTag, FlushTagsCache);
-      continue;
-    }
-    if (IsCtrlZ(fk[bkey]))
-    {
-      return LookupResult::Exit;
-    }
-    if (IsCtrlR(fk[bkey]))
-    {
-      ManualResetCacheCounters(*selectedTag);
-      continue;
-    }
-    if (static_cast<size_t>(bkey) >= filterkeys.length())
-    {
-      filter += GetClipboardText();
-      continue;
-    }
-    int key=filterkeys[bkey];
-    if(key == VK_BACK)
-    {
-      if (!prevFilter.empty() && filter.empty())
-        return LookupResult::Cancel;
+        return LookupResult::Exit;
+      }
+      if (selectedTag && IsF4(fk[bkey]))
+      {
+        OpenInNewWindow(*selectedTag);
+      }
+      if (selectedTag && IsCtrlDel(fk[bkey]))
+      {
+        ResetCacheCountersOnTimeout(*selectedTag);
+        Storage->EraseCachedTag(*selectedTag, FlushTagsCache);
+      }
+      if (selectedTag && IsCtrlR(fk[bkey]))
+      {
+        ManualResetCacheCounters(*selectedTag);
+      }
+      if (IsCtrlZ(fk[bkey]))
+      {
+        return LookupResult::Exit;
+      }
+      if(IsTab(fk[bkey]))
+      {
+        LookupResult result = LookupResult::Ok;
+        if ((prevFilter.empty() || !filter.empty()) &&
+            (result = LookupTagsMenu(*Tags::GetFilterTagsViewer(tagsView, !config.casesens, tagsOnTop), tag, tagsOnTop, formatFlag, -1, JoinFilters(prevFilter, filter, true))) != LookupResult::Cancel)
+          return result;
+      }
+      if (IsCtrlV(fk[bkey]))
+      {
+        filter += GetClipboardText();
+        break;
+      }
+      if(IsBackspace(fk[bkey]))
+      {
+        if (!prevFilter.empty() && filter.empty())
+          return LookupResult::Cancel;
 
-      filter.resize(filter.empty() ? 0 : filter.length() - 1);
-      continue;
+        filter.resize(filter.empty() ? 0 : filter.length() - 1);
+        break;
+      }
+      if (bkey < static_cast<intptr_t>(filterkeys.length()))
+      {
+        filter+=filterkeys[bkey];
+        break;
+      }
     }
-    if(key == VK_TAB)
-    {
-      LookupResult result = LookupResult::Ok;
-      if ((!prevFilter.empty() && filter.empty())
-       || (result = LookupTagsMenu(*Tags::GetFilterTagsViewer(tagsView, !config.casesens, tagsOnTop), tag, tagsOnTop, formatFlag, -1, JoinFilters(prevFilter, filter, true))) == LookupResult::Cancel)
-        continue;
-
-      return result;
-    }
-    filter+=(char)key;
   }
   return LookupResult::Cancel;
 }
