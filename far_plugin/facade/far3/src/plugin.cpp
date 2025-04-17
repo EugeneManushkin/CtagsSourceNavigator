@@ -1532,6 +1532,17 @@ int EnsureLine(int line, std::string const& file, std::string const& regex)
   return id < 0 ? EnsureLineInFile(line, file, regex) : EnsureLineInEditor(line, id, regex);
 }
 
+int EnsureLineOrAsk(TagInfo const& tag)
+{
+  int line = tag.lineno;
+  if (!tag.name.empty())
+  {
+    line = EnsureLine(tag.lineno, tag.file, tag.re);
+    line = line < 0 && YesNoCalncelDialog(GetMsg(MNotFoundAsk)) == YesNoCancel::Yes ? tag.lineno : line;
+  }
+  return line;
+}
+
 static Plugin::EditorPosition MakeEditorPosition(std::string const& file, int line)
 {
   return {
@@ -1544,7 +1555,7 @@ static Plugin::EditorPosition MakeEditorPosition(std::string const& file, int li
 
 static void OpenInNewWindow(TagInfo const& tag)
 {
-  auto ensured = tag.name.empty() ? std::make_pair(true, -1) : SafeCall(EnsureLine, Err, tag.lineno, tag.file, tag.re);
+  auto ensured = tag.name.empty() ? std::make_pair(true, -1) : SafeCall(EnsureLineOrAsk, Err, tag);
   auto line = ensured.first ? ensured.second : -1;
   if (tag.name.empty() || line >= 0)
     CurrentEditor->OpenModal(MakeEditorPosition(tag.file, line));
@@ -1561,14 +1572,9 @@ static void CacheTag(TagInfo const& tag)
 
 static void NavigateTo(TagInfo const& tag, bool setPanelDir = false)
 {
-  int line = tag.lineno;
-  if (!tag.name.empty())
-  {
-    line = EnsureLine(tag.lineno, tag.file, tag.re);
-    line = line < 0 && YesNoCalncelDialog(GetMsg(MNotFoundAsk)) == YesNoCancel::Yes ? tag.lineno : line;
-    if (line < 0)
-      return;
-  }
+  int line = EnsureLineOrAsk(tag);
+  if (line < 0 && tag.name.empty())
+    return;
 
   CacheTag(tag);
   NavigatorInstance->Open(MakeEditorPosition(tag.file, line));
