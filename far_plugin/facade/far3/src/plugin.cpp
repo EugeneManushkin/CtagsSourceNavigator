@@ -1573,7 +1573,7 @@ static void CacheTag(TagInfo const& tag)
 static void NavigateTo(TagInfo const& tag, bool setPanelDir = false)
 {
   int line = EnsureLineOrAsk(tag);
-  if (line < 0 && tag.name.empty())
+  if (line < 0 && !tag.name.empty())
     return;
 
   CacheTag(tag);
