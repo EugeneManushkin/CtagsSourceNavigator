@@ -1166,10 +1166,11 @@ static std::vector<FarMenuItem> MakeMenuItems(const std::vector<WideString>& men
   std::vector<FarMenuItem> result;
   for (size_t i = 0; i < menuStrings.size(); ++i)
   {
+    if (i > 0 && i == separatorPos)
+      result.push_back(FarMenuItem({MIF_SEPARATOR}));
+
     result.push_back(FarMenuItem({MIF_NONE, menuStrings[i].c_str()}));
     result.back().UserData = i;
-    if (i == separatorPos)
-      result.push_back(FarMenuItem({MIF_SEPARATOR}));
   }
 
   return result;
