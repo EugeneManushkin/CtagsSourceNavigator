@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <cstdint>
 #include <limits>
+#include <stdexcept>
 #include <unordered_map>
 #include <vector>
 
@@ -15,6 +16,7 @@ namespace
   using ScanType = decltype(::VkKeyScanExA(0, HKL()));
   using CharType = uint8_t;
   using Far3::KeyEvent;
+  using Far3::UseLayouts;
 
   std::vector<HKL> GetKeyboardLayouts()
   {
@@ -90,7 +92,7 @@ namespace
   class BreakKeysImpl : public Far3::BreakKeys
   {
   public:
-    BreakKeysImpl(bool onlyLatin);
+    BreakKeysImpl(std::vector<KeyEvent> const& events, UseLayouts useLayouts);
     ::FarKey const* GetBreakKeys() const override;
     KeyEvent GetEvent(int index) const override;
     int GetChar(int index) const override;
@@ -99,12 +101,12 @@ namespace
     using IndexType = int;
     using IndexesToCharsType = std::unordered_map<IndexType, CharType>;
 
-    void PutChars();
-    void PutEvents();
-    void PutEvent(::FarKey&& key, KeyEvent event);
+    void PutChars(std::vector<HKL>&& layouts);
+    void PutEvents(std::vector<KeyEvent> const& events);
+    void PutEvent(::FarKey&& key, KeyEvent event, std::vector<KeyEvent> const& allowedEvents);
 
   private:
-    bool OnlyLatin;
+    UseLayouts UsedLayout;
     std::vector<::FarKey> Keys;
     std::unordered_map<HKL, IndexesToCharsType> Locales;
     std::unordered_map<IndexType, KeyEvent> Events;
@@ -121,11 +123,20 @@ namespace
     };
   }; 
 
-  BreakKeysImpl::BreakKeysImpl(bool onlyLatin)
-    : OnlyLatin(onlyLatin)
+  BreakKeysImpl::BreakKeysImpl(std::vector<KeyEvent> const& events, UseLayouts useLayouts)
+    : UsedLayout(useLayouts)
   {
-    PutChars();
-    PutEvents();
+    if (UsedLayout != UseLayouts::None)
+    {
+      auto layouts = GetKeyboardLayouts();
+      auto latinLayout = GetLatinKeyboardLayout(layouts);
+      PutChars(UsedLayout == UseLayouts::Latin ? std::vector<HKL>{latinLayout} : std::move(layouts));
+    }
+
+    PutEvents(events);
+    if (Keys.empty())
+      throw std::logic_error("No break keys registered");
+
     Keys.push_back(::FarKey());
   }
 
@@ -142,7 +153,7 @@ namespace
 
   int BreakKeysImpl::GetChar(int index) const
   {
-    auto locale = OnlyLatin ? Locales.begin() : Locales.find(GetCurrentKeyboardLayout());
+    auto locale = UsedLayout == UseLayouts::All ? Locales.find(GetCurrentKeyboardLayout()) : Locales.begin();
     if (locale == Locales.end())
       return Far3::BreakKeys::InvalidChar;
 
@@ -150,11 +161,9 @@ namespace
     return found != locale->second.end() ? found->second : Far3::BreakKeys::InvalidChar;
   }
 
-  void BreakKeysImpl::PutChars()
+  void BreakKeysImpl::PutChars(std::vector<HKL>&& layouts)
   {
-    auto layouts = GetKeyboardLayouts();
-    auto latinLayout = GetLatinKeyboardLayout(layouts);
-    LocalesBuilder builder(OnlyLatin ? std::vector<HKL>{latinLayout} : std::move(layouts));
+    LocalesBuilder builder(std::move(layouts));
     for (int c = std::numeric_limits<CharType>::min(); c <= std::numeric_limits<CharType>::max(); ++c)
     {
       if (::IsCharAlphaA(static_cast<CharType>(c)))
@@ -168,30 +177,33 @@ namespace
     }
   }
 
-  void BreakKeysImpl::PutEvents()
+  void BreakKeysImpl::PutEvents(std::vector<KeyEvent> const& events)
   {
-    PutEvent({VK_TAB}, KeyEvent::Tab);
-    PutEvent({VK_BACK}, KeyEvent::Backspace);
-    PutEvent({VK_F4}, KeyEvent::F4);
-    PutEvent({VK_INSERT, LEFT_CTRL_PRESSED}, KeyEvent::CtrlC);
-    PutEvent({VK_INSERT, RIGHT_CTRL_PRESSED}, KeyEvent::CtrlC);
-    PutEvent({0x43, LEFT_CTRL_PRESSED}, KeyEvent::CtrlC);
-    PutEvent({0x43, RIGHT_CTRL_PRESSED}, KeyEvent::CtrlC);
-    PutEvent({VK_INSERT, SHIFT_PRESSED}, KeyEvent::CtrlV);
-    PutEvent({0x56, LEFT_CTRL_PRESSED}, KeyEvent::CtrlV);
-    PutEvent({0x56, RIGHT_CTRL_PRESSED}, KeyEvent::CtrlV);
-    PutEvent({0x52, LEFT_CTRL_PRESSED}, KeyEvent::CtrlR);
-    PutEvent({0x52, RIGHT_CTRL_PRESSED}, KeyEvent::CtrlR);
-    PutEvent({0x5A, LEFT_CTRL_PRESSED}, KeyEvent::CtrlZ);
-    PutEvent({0x5A, RIGHT_CTRL_PRESSED}, KeyEvent::CtrlZ);
-    PutEvent({VK_DELETE, LEFT_CTRL_PRESSED}, KeyEvent::CtrlDel);
-    PutEvent({VK_DELETE, RIGHT_CTRL_PRESSED}, KeyEvent::CtrlDel);
-    PutEvent({VK_RETURN, LEFT_CTRL_PRESSED}, KeyEvent::CtrlEnter);
-    PutEvent({VK_RETURN, RIGHT_CTRL_PRESSED}, KeyEvent::CtrlEnter);
+    PutEvent({VK_TAB}, KeyEvent::Tab, events);
+    PutEvent({VK_BACK}, KeyEvent::Backspace, events);
+    PutEvent({VK_F4}, KeyEvent::F4, events);
+    PutEvent({VK_INSERT, LEFT_CTRL_PRESSED}, KeyEvent::CtrlC, events);
+    PutEvent({VK_INSERT, RIGHT_CTRL_PRESSED}, KeyEvent::CtrlC, events);
+    PutEvent({0x43, LEFT_CTRL_PRESSED}, KeyEvent::CtrlC, events);
+    PutEvent({0x43, RIGHT_CTRL_PRESSED}, KeyEvent::CtrlC, events);
+    PutEvent({VK_INSERT, SHIFT_PRESSED}, KeyEvent::CtrlV, events);
+    PutEvent({0x56, LEFT_CTRL_PRESSED}, KeyEvent::CtrlV, events);
+    PutEvent({0x56, RIGHT_CTRL_PRESSED}, KeyEvent::CtrlV, events);
+    PutEvent({0x52, LEFT_CTRL_PRESSED}, KeyEvent::CtrlR, events);
+    PutEvent({0x52, RIGHT_CTRL_PRESSED}, KeyEvent::CtrlR, events);
+    PutEvent({0x5A, LEFT_CTRL_PRESSED}, KeyEvent::CtrlZ, events);
+    PutEvent({0x5A, RIGHT_CTRL_PRESSED}, KeyEvent::CtrlZ, events);
+    PutEvent({VK_DELETE, LEFT_CTRL_PRESSED}, KeyEvent::CtrlDel, events);
+    PutEvent({VK_DELETE, RIGHT_CTRL_PRESSED}, KeyEvent::CtrlDel, events);
+    PutEvent({VK_RETURN, LEFT_CTRL_PRESSED}, KeyEvent::CtrlEnter, events);
+    PutEvent({VK_RETURN, RIGHT_CTRL_PRESSED}, KeyEvent::CtrlEnter, events);
   }
 
-  void BreakKeysImpl::PutEvent(::FarKey&& key, KeyEvent event)
+  void BreakKeysImpl::PutEvent(::FarKey&& key, KeyEvent event, std::vector<KeyEvent> const& allowedEvents)
   {
+    if (std::find(allowedEvents.begin(), allowedEvents.end(), event) == allowedEvents.end())
+      return;
+
     Events.emplace(static_cast<int>(Keys.size()), event);
     Keys.push_back(std::move(key));
   }
@@ -219,8 +231,8 @@ namespace
 
 namespace Far3
 {
-  std::unique_ptr<BreakKeys> BreakKeys::Create(bool onlyLatin)
+  std::unique_ptr<BreakKeys> BreakKeys::Create(std::vector<KeyEvent> const& events, UseLayouts useLayouts)
   {
-    return std::unique_ptr<BreakKeys>(new BreakKeysImpl(onlyLatin));
+    return std::unique_ptr<BreakKeys>(new BreakKeysImpl(events, useLayouts));
   }
 }
