@@ -1,12 +1,13 @@
 #pragma once
 
 #include <memory>
+#include <vector>
 
 struct FarKey;
 
 namespace Far3
 {
-  enum class KeyEvent : int
+  enum class KeyEvent
   {
     NoEvent,
     Tab,
@@ -20,14 +21,19 @@ namespace Far3
     CtrlEnter,
   };
 
-  inline bool operator == (int left, KeyEvent right) { return left == static_cast<int>(right); }
+  enum class UseLayouts
+  {
+    None,
+    Latin,
+    All,
+  };
 
   class BreakKeys
   {
   public:
     static int const InvalidChar = -1;
 
-    static std::unique_ptr<BreakKeys> Create(bool onlyLatin);
+    static std::unique_ptr<BreakKeys> Create(std::vector<KeyEvent> const& events, UseLayouts useLayouts);
 
     virtual ::FarKey const* GetBreakKeys() const = 0;
     virtual KeyEvent GetEvent(int index) const = 0;

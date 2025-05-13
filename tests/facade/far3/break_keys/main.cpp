@@ -3,10 +3,24 @@
 #include <far3/break_keys.h>
 #include <far3/plugin_sdk/api.h>
 
+#include <stdexcept>
+
 namespace Far3
 {
   namespace Tests
   {
+    std::vector<KeyEvent> const AllEvents = {
+      KeyEvent::Tab
+    , KeyEvent::Backspace
+    , KeyEvent::F4
+    , KeyEvent::CtrlC
+    , KeyEvent::CtrlV
+    , KeyEvent::CtrlR
+    , KeyEvent::CtrlZ
+    , KeyEvent::CtrlDel
+    , KeyEvent::CtrlEnter
+    };
+
     int Count(::FarKey const* keys)
     {
       int i = 0;
@@ -35,12 +49,17 @@ namespace Far3
 
     TEST(BreakKeys, ReturnInvalid)
     {
-      ASSERT_NO_FATAL_FAILURE(TestReturnInvalid(*BreakKeys::Create(false)));
+      ASSERT_NO_FATAL_FAILURE(TestReturnInvalid(*BreakKeys::Create(AllEvents, Far3::UseLayouts::All)));
     }
 
     TEST(BreakKeysOnlyLatin, ReturnInvalid)
     {
-      ASSERT_NO_FATAL_FAILURE(TestReturnInvalid(*BreakKeys::Create(true)));
+      ASSERT_NO_FATAL_FAILURE(TestReturnInvalid(*BreakKeys::Create(AllEvents, Far3::UseLayouts::Latin)));
+    }
+
+    TEST(BreakKeys, ThrowsIfNoKeys)
+    {
+      ASSERT_THROW(BreakKeys::Create({}, Far3::UseLayouts::None), std::logic_error);
     }
 
     struct BreakKeysTestParam
@@ -212,7 +231,7 @@ namespace Far3
 
     void TestGetChar(BreakKeys const& SUT, BreakKeysTestParam const& param)
     {
-      auto index = Find(param.Key, SUT.GetBreakKeys());
+      auto const index = Find(param.Key, SUT.GetBreakKeys());
       ASSERT_NE(-1, index);
       ASSERT_EQ(param.ExpectedEvent, SUT.GetEvent(index));
       ASSERT_EQ(param.ExpectedChar, SUT.GetChar(index));
@@ -220,16 +239,41 @@ namespace Far3
 
     TEST_P(BreakKeysP, GetChar)
     {
-      ASSERT_NO_FATAL_FAILURE(TestGetChar(*BreakKeys::Create(false), GetParam()));
+      ASSERT_NO_FATAL_FAILURE(TestGetChar(*BreakKeys::Create(AllEvents, UseLayouts::All), GetParam()));
     }
 
     TEST_P(BreakKeysOnlyLatinP, GetChar)
     {
-      ASSERT_NO_FATAL_FAILURE(TestGetChar(*BreakKeys::Create(true), GetParam()));
+      ASSERT_NO_FATAL_FAILURE(TestGetChar(*BreakKeys::Create(AllEvents, UseLayouts::Latin), GetParam()));
     }
 
     INSTANTIATE_TEST_CASE_P(, BreakKeysP, ::testing::ValuesIn(BreakKeysTestParams), BreakKeysTestParamName);
     INSTANTIATE_TEST_CASE_P(, BreakKeysOnlyLatinP, ::testing::ValuesIn(BreakKeysTestParams), BreakKeysTestParamName);
+
+    BreakKeysTestParam OnlyBreakKeysTestParams[] = {
+      {"LCtrlIns", {VK_INSERT, LEFT_CTRL_PRESSED}, KeyEvent::CtrlC}
+    , {"RCtrlIns", {VK_INSERT, RIGHT_CTRL_PRESSED}, KeyEvent::CtrlC}
+    , {"LCtrlC", {0x43, LEFT_CTRL_PRESSED}, KeyEvent::CtrlC}
+    , {"RCtrlC", {0x43, RIGHT_CTRL_PRESSED}, KeyEvent::CtrlC}
+    , {"ShiftIns", {VK_INSERT, SHIFT_PRESSED}, KeyEvent::CtrlV}
+    , {"LCtrlV", {0x56, LEFT_CTRL_PRESSED}, KeyEvent::CtrlV}
+    , {"RCtrlV", {0x56, RIGHT_CTRL_PRESSED}, KeyEvent::CtrlV}
+    };
+
+    struct OnlyBreakKeysP: ::testing::TestWithParam<BreakKeysTestParam> {};
+
+    TEST_P(OnlyBreakKeysP, GetKey)
+    {
+      auto const ExpectedBreakKeysCount = sizeof(OnlyBreakKeysTestParams)/sizeof(OnlyBreakKeysTestParams[0]);
+      auto SUT = BreakKeys::Create({KeyEvent::CtrlC, KeyEvent::CtrlV}, UseLayouts::None);
+      auto const index = Find(GetParam().Key, SUT->GetBreakKeys());
+      ASSERT_NE(-1, index);
+      ASSERT_EQ(BreakKeys::InvalidChar, SUT->GetChar(index));
+      ASSERT_EQ(GetParam().ExpectedEvent, SUT->GetEvent(index));
+      ASSERT_EQ(ExpectedBreakKeysCount, Count(SUT->GetBreakKeys()));
+    }
+
+    INSTANTIATE_TEST_CASE_P(, OnlyBreakKeysP, ::testing::ValuesIn(OnlyBreakKeysTestParams), BreakKeysTestParamName);
   }
 }
 
