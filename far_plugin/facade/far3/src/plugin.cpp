@@ -21,6 +21,7 @@
 #include "resource.h"
 
 #include <facade/safe_call.h>
+#include <far3/break_keys.h>
 #include <far3/current_editor_impl.h>
 #include <far3/error.h>
 #include <far3/plugin_sdk/api.h>
@@ -53,6 +54,9 @@ using WideString = Far3::WideString;
 using Far3::ToString;
 using Far3::ToStdString;
 using Far3::Error;
+using Far3::KeyEvent;
+using Far3::UseLayouts;
+using Far3::BreakKeys;
 
 static struct PluginStartupInfo I;
 FarStandardFunctions FSF;
@@ -69,6 +73,13 @@ static const bool FlushTagsCache = true;
 
 //TODO: remove dependency
 std::bitset<256> GetCharsMap(std::string const& str);
+
+enum class ThreeStateFlag
+{
+  Undefined,
+  Enabled,
+  Disabled,
+};
 
 struct Config{
   Config();
@@ -101,6 +112,7 @@ struct Config{
   bool use_built_in_ctags;
   size_t reset_cache_counters_timeout_hours;
   bool restore_last_visited_on_load;
+  ThreeStateFlag platform_language_lookup;
 
 private:
   std::string wordchars;
@@ -127,6 +139,7 @@ Config::Config()
   , use_built_in_ctags(true)
   , reset_cache_counters_timeout_hours(12)
   , restore_last_visited_on_load(true)
+  , platform_language_lookup(ThreeStateFlag::Undefined)
 {
   SetWordchars("0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz~$_");
 }
@@ -721,28 +734,6 @@ static WideString GetCtagsUtilityPath()
   return config.use_built_in_ctags ? JoinPath(JoinPath(GetModulePath(), ToString(CTAGS_UTIL_DIR)), L"ctags.exe") : ExpandEnvString(ToString(config.exe));
 }
 
-static DWORD ToFarControlState(WORD controlState)
-{
-  switch (controlState)
-  {
-  case 1:
-    return SHIFT_PRESSED;
-  case 2:
-    return LEFT_CTRL_PRESSED;
-  case 4:
-    return LEFT_ALT_PRESSED;
-  }
-
-  return 0;
-}
-
-static FarKey ToFarKey(WORD virtualKey)
-{
-  WORD key = virtualKey & 0xff;
-  WORD controlState = (virtualKey & 0xff00) >> 8;
-  return {key, ToFarControlState(controlState)};
-}
-
 using Strings = std::deque<std::string>;
 
 static void SaveStrings(Strings const& strings, std::string const& fileName, std::ios_base::iostate exceptions = std::ifstream::goodbit)
@@ -887,6 +878,10 @@ static Config LoadConfig(std::string const& fileName)
     {
       config.restore_last_visited_on_load = val == "true";
     }
+    else if(key == "platformlanguagelookup")
+    {
+      config.platform_language_lookup = val == "true" ? ThreeStateFlag::Enabled : ThreeStateFlag::Disabled;
+    }
   }
 
   config.history_len = config.history_file.empty() ? 0 : config.history_len;
@@ -998,93 +993,6 @@ int Menu(const wchar_t *title, MenuList const& lst, int sel = 0)
   return Menu(title, lst, sel, std::vector<FarKey>()).first;
 }
 
-std::vector<HKL> GetKeyboardLayouts()
-{
-  auto sz = GetKeyboardLayoutList(0, nullptr);
-  if (!sz)
-    throw Error(MFailedGetKeyboardLayoutListSize, "GetLastError", std::to_string(GetLastError()));
-
-  std::vector<HKL> result(sz);
-  if (!GetKeyboardLayoutList(sz, &result[0]))
-    throw Error(MFailedGetKeyboardLayoutList, "GetLastError", std::to_string(GetLastError()));
-
-  return result;
-}
-
-std::vector<uint16_t> GetVirtualKeys(std::string const& filterkeys, HKL layout)
-{
-  std::vector<uint16_t> result;
-  for(auto filterKey : filterkeys)
-  {
-    auto virtualKey = VkKeyScanExA(filterKey, layout);
-    if (virtualKey == -1)
-      break;
-
-    result.push_back(virtualKey);
-  }
-
-  return result;
-}
-
-std::vector<uint16_t> GetVirtualKeys(std::string const& filterkeys)
-{
-  for (auto const& layout : GetKeyboardLayouts())
-  {
-    auto result = GetVirtualKeys(filterkeys, layout);
-    if (result.size() == filterkeys.size())
-      return result;
-  }
-  throw Error(MNoKeyboardLayout, "filter_keys", filterkeys);
-}
-
-std::vector<FarKey> GetFarKeys(std::string const& filterkeys)
-{
-  const auto virtualKeys = GetVirtualKeys(filterkeys);
-  std::vector<FarKey> fk(virtualKeys.size());
-  std::transform(virtualKeys.begin(), virtualKeys.end(), fk.begin(), ToFarKey);
-
-  fk.push_back({VK_INSERT, SHIFT_PRESSED});
-  fk.push_back({0x56, LEFT_CTRL_PRESSED});
-  fk.push_back({0x56, RIGHT_CTRL_PRESSED});
-  fk.push_back({ VK_INSERT, LEFT_CTRL_PRESSED });
-  fk.push_back({ VK_INSERT, RIGHT_CTRL_PRESSED });
-  fk.push_back({ 0x43, LEFT_CTRL_PRESSED });
-  fk.push_back({ 0x43, RIGHT_CTRL_PRESSED });
-  fk.push_back({VK_F4});
-  fk.push_back({VK_DELETE, LEFT_CTRL_PRESSED});
-  fk.push_back({VK_DELETE, RIGHT_CTRL_PRESSED});
-  fk.push_back({0x5A, LEFT_CTRL_PRESSED});
-  fk.push_back({0x5A, RIGHT_CTRL_PRESSED});
-  fk.push_back({0x52, LEFT_CTRL_PRESSED});
-  fk.push_back({0x52, RIGHT_CTRL_PRESSED});
-  fk.push_back({VK_RETURN, LEFT_CTRL_PRESSED});
-  fk.push_back({VK_RETURN, RIGHT_CTRL_PRESSED});
-  fk.push_back({VK_TAB});
-  fk.push_back({VK_BACK});
-  fk.push_back(FarKey());
-  return fk;
-}
-
-bool IsCtrlC(FarKey const& key)
-{
-  return (key.VirtualKeyCode == VK_INSERT && key.ControlKeyState == LEFT_CTRL_PRESSED)
-      || (key.VirtualKeyCode == VK_INSERT && key.ControlKeyState == RIGHT_CTRL_PRESSED)
-      || (key.VirtualKeyCode == 0x43 && key.ControlKeyState == LEFT_CTRL_PRESSED)
-      || (key.VirtualKeyCode == 0x43 && key.ControlKeyState == RIGHT_CTRL_PRESSED);
-}
-
-bool IsCtrlV(FarKey const& key)
-{
-  return (key.VirtualKeyCode == VK_INSERT && key.ControlKeyState == SHIFT_PRESSED)
-      || (key.VirtualKeyCode == 0x56 && key.ControlKeyState == LEFT_CTRL_PRESSED)
-      || (key.VirtualKeyCode == 0x56 && key.ControlKeyState == RIGHT_CTRL_PRESSED);
-}
-
-bool IsF4(FarKey const& key)
-{
-  return key.VirtualKeyCode == VK_F4;
-}
-
 bool IsCtrlDel(FarKey const& key)
 {
   return key.VirtualKeyCode == VK_DELETE && (key.ControlKeyState == LEFT_CTRL_PRESSED || key.ControlKeyState == RIGHT_CTRL_PRESSED);
@@ -1096,30 +1004,63 @@ bool IsCtrlP(FarKey const& key)
       || (key.VirtualKeyCode == 0x50 && key.ControlKeyState == RIGHT_CTRL_PRESSED);
 }
 
-bool IsCtrlZ(FarKey const& key)
+std::unique_ptr<BreakKeys> CreateLookupBreakKeys(UseLayouts useLayouts)
 {
-  return (key.VirtualKeyCode == 0x5A && key.ControlKeyState == LEFT_CTRL_PRESSED)
-      || (key.VirtualKeyCode == 0x5A && key.ControlKeyState == RIGHT_CTRL_PRESSED);
+  return BreakKeys::Create(
+    std::vector<KeyEvent>{
+      KeyEvent::Tab
+    , KeyEvent::Backspace
+    , KeyEvent::F4
+    , KeyEvent::CtrlC
+    , KeyEvent::CtrlV
+    , KeyEvent::CtrlR
+    , KeyEvent::CtrlZ
+    , KeyEvent::CtrlDel
+    , KeyEvent::CtrlEnter
+    }
+  , useLayouts
+  );
 }
 
-bool IsCtrlR(FarKey const& key)
+BreakKeys const& GetLookupBreakKeys()
 {
-  return key.VirtualKeyCode == 0x52 && (key.ControlKeyState == LEFT_CTRL_PRESSED || key.ControlKeyState == RIGHT_CTRL_PRESSED);
+  static auto result = CreateLookupBreakKeys(UseLayouts::All);
+  return *result;
 }
 
-bool IsCtrlEnter(FarKey const& key)
+BreakKeys const& GetLookupLatinBreakKeys()
 {
-  return key.VirtualKeyCode == VK_RETURN && (key.ControlKeyState == LEFT_CTRL_PRESSED || key.ControlKeyState == RIGHT_CTRL_PRESSED);
+  static auto result = CreateLookupBreakKeys(UseLayouts::Latin);
+  return *result;
 }
 
-bool IsTab(FarKey const& key)
+void CheckPlatformLanguageLookupSupported()
 {
-  return key.VirtualKeyCode == VK_TAB;
+  CPINFO cpinfo;
+  if (!GetCPInfo(CP_ACP, &cpinfo))
+    throw Far3::Error(MFailedGetCPInfo, "GetLastError", std::to_string(GetLastError()));
+
+  if (cpinfo.MaxCharSize != 1)
+    throw Far3::Error(MPlatformLanguageNotSupported, "MaxCharSize", std::to_string(cpinfo.MaxCharSize));
 }
 
-bool IsBackspace(FarKey const& key)
+void ConfigurePlatformLanguageLookup()
 {
-  return key.VirtualKeyCode == VK_BACK;
+  bool enabled = YesNoCalncelDialog(GetMsg(MAskEnablePlatformLanguageLookup)) == YesNoCancel::Yes &&
+                 SafeCall(CheckPlatformLanguageLookupSupported, Err).first;
+  auto const configPath = ToStdString(GetConfigFilePath());
+  auto strings = LoadStrings(configPath);
+  strings.push_back(std::string("platformlanguagelookup=") + (enabled ? "true" : "false"));
+  SaveStrings(strings, configPath, std::ifstream::badbit);
+  config = LoadConfig(configPath);
+}
+
+bool CheckPlatformLanguageLookupEnabled()
+{
+  if (config.platform_language_lookup == ThreeStateFlag::Undefined && SafeCall(ConfigurePlatformLanguageLookup, Err).first == false)
+    config.platform_language_lookup = ThreeStateFlag::Disabled;
+
+  return config.platform_language_lookup == ThreeStateFlag::Enabled;
 }
 
 using Tags::FormatTagFlag;
@@ -1189,9 +1130,8 @@ static LookupResult LookupTagsMenu(TagsViewer const& viewer, TagInfo& tag, std::
 {
   std::string filter;
   auto title = GetMsg(MSelectSymbol);
-//TODO: Support platform path chars
-  static std::string filterkeys = "1234567890abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_$\\-_=|;':\",./<>?[]()+*&^%#@!~";
-  static std::vector<FarKey> fk = GetFarKeys(filterkeys);
+  auto const& breakKeys = formatFlag == FormatTagFlag::Default && CheckPlatformLanguageLookupEnabled() ?
+                          GetLookupBreakKeys() : GetLookupLatinBreakKeys();
   while(true)
   {
     size_t threshold_filter_len = config.threshold_filter_len > 0 ? config.threshold_filter_len : std::numeric_limits<size_t>::max();
@@ -1210,56 +1150,58 @@ static LookupResult LookupTagsMenu(TagsViewer const& viewer, TagInfo& tag, std::
       ResetSelected(menu, selected);
       intptr_t bkey = -1;
       selected = I.Menu(&PluginGuid, &CtagsMenuGuid,-1,-1,0,FMENU_WRAPMODE|FMENU_SHOWAMPERSAND,ftitle.c_str(),
-                       GetMsg(MLookupMenuBottom),L"content",&fk[0],&bkey, menu.empty() ? nullptr : &menu[0],menu.size());
+                       GetMsg(MLookupMenuBottom),L"content",breakKeys.GetBreakKeys(),&bkey, menu.empty() ? nullptr : &menu[0],menu.size());
       if(selected == -1 && bkey == -1) return LookupResult::Cancel;
       auto selectedTag = selected >= 0 ? tagsView[menu[selected].UserData].GetTag() : nullptr;
+      auto event = breakKeys.GetEvent(static_cast<int>(bkey));
+      auto character = breakKeys.GetChar(static_cast<int>(bkey));
       if(bkey==-1)
       {
         tag = *selectedTag;
         return LookupResult::Ok;
       }
-      if (selectedTag && IsCtrlEnter(fk[bkey]))
+      if (selectedTag && event == KeyEvent::CtrlEnter)
       {
         tag = *selectedTag;
         return LookupResult::Goto;
       }
-      if (IsCtrlC(fk[bkey]))
+      if (event == KeyEvent::CtrlC)
       {
         if (selectedTag)
           SetClipboardText(selectedTag->name.empty() ? selectedTag->file : selectedTag->name);
 
         return LookupResult::Exit;
       }
-      if (selectedTag && IsF4(fk[bkey]))
+      if (selectedTag && event == KeyEvent::F4)
       {
         OpenInNewWindow(*selectedTag);
       }
-      if (selectedTag && IsCtrlDel(fk[bkey]))
+      if (selectedTag && event == KeyEvent::CtrlDel)
       {
         ResetCacheCountersOnTimeout(*selectedTag);
         Storage->EraseCachedTag(*selectedTag, FlushTagsCache);
       }
-      if (selectedTag && IsCtrlR(fk[bkey]))
+      if (selectedTag && event == KeyEvent::CtrlR)
       {
         ManualResetCacheCounters(*selectedTag);
       }
-      if (IsCtrlZ(fk[bkey]))
+      if (event == KeyEvent::CtrlZ)
       {
         return LookupResult::Exit;
       }
-      if(IsTab(fk[bkey]))
+      if (event == KeyEvent::Tab)
       {
         LookupResult result = LookupResult::Ok;
         if ((prevFilter.empty() || !filter.empty()) &&
             (result = LookupTagsMenu(*Tags::GetFilterTagsViewer(tagsView, !config.casesens, tagsOnTop), tag, tagsOnTop, formatFlag, -1, JoinFilters(prevFilter, filter, true))) != LookupResult::Cancel)
           return result;
       }
-      if (IsCtrlV(fk[bkey]))
+      if (event == KeyEvent::CtrlV)
       {
         filter += GetClipboardText();
         break;
       }
-      if(IsBackspace(fk[bkey]))
+      if (event == KeyEvent::Backspace)
       {
         if (!prevFilter.empty() && filter.empty())
           return LookupResult::Cancel;
@@ -1267,9 +1209,9 @@ static LookupResult LookupTagsMenu(TagsViewer const& viewer, TagInfo& tag, std::
         filter.resize(filter.empty() ? 0 : filter.length() - 1);
         break;
       }
-      if (bkey < static_cast<intptr_t>(filterkeys.length()))
+      if (character != BreakKeys::InvalidChar)
       {
-        filter+=filterkeys[bkey];
+        filter += static_cast<unsigned char>(character);
         break;
       }
     }

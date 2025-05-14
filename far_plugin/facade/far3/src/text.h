@@ -86,4 +86,7 @@ enum{
   MFailedGetKeyboardLayoutList,
   MNoKeyboardLayout,
   MNoLatinKeyboardLayout,
+  MAskEnablePlatformLanguageLookup,
+  MFailedGetCPInfo,
+  MPlatformLanguageNotSupported,
 };
