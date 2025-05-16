@@ -189,6 +189,8 @@ namespace
     PutEvent({VK_INSERT, SHIFT_PRESSED}, KeyEvent::CtrlV, events);
     PutEvent({0x56, LEFT_CTRL_PRESSED}, KeyEvent::CtrlV, events);
     PutEvent({0x56, RIGHT_CTRL_PRESSED}, KeyEvent::CtrlV, events);
+    PutEvent({0x50, LEFT_CTRL_PRESSED}, KeyEvent::CtrlP, events);
+    PutEvent({0x50, RIGHT_CTRL_PRESSED}, KeyEvent::CtrlP, events);
     PutEvent({0x52, LEFT_CTRL_PRESSED}, KeyEvent::CtrlR, events);
     PutEvent({0x52, RIGHT_CTRL_PRESSED}, KeyEvent::CtrlR, events);
     PutEvent({0x5A, LEFT_CTRL_PRESSED}, KeyEvent::CtrlZ, events);
