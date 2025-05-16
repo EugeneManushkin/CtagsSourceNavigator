@@ -15,6 +15,7 @@ namespace Far3
     F4,
     CtrlC,
     CtrlV,
+    CtrlP,
     CtrlR,
     CtrlZ,
     CtrlDel,

@@ -978,30 +978,19 @@ struct MI{
 
 using MenuList = std::vector<MI>;
 
-std::pair<int, FarKey> Menu(const wchar_t *title, MenuList const& lst, int sel, std::vector<FarKey> const& stopKeys)
+std::pair<int, int> Menu(const wchar_t *title, MenuList const& lst, int sel, FarKey const* breakKeys)
 {
   std::vector<FarMenuItem> menu(lst.size());
   std::transform(lst.begin(), lst.end(), menu.begin(), [sel](MI const& mi) {return mi.GetFarItem(sel);});
   intptr_t bkey = -1;
   auto res=I.Menu(&PluginGuid, &CtagsMenuGuid, -1, -1, 0, FMENU_WRAPMODE, title, L"",
-                   L"content",stopKeys.empty() ? nullptr : &stopKeys[0],&bkey,&menu[0],lst.size());
-  return std::make_pair(res == -1 ? -1 : lst.at(res).data, bkey == -1 ? FarKey() : stopKeys.at(bkey));
+                  L"content", breakKeys, &bkey, &menu[0], lst.size());
+  return std::make_pair(res == -1 ? -1 : lst.at(res).data, static_cast<int>(bkey));
 }
 
 int Menu(const wchar_t *title, MenuList const& lst, int sel = 0)
 {
-  return Menu(title, lst, sel, std::vector<FarKey>()).first;
-}
-
-bool IsCtrlDel(FarKey const& key)
-{
-  return key.VirtualKeyCode == VK_DELETE && (key.ControlKeyState == LEFT_CTRL_PRESSED || key.ControlKeyState == RIGHT_CTRL_PRESSED);
-}
-
-bool IsCtrlP(FarKey const& key)
-{
-  return (key.VirtualKeyCode == 0x50 && key.ControlKeyState == LEFT_CTRL_PRESSED)
-      || (key.VirtualKeyCode == 0x50 && key.ControlKeyState == RIGHT_CTRL_PRESSED);
+  return Menu(title, lst, sel, nullptr).first;
 }
 
 std::unique_ptr<BreakKeys> CreateLookupBreakKeys(UseLayouts useLayouts)
@@ -1262,7 +1251,7 @@ static void AddPermanent(std::string const& tagsFile);
 
 static void ManageRepositories()
 {
-  std::vector<FarKey> const stopKeys = {{VK_DELETE, LEFT_CTRL_PRESSED}, {VK_DELETE, RIGHT_CTRL_PRESSED}, {0x50, LEFT_CTRL_PRESSED}, {0x50, RIGHT_CTRL_PRESSED}};
+  auto breakKeys = BreakKeys::Create(std::vector<KeyEvent>{KeyEvent::CtrlDel, KeyEvent::CtrlP}, UseLayouts::None);
   Tags::RepositoryInfo repo;
   int selected = 0;
   while(repo.TagsPath.empty())
@@ -1272,26 +1261,27 @@ static void ManageRepositories()
     auto regulars_count = std::distance(repositories.begin(), std::stable_partition(repositories.begin(), repositories.end(), [](Tags::RepositoryInfo const& repo) {return repo.Type == Tags::RepositoryType::Regular;}));
     auto history = LoadHistory();
     for (size_t i = 0; i < history.size() / 2; std::swap(history[i], history[history.size() - 1 - i]), ++i);
-    auto res = Menu(GetMsg(MUnloadTagsFile), GetRepoMenuList(repositories, history), selected, stopKeys);
+    auto res = Menu(GetMsg(MUnloadTagsFile), GetRepoMenuList(repositories, history), selected, breakKeys->GetBreakKeys());
     if (res.first == -1)
       return;
 
+    auto event = breakKeys->GetEvent(res.second);
     bool repository_selected = res.first < repositories.size();
     size_t index = repository_selected ? res.first : res.first - repositories.size();
-    if (IsCtrlDel(res.second) && repository_selected)
+    if (event == KeyEvent::CtrlDel && repository_selected)
     {
       selected = index > 0 && (index + 1 == regulars_count || index + 1 == repositories.size()) ? res.first - 1 : res.first;
       Storage->Remove(repositories.at(index).TagsPath.c_str());
       SavePermanents();
     }
-    else if (IsCtrlDel(res.second))
+    else if (event == KeyEvent::CtrlDel)
     {
       selected = index > 0 && index + 1 == history.size() ? res.first - 1 : res.first;
       history.erase(history.begin() + index);
       for (size_t i = 0; i < history.size() / 2; std::swap(history[i], history[history.size() - 1 - i]), ++i);
       SaveHistory(history);
     }
-    else if (IsCtrlP(res.second))
+    else if (event == KeyEvent::CtrlP)
     {
       selected = 0;
       auto tagsPath = repository_selected ? repositories.at(index).TagsPath : history.at(index);
