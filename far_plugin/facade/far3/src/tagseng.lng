@@ -85,6 +85,7 @@
 "Failed to get keyboard layouts (system call 'GetKeyboardLayoutList' failed)"
 "Internal error: no keyboard layout containing entire set of filter keys"
 "No keyboard layout containing entire set of latin keys"
-"Would you like to enable search in your platform's language?\n(You may always configure this option in plugin configuration menu)"
+"Would you like to enable platform language in search menu?\n(You may always configure this option in plugin configuration menu)"
 "Failed to get installed code page info (system call 'GetCPInfo' failed)"
 "Your platform language is not supported (only single byte charsets are supported).\nThe feature will be disabled"
+"Enable platform language in search menu"

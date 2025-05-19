@@ -2303,6 +2303,13 @@ static void SaveConfig(InitDialogItem const* dlgItems, size_t count)
   SaveStrings(strings, ToStdString(GetConfigFilePath()), std::ifstream::badbit);
 }
 
+static void EnsurePlatformLanguageLookup(InitDialogItem* begin, size_t count)
+{
+  for (; count > 0 && begin->Save.KeyName != "platformlanguagelookup"; --count, ++begin);
+  if (count > 0)
+    begin->Selected = !!begin->Selected && SafeCall(CheckPlatformLanguageLookupSupported, Err).first;
+}
+
 static WideString PluginVersionString()
 {
   return ToString(std::to_string(CTAGS_VERSION_MAJOR) + "." +
@@ -2356,7 +2363,7 @@ static intptr_t ConfigurePlugin()
   WideString menuTitle = WideString(GetMsg(MPlugin)) + L" " + PluginVersionString();
   struct InitDialogItem initItems[]={
 //    Type        X1  Y2  X2 Y2  F S           Flags D Data
-    DI_DOUBLEBOX, 3, ++y, 64,36, 0,0,              0,0,-1,menuTitle.c_str(),{},
+    DI_DOUBLEBOX, 3, ++y, 64,37, 0,0,              0,0,-1,menuTitle.c_str(),{},
     DI_TEXT,      5, ++y,  0, 0, 0,0,              0,0,MPathToExe,L"",{},
     DI_EDIT,      5, ++y, 62, 3, 1,0,              0,0,-1,ToString(config.exe),{"pathtoexe", true},
     DI_CHECKBOX,  5, ++y, 62,10, 1,config.use_built_in_ctags,0,0,MUseBuiltInCtags,L"",{"usebuiltinctags", false, true},
@@ -2369,6 +2376,7 @@ static intptr_t ConfigurePlugin()
     DI_EDIT,      5, ++y, 62, 9, 1,0,              0,0,-1,ToString(std::to_string(config.threshold)),{"threshold", true},
     DI_TEXT,      5, ++y,  0, 0, 0,0,              0,0,MThresholdFilterLen,L"",{},
     DI_EDIT,      5, ++y, 62, 9, 1,0,              0,0,-1,ToString(std::to_string(config.threshold_filter_len)),{"thresholdfilterlen", true},
+    DI_CHECKBOX,  5, ++y, 62,10, 1,config.platform_language_lookup == ThreeStateFlag::Enabled ? 1 : 0,0,0,MPlatformLanguageLookup,L"",{"platformlanguagelookup", false, true},
     DI_TEXT,      5, ++y, 62,10, 1,0,DIF_SEPARATOR|DIF_BOXCOLOR,0,-1,L"",{},
     DI_TEXT,      5, ++y,  0, 0, 0,0,              0,0,MResetCountersAfter,L"",{},
     DI_EDIT,      5, ++y, 62, 9, 1,0,              0,0,-1,ToString(std::to_string(config.reset_cache_counters_timeout_hours)),{"resetcachecounterstimeouthours", true},
@@ -2418,6 +2426,7 @@ static intptr_t ConfigurePlugin()
   std::shared_ptr<void> handleHolder(handle, [](void* h){I.DialogFree(h);});
   auto ExitCode = I.DialogRun(handle);
   if(ExitCode!=itemsCount-2)return FALSE;
+  EnsurePlatformLanguageLookup(initItems, itemsCount);
   if (SafeCall(SaveConfig, Err, initItems, itemsCount).first)
     config = LoadConfig(ToStdString(GetConfigFilePath()));
 
