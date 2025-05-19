@@ -89,4 +89,5 @@ enum{
   MAskEnablePlatformLanguageLookup,
   MFailedGetCPInfo,
   MPlatformLanguageNotSupported,
+  MPlatformLanguageLookup,
 };
