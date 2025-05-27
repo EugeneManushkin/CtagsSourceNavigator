@@ -36,6 +36,7 @@ namespace Far3
 
     static std::unique_ptr<BreakKeys> Create(std::vector<KeyEvent> const& events, UseLayouts useLayouts);
 
+    virtual ~BreakKeys() = default;
     virtual ::FarKey const* GetBreakKeys() const = 0;
     virtual KeyEvent GetEvent(int index) const = 0;
     virtual int GetChar(int index) const = 0;
