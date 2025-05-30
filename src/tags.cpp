@@ -1438,27 +1438,55 @@ std::vector<TagInfo> MergeUnique(std::vector<TagInfo>&& into, std::vector<TagInf
   return std::move(into);
 }
 
-static std::tuple<std::string, std::string, int> GetNamePathLine(char const* path)
+static bool IsDecimal(char c)
 {
-  for (; *path && IsPathSeparator(*path); ++path);
-  auto pathEnd = path;
-  for (; *pathEnd; ++pathEnd);
-  pathEnd -= pathEnd != path && *(pathEnd - 1) == ':' ? 1 : 0;
-  char separator = pathEnd != path && *(pathEnd - 1) == ')' ? '(' : ':';
-  pathEnd -= pathEnd != path && *(pathEnd - 1) == ')' ? 1 : 0;
-  auto linenumBegin = pathEnd;
-  auto linenumEnd = pathEnd;
+  return c >= '0' && c <= '9';
+}
+
+static char const* LTrimPathSeparators(char const* begin, char const* end)
+{
+  for (; end != begin && IsPathSeparator(*begin); ++begin);
+  return begin;
+}
+
+static char const* RTrimPathSeparators(char const* begin, char const* end)
+{
+  for (; end != begin && IsPathSeparator(end[-1]); --end);
+  return end;
+}
+
+static char const* RFindPathSeparator(char const* begin, char const* end)
+{
+  for (; end != begin && !IsPathSeparator(end[-1]); --end);
+  return end;
+}
+
+std::tuple<std::string, std::string, int> Tags::GetNamePathLine(char const* path)
+{
+  auto end = path;
+  for (; *end; ++end);
+  end = RTrimPathSeparators(path, end);
+  path = LTrimPathSeparators(path, end);
+  auto fname = RFindPathSeparator(path, end);
+  auto linenumSeparator = fname;
+  for (; linenumSeparator != end && *linenumSeparator != ':' && *linenumSeparator != '('; ++linenumSeparator);
+  linenumSeparator = linenumSeparator == fname ? end : linenumSeparator;
+  auto linenumBegin = linenumSeparator != end ? linenumSeparator + 1 : linenumSeparator;
   size_t const linenumLimit = 5;
-  for (; linenumEnd - linenumBegin < linenumLimit && linenumBegin != path && linenumBegin - 1 != path && isdigit(*(linenumBegin - 1)); --linenumBegin);
-  pathEnd = linenumBegin != path && *(linenumBegin - 1) == separator ? linenumBegin - 1 : pathEnd;
-  linenumBegin = pathEnd != linenumBegin - 1 ? linenumEnd : linenumBegin;
-  for (; pathEnd != path && pathEnd - 1 != path && IsPathSeparator(*(pathEnd - 1)); --pathEnd);
-  auto nameBegin = pathEnd - 1;
-  for (; nameBegin != path - 1 && !IsPathSeparator(*nameBegin); --nameBegin);
-  auto name = std::string(nameBegin + 1, pathEnd);
-  for (; nameBegin != path - 1 && IsPathSeparator(*nameBegin); --nameBegin);
-  int lineNum = linenumBegin == linenumEnd ? -1 : std::stoi(std::string(linenumBegin, linenumEnd));
-  return std::make_tuple(std::move(name), std::string(path, nameBegin + 1), lineNum);
+  auto linenumEnd = linenumBegin;
+  for (; linenumEnd - linenumBegin < linenumLimit && linenumEnd != end && IsDecimal(*linenumEnd); ++linenumEnd);
+  const bool emptyLinenum = linenumSeparator != end && linenumBegin == end;
+  const bool notemptyLinenum = linenumSeparator != end && linenumBegin != linenumEnd && (
+                               linenumEnd == end
+                            || *linenumSeparator == ':' && *linenumEnd == ':'
+                            || *linenumSeparator == '(' && *linenumEnd == ')'
+                            || *linenumSeparator == '(' && *linenumEnd == ','
+                            || false);
+  const bool valid = emptyLinenum || notemptyLinenum;
+  int lineNum = notemptyLinenum ? std::stoi(std::string(linenumBegin, linenumEnd)) : -1;
+  std::string resultName(fname, valid ? linenumSeparator : end);
+  std::string resultPath(path, RTrimPathSeparators(path, fname != path ? fname - 1 : fname));
+  return std::make_tuple(std::move(resultName), std::move(resultPath), lineNum);
 }
 
 bool Tags::IsTagFile(const char* file)
@@ -1560,6 +1588,8 @@ static TagsStat RefreshNamesCache(TagFileInfo* fi, FILE* f, OffsetCont const& of
   tagsWithFreq.erase(cur, tagsWithFreq.end());
   return std::move(tagsWithFreq);
 }
+
+using Tags::GetNamePathLine;
 
 static TagsStat RefreshFilesCache(TagFileInfo* fi, FILE* f, OffsetCont const& offsets, TagsStat&& tagsWithFreq)
 {
