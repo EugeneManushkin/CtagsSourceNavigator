@@ -494,6 +494,13 @@ static void SetClipboardText(std::string const& text)
   CloseClipboard();
 }
 
+static std::string Trim(std::string&& str)
+{
+  str.erase(std::find_if(str.rbegin(), str.rend(), [](unsigned char c){return !isspace(c);}).base(), str.end());
+  str.erase(str.begin(), std::find_if(str.begin(), str.end(), [](unsigned char c){return !isspace(c);}));
+  return std::move(str);
+}
+
 static bool IsEscPressed()
 {
   HANDLE h_con = GetStdHandle(STD_INPUT_HANDLE);
@@ -1187,7 +1194,7 @@ static LookupResult LookupTagsMenu(TagsViewer const& viewer, TagInfo& tag, std::
       }
       if (event == KeyEvent::CtrlV)
       {
-        filter += GetClipboardText();
+        filter += Trim(GetClipboardText());
         break;
       }
       if (event == KeyEvent::Backspace)
