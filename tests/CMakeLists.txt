@@ -13,6 +13,7 @@ endfunction(add_test)
 
 add_test(TARGET "tags_tests" SRC "tags/*.cpp" LIB "tags")
 add_test(TARGET "tags_cache_tests" SRC "tags_cache/*.cpp" LIB "tags")
+add_test(TARGET "tags_name_path_line_tests" SRC "tags_name_path_line/*.cpp" LIB "tags")
 add_test(TARGET "tag_view_tests" SRC "tag_view/*.cpp" LIB "tags")
 add_test(TARGET "tags_repository_storage_tests" SRC "tags_repository_storage/*.cpp" LIB "tags")
 add_test(TARGET "safe_call_tests" SRC "safe_call/*.cpp" LIB "facade")
