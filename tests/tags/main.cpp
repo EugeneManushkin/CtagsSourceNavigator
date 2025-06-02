@@ -195,8 +195,9 @@ bool operator == (TagInfo const& left, TagInfo const& right)
 
 std::ostream& operator << (std::ostream& stream, TagInfo const& tag)
 {
+  return tag.name.empty() ?
+  stream << "f:" << tag.file :
   stream << tag.kind << ":" << tag.name;
-  return stream;
 }
 
 namespace Tags
@@ -771,6 +772,44 @@ namespace TESTS
     ASSERT_NO_FATAL_FAILURE(CheckExpectedNames(patially_matched, selector->GetByPart("abc", GetNames)));
     ASSERT_NO_FATAL_FAILURE(CheckExpectedNames(patially_matched_unlimited, selector->GetByPart("abc", GetNames, Unlimited)));
     ASSERT_NO_FATAL_FAILURE(CheckExpectedNames(by_file_matched, selector->GetByFile(AlphabeticalRepoFile.c_str())));
+  }
+
+
+  TEST_F(Tags, ReturnedPartiallyMatchedFileTagsWithCachedOnTop)
+  {
+    std::string const tagsFile = "repeated_files_repos/tags.universal";
+    size_t const tagsInRepository = 32;
+    std::vector<std::string> const cachedFiles = {
+      "folder5\\10times.cpp"
+    , "folder5\\10times.cpp"
+    , "folder5\\10times.cpp"
+    , "folder5\\folder6\\10times.cpp"
+    };
+    std::vector<std::string> const expected = {
+      "repeated_files_repos\\folder1\\folder2\\folder3\\folder4\\folder5\\10times.cpp"
+    , "repeated_files_repos\\folder1\\folder2\\folder3\\folder4\\folder5\\folder6\\10times.cpp"
+    , "repeated_files_repos\\folder1\\10times.cpp"
+    , "repeated_files_repos\\folder1\\folder2\\10times.cpp"
+    , "repeated_files_repos\\folder1\\folder2\\folder3\\10times.cpp"
+    , "repeated_files_repos\\folder1\\folder2\\folder3\\folder4\\10times.cpp"
+    , "repeated_files_repos\\folder1\\folder2\\folder3\\folder4\\folder5\\folder6\\folder7\\10times.cpp"
+    , "repeated_files_repos\\folder1\\folder2\\folder3\\folder4\\folder5\\folder6\\folder7\\folder8\\10times.cpp"
+    , "repeated_files_repos\\folder1\\folder2\\folder3\\folder4\\folder5\\folder6\\folder7\\folder8\\folder9\\10times.cpp"
+    , "repeated_files_repos\\folder1\\folder2\\folder3\\folder4\\folder5\\folder6\\folder7\\folder8\\folder9\\folder10\\10times.cpp"
+    };
+    ASSERT_NO_FATAL_FAILURE(LoadTagsFileImpl(tagsFile.c_str(), RepositoryType::Regular, tagsInRepository));
+    ASSERT_NO_FATAL_FAILURE(ClearCache(tagsFile.c_str()));
+    for (auto const& cachedFile : cachedFiles)
+      Storage->CacheTag(FindFile(tagsFile.c_str(), cachedFile.c_str()).at(0), expected.size(), true);
+
+    auto selector = GetSelector(tagsFile.c_str(), true, SortingOptions::CachedTagsOnTop, expected.size());
+    auto matchedByPart = selector->GetByPart("10times.cpp", true);
+    auto matchedByPartWithLine = selector->GetByPart("10times.cpp:123", true);
+
+    ASSERT_EQ(expected, ToStrings(std::vector<TagInfo>(matchedByPart)));
+    ASSERT_EQ(expected, ToStrings(std::vector<TagInfo>(matchedByPartWithLine)));
+    ASSERT_FALSE(matchedByPart.empty());
+    ASSERT_EQ(matchedByPart, matchedByPartWithLine);
   }
 
   TEST_F(Tags, LoadedPartiallyCoincidentalPathRepos)
