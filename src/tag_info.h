@@ -27,7 +27,8 @@ struct TagInfo
   {
     TagInfo const& left = *this;
     int cmp = 0;
-    return left.lineno != right.lineno ? left.lineno < right.lineno :
+    return left.name.empty() && right.name.empty() ? left.file.compare(right.file) < 0 :
+           left.lineno != right.lineno ? left.lineno < right.lineno :
            left.kind != right.kind ? left.kind < right.kind :
            !!(cmp = left.name.compare(right.name)) ? cmp < 0 :
            !!(cmp = left.file.compare(right.file)) ? cmp < 0 :
