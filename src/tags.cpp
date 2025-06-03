@@ -1418,16 +1418,26 @@ std::vector<TagInfo> Tags::SortTags(std::vector<TagInfo>&& tags, char const* fil
   return std::move(tags);
 }
 
-std::vector<TagInfo> Tags::MoveOnTop(std::vector<TagInfo>&& tags, std::vector<TagInfo>&& tagsOnTop)
+static std::vector<TagInfo>::iterator PartitionTopTags(std::vector<TagInfo>& tags, std::vector<TagInfo> const& tagsOnTop)
 {
   std::set<TagInfo> topTags(tagsOnTop.begin(), tagsOnTop.end());
-  auto border = std::stable_partition(tags.begin(), tags.end(), [&topTags](TagInfo const& tag) { return topTags.count(tag) > 0; });
-  topTags.clear();
-  topTags.insert(tags.begin(), border);
-  tagsOnTop.erase(std::remove_if(tagsOnTop.begin(), tagsOnTop.end(), [&topTags](TagInfo const& tag) { return topTags.count(tag) == 0; }), tagsOnTop.end());
-  if (tagsOnTop.size() == std::distance(tags.begin(), border))
-    std::move(tagsOnTop.begin(), tagsOnTop.end(), tags.begin());
+  return std::stable_partition(tags.begin(), tags.end(), [&topTags](TagInfo const& tag) { return topTags.count(tag) > 0; });
+}
 
+static void OrderPartitionedTags(std::vector<TagInfo>::iterator begin, std::vector<TagInfo>::iterator end, std::vector<TagInfo> const& tagsOnTop)
+{
+  std::set<TagInfo> partitionedTags(begin, end);
+  for (auto tagOnTop = tagsOnTop.begin(); tagOnTop != tagsOnTop.end() && begin != end; ++tagOnTop)
+  {
+    auto found = partitionedTags.find(*tagOnTop);
+    if (found != partitionedTags.end())
+      *begin++ = *found;
+  }
+}
+
+std::vector<TagInfo> Tags::MoveOnTop(std::vector<TagInfo>&& tags, std::vector<TagInfo> const& tagsOnTop)
+{
+  OrderPartitionedTags(tags.begin(), PartitionTopTags(tags, tagsOnTop), tagsOnTop);
   return std::move(tags);
 }
 

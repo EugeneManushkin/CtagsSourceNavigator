@@ -533,7 +533,7 @@ namespace TESTS
 
     void CheckExpectedNames(std::vector<std::string> const& expected, std::vector<TagInfo> const& tags)
     {
-      for (int i = 0; i < expected.size(); ++i)
+      for (size_t i = 0; i < expected.size(); ++i)
       {
         ASSERT_EQ(expected.at(i), tags.at(i).name);
       }
@@ -810,6 +810,10 @@ namespace TESTS
     ASSERT_EQ(expected, ToStrings(std::vector<TagInfo>(matchedByPartWithLine)));
     ASSERT_FALSE(matchedByPart.empty());
     ASSERT_EQ(matchedByPart, matchedByPartWithLine);
+    for (auto const& tag : matchedByPart)
+      ASSERT_EQ(-1, tag.lineno);
+    for (auto const& tag : matchedByPartWithLine)
+      ASSERT_EQ(123, tag.lineno);
   }
 
   TEST_F(Tags, LoadedPartiallyCoincidentalPathRepos)

@@ -78,7 +78,7 @@ namespace
         auto tags = SortTags(func(**repos), CurrentFile.c_str(), sorted ? SortOptions : Tags::SortingOptions::DoNotSort);
         bool cachedOnTop = sorted && !!(SortOptions & Tags::SortingOptions::CachedTagsOnTop);
         auto cached = cachedOnTop && !tags.empty() ? (*repos)->GetCachedTags(getFiles, Limit) : std::vector<TagInfo>();
-        tags = !cached.empty() ? Tags::MoveOnTop(std::move(tags), std::move(cached)) : tags;
+        tags = !cached.empty() ? Tags::MoveOnTop(std::move(tags), cached) : tags;
         auto tagsEnd = !unlimited && result.size() + tags.size() > Limit ? tags.begin() + (Limit - result.size()) : tags.end();
         std::move(tags.begin(), tagsEnd, std::back_inserter(result));
       }

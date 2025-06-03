@@ -35,7 +35,7 @@ std::tuple<std::string, std::string, int> GetNamePathLine(char const* path);
 std::vector<TagInfo>::const_iterator FindContextTag(std::vector<TagInfo> const& tags, char const* fileName, int lineNumber, char const* lineText);
 std::vector<TagInfo>::const_iterator Reorder(TagInfo const& context, std::vector<TagInfo>& tags);
 std::vector<TagInfo> SortTags(std::vector<TagInfo>&& tags, char const* file, SortingOptions sortOptions);
-std::vector<TagInfo> MoveOnTop(std::vector<TagInfo>&& tags, std::vector<TagInfo>&& tagsOnTop);
+std::vector<TagInfo> MoveOnTop(std::vector<TagInfo>&& tags, std::vector<TagInfo> const& tagsOnTop);
 }
 
 #endif
