@@ -1494,7 +1494,7 @@ static Plugin::EditorPosition MakeEditorPosition(std::string const& file, int li
 
 static void OpenInNewWindow(TagInfo const& tag)
 {
-  auto ensured = tag.name.empty() ? std::make_pair(true, -1) : SafeCall(EnsureLineOrAsk, Err, tag);
+  auto ensured = tag.name.empty() ? std::make_pair(true, tag.lineno) : SafeCall(EnsureLineOrAsk, Err, tag);
   auto line = ensured.first ? ensured.second : -1;
   if (tag.name.empty() || line >= 0)
     CurrentEditor->OpenModal(MakeEditorPosition(tag.file, line));
