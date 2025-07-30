@@ -17,7 +17,26 @@
 + Переиндексация редактируемого файла и репозитория
 + Макрос с горячими клавишами
 ## Что нового
-### 2.1.0.99
+### 2.1.106.x
++ Изменилась схема версионирования. Последнее число в версии переместилось на предпоследнее место и теперь означает номер ревизии.
+  Последнее число версии теперь соответствует инкрементальному счетчику релизного пайплайна
+  [#111](https://github.com/EugeneManushkin/CtagsSourceNavigator/issues/111)
++ Поддержан поиск на русском языке! Это эксперементальная фича и может подтормаживать на маломощных компьютерах. Вы всегда можете выключить
+  эту опцию в меню конфигурации плагина (см. "Enable platform language in search menu"). Поддержаны только однобайтовые кодировки
+  типа cp1251. Русские буквы включены только для меню в которых отображаются имена файлов или пути к файлам
+  [#123](https://github.com/EugeneManushkin/CtagsSourceNavigator/issues/123)
++ Улучшено определение номеров строк для шаблонов поиска на подобие ворнингов или ошибок популярных компиляторов. Откройте меню поиска
+  файлов ("Search name in entire repository") и вставьте в него строку с текстом ошибки компилятора, например такую:
+  `\src\tags.cpp(1831,10): error C2143: syntax error: missing ';' before 'return'`. Плагин определит файл tags.cpp с номером строки 1831
+  [#139](https://github.com/EugeneManushkin/CtagsSourceNavigator/issues/139)
++ Пробелы при вставки в меню из буфера обмена теперь обрезаются с обоих сторон
+  [#140](https://github.com/EugeneManushkin/CtagsSourceNavigator/issues/140)
++ Пофикшено:
+  [#122](https://github.com/EugeneManushkin/CtagsSourceNavigator/issues/122),
+  [#129](https://github.com/EugeneManushkin/CtagsSourceNavigator/issues/129),
+  [#143](https://github.com/EugeneManushkin/CtagsSourceNavigator/issues/143),
+  [#145](https://github.com/EugeneManushkin/CtagsSourceNavigator/issues/145)
+### 2.1.100.599
 + Команда 'Go back' перемещает курсор едитора на последний посещенный тег [#98](https://github.com/EugeneManushkin/CtagsSourceNavigator/issues/98)
 + Нажатие Ctrl+Enter в меню поиска по тегам перемещает текущую панель на файл в котором расположен тег [#99](https://github.com/EugeneManushkin/CtagsSourceNavigator/issues/99)
 + Для коротких фильтров выдача тегов ограничивается до 1500 (можно сконфигурировать либо отключить в конфиге плагина). [#103](https://github.com/EugeneManushkin/CtagsSourceNavigator/issues/103)
@@ -26,12 +45,6 @@
 + При открытии репозитория в меню "Manage Repositories" плагин переместит вас в ту папку где вы работали над проектом [#93](https://github.com/EugeneManushkin/CtagsSourceNavigator/issues/93)
 + Навигация полностью переработана. Опции "Go back" и "Go forward" стали более удобными и предсказуемыми [#94](https://github.com/EugeneManushkin/CtagsSourceNavigator/issues/94)
 + Плагин стал стабильнее. Пофикшено: [#95](https://github.com/EugeneManushkin/CtagsSourceNavigator/issues/95), [#96](https://github.com/EugeneManushkin/CtagsSourceNavigator/issues/96), [#97](https://github.com/EugeneManushkin/CtagsSourceNavigator/issues/97)
-### 2.1.0.86
-+ Теперь можно обновлять индекс редактируемого файла (#79)
-+ Самые посещаемые теги выводятся в топе всех меню (#87, #88, #90). Это поведение можно отключить: **F11->Ctags Source Navigator->Plugin configuration->Recent tags in the first place**
-+ Плагин стал чуть чуть удобнее. Зацените обновленное меню "Manage repositories", теперь там можно смотреть историю заргуженых репозиториев, перемещаться в корень репозиторя, и делать любой репозиторий библиотечным (permanent)
-+ Плагин стал немного быстрее. Пофикшен медленный поиск коротких имен (#85)
-+ Плагин стал стабильнее. Пофикшены баги: #77, #83, #84, #86, #89
 ## Установка
 1. Загрузите последний релиз со [страницы релизов](https://github.com/EugeneManushkin/CtagsSourceNavigator/releases)
 2. Извлеките содержимое архива в папку FarManager/Plugins/ctags

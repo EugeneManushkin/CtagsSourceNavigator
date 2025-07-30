@@ -20,7 +20,27 @@ This is a [Far Manager](https://www.farmanager.com/) plugin for browsing source 
 + Reindexing single file or repository.
 + Hotkeys macro
 ## What's new 
-### 2.1.0.99
+### 2.1.106.x
++ Versioning has been changed. The last number in the version string is moved on 3-rd place and became a revision number.
+  Now the last number in the version string corresponds to incremental counter of the release pipeline
+  [#111](https://github.com/EugeneManushkin/CtagsSourceNavigator/issues/111)
++ Supported platform language in search tags menu. This feature is experimental and may affect performance in some environments.
+  You may always disable this feature in configuration menu (see "Enable platform language in search menu").
+  Only single byte charsets (e.g. cp1251) are supported. Platform language is enabled only if file names or paths are displayed
+  [#123](https://github.com/EugeneManushkin/CtagsSourceNavigator/issues/123)
++ Enhanced matching line numbers when searching compiler like warning/error strings. Just open file search menu and
+  Ctrl+V string like following:
+  `\src\tags.cpp(1831,10): error C2143: syntax error: missing ';' before 'return'`.
+  Plugin will detect file tags.cpp with line number 1831
+  [#139](https://github.com/EugeneManushkin/CtagsSourceNavigator/issues/139)
++ Insertions in search menu are trimmed from both right and left sides
+  [#140](https://github.com/EugeneManushkin/CtagsSourceNavigator/issues/140)
++ Fixed bugs:
+  [#122](https://github.com/EugeneManushkin/CtagsSourceNavigator/issues/122),
+  [#129](https://github.com/EugeneManushkin/CtagsSourceNavigator/issues/129),
+  [#143](https://github.com/EugeneManushkin/CtagsSourceNavigator/issues/143),
+  [#145](https://github.com/EugeneManushkin/CtagsSourceNavigator/issues/145)
+### 2.1.100.599
 + Go back command moves editor position to last followed tag [#98](https://github.com/EugeneManushkin/CtagsSourceNavigator/issues/98)
 + Ctrl+Enter shortcut in search menu navigates Far Manager to file where selected item is located [#99](https://github.com/EugeneManushkin/CtagsSourceNavigator/issues/99)
 + Limit total search list to 1500 (may be configured or disabled) for short filters [#103](https://github.com/EugeneManushkin/CtagsSourceNavigator/issues/103)
@@ -29,12 +49,6 @@ This is a [Far Manager](https://www.farmanager.com/) plugin for browsing source 
 + Opening a repository in "Manage Repositories" menu moves you to last visited directory [#93](https://github.com/EugeneManushkin/CtagsSourceNavigator/issues/93)
 + Navigation history is reworked. "Go back" and "Go forward" options become more convinient [#94](https://github.com/EugeneManushkin/CtagsSourceNavigator/issues/94)
 + Plugin become more stable. Fixed bugs: [#95](https://github.com/EugeneManushkin/CtagsSourceNavigator/issues/95), [#96](https://github.com/EugeneManushkin/CtagsSourceNavigator/issues/96), [#97](https://github.com/EugeneManushkin/CtagsSourceNavigator/issues/97)
-### 2.1.0.86
-+ Implemented indexing current file (#79)
-+ Most visited tags goes on top of each menu (#87, #88, #90). This behaviour may be disabled: **F11->Ctags Source Navigator->Plugin configuration->Recent tags in the first place**
-+ Plugin become more convinient. Check out renewed "Manage repositories" menu where you can see loaded repositories history, go to repositories and make any repository permanent
-+ Plugin become a bit faster. Fixed slow search of short names (#85)
-+ Plugin become more stable. Fixed bugs: #77, #83, #84, #86, #89
 ## Installation
 1. Download latest release from [release page](https://github.com/EugeneManushkin/CtagsSourceNavigator/releases)
 2. Extract downloaded archive to FarManager/Plugins folder
