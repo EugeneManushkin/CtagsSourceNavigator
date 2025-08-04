@@ -2,6 +2,7 @@
 
 #include <far3/current_editor_impl.h>
 #include <far3/error.h>
+#include <far3/guid.h>
 #include <far3/plugin_sdk/api.h>
 #include <far3/wide_string.h>
 
@@ -15,6 +16,7 @@ namespace
   using Far3::ToString;
   using Far3::ToStdString;
   using Far3::Error;
+  using Far3::Guid;
 
   EditorSetPosition MakeEditorSetPosition(Plugin::EditorPosition const& position)
   {
@@ -57,7 +59,7 @@ namespace
   class CurrentEditorImpl : public Plugin::CurrentEditor
   {
   public:
-    CurrentEditorImpl(PluginStartupInfo const& i, GUID const& pluginGuid)
+    CurrentEditorImpl(PluginStartupInfo const& i, Guid const& pluginGuid)
       : I(i)
       , PluginGuid(pluginGuid)
     {
@@ -119,13 +121,13 @@ namespace
 
   private:
     PluginStartupInfo I;
-    GUID PluginGuid;
+    Guid PluginGuid;
   };
 }
 
 namespace Far3
 {
-  std::unique_ptr<Plugin::CurrentEditor> CreateCurrentEditor(PluginStartupInfo const& i, GUID const& pluginGuid)
+  std::unique_ptr<Plugin::CurrentEditor> CreateCurrentEditor(PluginStartupInfo const& i, Guid const& pluginGuid)
   {
     return std::unique_ptr<Plugin::CurrentEditor>(new CurrentEditorImpl(i, pluginGuid));
   }
