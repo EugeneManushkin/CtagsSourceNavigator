@@ -24,6 +24,7 @@
 #include <far3/break_keys.h>
 #include <far3/current_editor_impl.h>
 #include <far3/error.h>
+#include <far3/guid.h>
 #include <far3/plugin_sdk/api.h>
 #include <far3/wide_string.h>
 
@@ -54,6 +55,7 @@ using WideString = Far3::WideString;
 using Far3::ToString;
 using Far3::ToStdString;
 using Far3::Error;
+using Far3::Guid;
 using Far3::KeyEvent;
 using Far3::UseLayouts;
 using Far3::BreakKeys;
@@ -154,30 +156,13 @@ Config config;
 
 static const wchar_t* GetMsg(int MsgId);
 
-GUID StringToGuid(const std::string& str)
-{
-  GUID guid;
-  std::string lowercasedStr(str);
-  std::transform(str.begin(), str.end(), lowercasedStr.begin(), ::tolower);
-  auto sannedItems = sscanf(lowercasedStr.c_str(),
-    "{%8x-%4hx-%4hx-%2hhx%2hhx-%2hhx%2hhx%2hhx%2hhx%2hhx%2hhx}",
-    &guid.Data1, &guid.Data2, &guid.Data3,
-    &guid.Data4[0], &guid.Data4[1], &guid.Data4[2], &guid.Data4[3],
-    &guid.Data4[4], &guid.Data4[5], &guid.Data4[6], &guid.Data4[7]);
-
-  if (sannedItems != 11)
-    throw std::invalid_argument("Invalid guid string specified");
-
-  return guid;
-}
-
-::GUID ErrorMessageGuid = StringToGuid("{03cceb3e-20ba-438a-9972-85a48b0d28e4}");
-::GUID InfoMessageGuid = StringToGuid("{58a20c1d-44e2-40ba-9223-5f96d31d8c09}");
-::GUID InteractiveDialogGuid = StringToGuid("{fcd1e1b9-4060-4696-9e40-11f055c2909e}");
-::GUID InputBoxGuid = StringToGuid("{6ac0c4bb-b907-43c6-8c7a-642e4a34ee35}");
-::GUID PluginGuid = StringToGuid("{2e34b611-3df1-463f-8711-74b0f21558a5}");
-::GUID CtagsMenuGuid = StringToGuid("{7f125c0d-5e18-4b7f-a6df-1caae013c48f}");
-::GUID MenuGuid = StringToGuid("{a5b1037e-2f54-4609-b6dd-70cd47bd222b}");
+const Guid ErrorMessageGuid("{03cceb3e-20ba-438a-9972-85a48b0d28e4}");
+const Guid InfoMessageGuid("{58a20c1d-44e2-40ba-9223-5f96d31d8c09}");
+const Guid InteractiveDialogGuid("{fcd1e1b9-4060-4696-9e40-11f055c2909e}");
+const Guid InputBoxGuid("{6ac0c4bb-b907-43c6-8c7a-642e4a34ee35}");
+const Guid PluginGuid("{2e34b611-3df1-463f-8711-74b0f21558a5}");
+const Guid CtagsMenuGuid("{7f125c0d-5e18-4b7f-a6df-1caae013c48f}");
+const Guid MenuGuid("{a5b1037e-2f54-4609-b6dd-70cd47bd222b}");
 //TODO: determine MaxMenuWidth depending on max Far Manager window width
 size_t const MaxMenuWidth = 120;
 
