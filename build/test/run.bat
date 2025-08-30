@@ -1,5 +1,5 @@
 echo on
-set EXPECTED_TESTS=9
+set EXPECTED_TESTS=10
 set ACTUAL_TESTS=0
 cd "%BUILD_ROOT%"\tests\%CMAKE_CONFIGURATION%
 for %%G in ("%~dp0..\.."\tests\tags\*.zip) do ( cmake -E tar xzvf "%%G" || exit /b 1 )
