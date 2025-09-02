@@ -73,9 +73,6 @@ static const wchar_t* const DefaultTagsFilename = L"tags";
 
 static const bool FlushTagsCache = true;
 
-//TODO: remove dependency
-std::bitset<256> GetCharsMap(std::string const& str);
-
 enum class ThreeStateFlag
 {
   Undefined,
@@ -83,74 +80,29 @@ enum class ThreeStateFlag
   Disabled,
 };
 
-struct Config{
-  Config();
-  void SetWordchars(std::string const& str);
-  std::string GetWordchars() const
-  {
-    return wordchars;
-  }
-
-  bool isident(int chr) const
-  {
-    return wordCharsMap[(unsigned char)chr];
-  }
-
-  std::string exe;
-  std::string opt;
-  std::string permanents;
-  std::string tagsmask;
-  std::string history_file;
-  size_t history_len;
-  bool casesens;
-  size_t max_results;
-  size_t threshold;
-  size_t threshold_filter_len;
-  bool cur_file_first;
-  bool cached_tags_on_top;
-  bool index_edited_file;
-  bool sort_class_members_by_name;
-  static const size_t max_history_len;
-  bool use_built_in_ctags;
-  size_t reset_cache_counters_timeout_hours;
-  bool restore_last_visited_on_load;
-  ThreeStateFlag platform_language_lookup;
-
-private:
-  std::string wordchars;
-  std::bitset<256> wordCharsMap;
+struct Config
+{
+  std::string exe = "ctags.exe";
+  bool use_built_in_ctags = true;
+  std::string opt = "--c++-types=+px --c-types=+px --fields=+n -R *";
+  size_t max_results = 10;
+  size_t threshold = 1500;
+  size_t threshold_filter_len = 2;
+  ThreeStateFlag platform_language_lookup = ThreeStateFlag::Undefined;
+  size_t reset_cache_counters_timeout_hours = 12;
+  bool casesens = true;
+  bool sort_class_members_by_name = false;
+  bool cur_file_first = true;
+  bool cached_tags_on_top = true;
+  bool index_edited_file = true;
+  std::string wordchars = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz~$_";
+  std::string tagsmask = "tags,*.tags";
+  std::string history_file = "%USERPROFILE%\\.tags-history";
+  size_t history_len = 10;
+  static size_t const max_history_len = 100;
+  std::string permanents = "%USERPROFILE%\\.tags-autoload";
+  bool restore_last_visited_on_load = true;
 };
-
-const size_t Config::max_history_len = 100;
-
-Config::Config()
-  : exe("ctags.exe")
-  , opt("--c++-types=+px --c-types=+px --fields=+n -R *")
-  , permanents("%USERPROFILE%\\.tags-autoload")
-  , tagsmask("tags,*.tags")
-  , history_file("%USERPROFILE%\\.tags-history")
-  , history_len(10)
-  , casesens(true)
-  , max_results(10)
-  , threshold(1500)
-  , threshold_filter_len(2)
-  , cur_file_first(true)
-  , cached_tags_on_top(true)
-  , index_edited_file(true)
-  , sort_class_members_by_name(false)
-  , use_built_in_ctags(true)
-  , reset_cache_counters_timeout_hours(12)
-  , restore_last_visited_on_load(true)
-  , platform_language_lookup(ThreeStateFlag::Undefined)
-{
-  SetWordchars("0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz~$_");
-}
-
-void Config::SetWordchars(std::string const& str)
-{
-  wordchars = str;
-  wordCharsMap = GetCharsMap(wordchars);
-}
 
 Config config;
 
@@ -790,15 +742,15 @@ static Config LoadConfig(std::string const& fileName)
     auto val = buf.substr(pos + 1);
     if(key == "pathtoexe")
     {
-      config.exe=val.c_str();
+      config.exe=val;
     }
     else if(key == "commandline")
     {
-      config.opt=val.c_str();
+      config.opt=val;
     }
     else if(key == "autoload")
     {
-      config.permanents=val.c_str();
+      config.permanents=val;
     }
     else if(key == "casesensfilt")
     {
@@ -806,15 +758,15 @@ static Config LoadConfig(std::string const& fileName)
     }
     else if(key == "wordchars")
     {
-      config.SetWordchars(val);
+      config.wordchars = !val.empty() ? val : config.wordchars;
     }
     else if(key == "tagsmask")
     {
-      config.tagsmask = val.c_str();
+      config.tagsmask = val;
     }
     else if(key == "historyfile")
     {
-      config.history_file = val.c_str();
+      config.history_file = val;
     }
     else if(key == "historylen")
     {
@@ -1317,9 +1269,10 @@ void WINAPI SetStartupInfoW(const struct PluginStartupInfo *Info)
   NavigatorInstance = Plugin::Navigator::Create(CurrentEditor); //TODO: prevent loading plugin if failed
 }
 
-inline int isident(int chr)
+static bool isident(wchar_t chr)
 {
-  return config.isident(chr);
+  bool const outOfRange = static_cast<uint32_t>(chr) > std::numeric_limits<unsigned char>::max();
+  return outOfRange ? false : config.wordchars.find(static_cast<char>(static_cast<unsigned char>(chr))) != std::string::npos;
 }
 
 static std::string GetWord(int offset=0)
@@ -2378,7 +2331,7 @@ static intptr_t ConfigurePlugin()
     DI_CHECKBOX,  5, ++y, 62,10, 1,config.cached_tags_on_top,0,0,MCachedTagsOnTop,L"",{"cachedtagsontop", false, true},
     DI_CHECKBOX,  5, ++y, 62,10, 1,config.index_edited_file,0,0,MIndexEditedFile,L"",{"indexeditedfile", false, true},
     DI_TEXT,      5, ++y,  0, 0, 0,0,              0,0,MWordChars,L"",{},
-    DI_EDIT,      5, ++y, 62, 9, 1,0,              0,0,-1,ToString(config.GetWordchars()),{"wordchars", true},
+    DI_EDIT,      5, ++y, 62, 9, 1,0,              0,0,-1,ToString(config.wordchars),{"wordchars", true},
     DI_TEXT,      5, ++y, 62,10, 1,0,DIF_SEPARATOR|DIF_BOXCOLOR,0,-1,L"",{},
     DI_TEXT,      5, ++y,  0, 0, 0,0,              0,0,MTagsMask,L"",{},
     DI_EDIT,      5, ++y, 62, 9, 1,0,              0,0,-1,ToString(config.tagsmask),{"tagsmask", true},
