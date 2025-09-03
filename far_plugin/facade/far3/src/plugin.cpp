@@ -28,6 +28,7 @@
 #include <far3/plugin_sdk/api.h>
 #include <far3/wide_string.h>
 
+#include <plugin/config.h>
 #include <plugin/navigator.h>
 #include <tags.h>
 #include <tags_repository_storage.h>
@@ -59,6 +60,8 @@ using Far3::Guid;
 using Far3::KeyEvent;
 using Far3::UseLayouts;
 using Far3::BreakKeys;
+using Plugin::Config;
+using Plugin::ThreeStateFlag;
 
 static struct PluginStartupInfo I;
 FarStandardFunctions FSF;
@@ -72,37 +75,6 @@ static const wchar_t* APPNAME = CTAGS_PRODUCT_NAME;
 static const wchar_t* const DefaultTagsFilename = L"tags";
 
 static const bool FlushTagsCache = true;
-
-enum class ThreeStateFlag
-{
-  Undefined,
-  Enabled,
-  Disabled,
-};
-
-struct Config
-{
-  std::string exe = "ctags.exe";
-  bool use_built_in_ctags = true;
-  std::string opt = "--c++-types=+px --c-types=+px --fields=+n -R *";
-  size_t max_results = 10;
-  size_t threshold = 1500;
-  size_t threshold_filter_len = 2;
-  ThreeStateFlag platform_language_lookup = ThreeStateFlag::Undefined;
-  size_t reset_cache_counters_timeout_hours = 12;
-  bool casesens = true;
-  bool sort_class_members_by_name = false;
-  bool cur_file_first = true;
-  bool cached_tags_on_top = true;
-  bool index_edited_file = true;
-  std::string wordchars = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz~$_";
-  std::string tagsmask = "tags,*.tags";
-  std::string history_file = "%USERPROFILE%\\.tags-history";
-  size_t history_len = 10;
-  static size_t const max_history_len = 100;
-  std::string permanents = "%USERPROFILE%\\.tags-autoload";
-  bool restore_last_visited_on_load = true;
-};
 
 Config config;
 
@@ -641,11 +613,6 @@ static WideString RenameToTempFilename(WideString const& originalFile)
   auto const newName = JoinPath(GetDirOfFile(originalFile), GetTempFilename());
   RenameFile(originalFile, newName);
   return newName;
-}
-
-static void SetDefaultConfig()
-{
-  config = Config();
 }
 
 static WideString GetModulePath()
