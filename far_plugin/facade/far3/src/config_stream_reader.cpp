@@ -1,7 +1,6 @@
-#include "text.h"
-
 #include <far3/config_stream_reader.h>
 #include <far3/error.h>
+#include <far3/text.h>
 
 #include <plugin/config_data_mapper.h>
 

@@ -2,6 +2,7 @@
 
 #include <far3/config_stream_reader.h>
 #include <far3/error.h>
+#include <far3/text.h>
 
 #include <plugin/config_data_mapper.h>
 
@@ -12,6 +13,11 @@ namespace Far3
   namespace Tests
   {
     unsigned const UNLIMITED = std::numeric_limits<unsigned>::max();
+
+    std::string ToString(Error const& error)
+    {
+      return "code: " + std::to_string(error.Code) + ", " + error.Field.first + ":" + error.Field.second;
+    }
 
     TEST(ConfigStreamReader, ReadsConfig)
     {
@@ -94,7 +100,7 @@ namespace Far3
       }
       catch(Error const& e)
       {
-        ASSERT_EQ(e.Field, decltype(e.Field)("line", "4"));
+        ASSERT_EQ(ToString(e), ToString(Error(MInvalidConfigFileFormat, "line", "4")));
       }
     }
 
@@ -115,7 +121,7 @@ namespace Far3
       }
       catch(Error const& e)
       {
-        ASSERT_EQ(e.Field, decltype(e.Field)("line", "5"));
+        ASSERT_EQ(ToString(e), ToString(Error(MInvalidConfigFileFormat, "line", "5")));
       }
     }
 
@@ -145,7 +151,7 @@ namespace Far3
       }
       catch(Error const& e)
       {
-        ASSERT_EQ(e.Field, decltype(e.Field)("line", "13"));
+        ASSERT_EQ(ToString(e), ToString(Error(MTooManyErrorsInConfigFile, "line", "13")));
       }
     }
 
@@ -171,7 +177,7 @@ namespace Far3
       }
       catch(Error const& e)
       {
-        ASSERT_EQ(e.Field, decltype(e.Field)("line", std::to_string(maxLines + 1)));
+        ASSERT_EQ(ToString(e), ToString(Error(MTooManyLinesInConfigFile, "line", std::to_string(maxLines + 1))));
       }
     }
 

@@ -1,9 +1,8 @@
-#include "text.h"
-
 #include <far3/current_editor_impl.h>
 #include <far3/error.h>
 #include <far3/guid.h>
 #include <far3/plugin_sdk/api.h>
+#include <far3/text.h>
 #include <far3/wide_string.h>
 
 #include <plugin/current_editor.h>
