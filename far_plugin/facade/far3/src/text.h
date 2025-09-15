@@ -90,4 +90,7 @@ enum{
   MFailedGetCPInfo,
   MPlatformLanguageNotSupported,
   MPlatformLanguageLookup,
+  MInvalidConfigFileFormat,
+  MTooManyErrorsInConfigFile,
+  MTooManyLinesInConfigFile,
 };

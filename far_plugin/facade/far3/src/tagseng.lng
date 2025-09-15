@@ -89,3 +89,6 @@
 "Failed to get installed code page info (system call 'GetCPInfo' failed)"
 "Your platform language is not supported (only single byte charsets are supported).\nThe feature will be disabled"
 "Enable platform language in search menu"
+"Invalid config file format"
+"Too many errors in config file"
+"Too many lines in config file"
