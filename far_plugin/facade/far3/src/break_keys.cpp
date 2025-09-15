@@ -1,8 +1,7 @@
-#include "text.h"
-
 #include <far3/break_keys.h>
 #include <far3/error.h>
 #include <far3/plugin_sdk/api.h>
+#include <far3/text.h>
 
 #include <algorithm>
 #include <cstdint>

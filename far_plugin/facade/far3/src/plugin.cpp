@@ -17,7 +17,6 @@
   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 */
 
-#include "text.h"
 #include "resource.h"
 
 #include <facade/safe_call.h>
@@ -27,6 +26,7 @@
 #include <far3/error.h>
 #include <far3/guid.h>
 #include <far3/plugin_sdk/api.h>
+#include <far3/text.h>
 #include <far3/wide_string.h>
 
 #include <plugin/config_data_mapper.h>
