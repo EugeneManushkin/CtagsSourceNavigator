@@ -22,13 +22,14 @@
 
 #include <facade/safe_call.h>
 #include <far3/break_keys.h>
+#include <far3/config_stream_reader.h>
 #include <far3/current_editor_impl.h>
 #include <far3/error.h>
 #include <far3/guid.h>
 #include <far3/plugin_sdk/api.h>
 #include <far3/wide_string.h>
 
-#include <plugin/config.h>
+#include <plugin/config_data_mapper.h>
 #include <plugin/navigator.h>
 #include <tags.h>
 #include <tags_repository_storage.h>
@@ -698,105 +699,13 @@ static void VisitTags(std::string const& tagsFile)
 
 static Config LoadConfig(std::string const& fileName)
 {
-  Config config;
-  for (auto const& buf : LoadStrings(fileName))
-  {
-    auto pos = buf.find('=');
-    if (pos == std::string::npos)
-      continue;
+  static auto reader = Far3::ConfigStreamReader::Create();
+  static auto mapper = Plugin::ConfigDataMapper::Create();
 
-    auto key = buf.substr(0, pos);
-    auto val = buf.substr(pos + 1);
-    if(key == "pathtoexe")
-    {
-      config.exe=val;
-    }
-    else if(key == "commandline")
-    {
-      config.opt=val;
-    }
-    else if(key == "autoload")
-    {
-      config.permanents=val;
-    }
-    else if(key == "casesensfilt")
-    {
-      config.casesens = val == "true";
-    }
-    else if(key == "wordchars")
-    {
-      config.wordchars = !val.empty() ? val : config.wordchars;
-    }
-    else if(key == "tagsmask")
-    {
-      config.tagsmask = val;
-    }
-    else if(key == "historyfile")
-    {
-      config.history_file = val;
-    }
-    else if(key == "historylen")
-    {
-      int len = 0;
-      if (sscanf(val.c_str(), "%d", &len) == 1 && len >= 0)
-        config.history_len = std::min(static_cast<size_t>(len), Config::max_history_len);
-    }
-    else if(key == "maxresults")
-    {
-      int maxresults = 0;
-      if (sscanf(val.c_str(), "%d", &maxresults) == 1 && maxresults > 0)
-        config.max_results = maxresults;
-    }
-    else if(key == "threshold")
-    {
-      int threshold = 0;
-      if (sscanf(val.c_str(), "%d", &threshold) == 1 && threshold >= 0)
-        config.threshold = threshold;
-    }
-    else if(key == "thresholdfilterlen")
-    {
-      int thresholdfilterlen = 0;
-      if (sscanf(val.c_str(), "%d", &thresholdfilterlen) == 1 && thresholdfilterlen >= 0)
-        config.threshold_filter_len = thresholdfilterlen;
-    }
-    else if(key == "curfilefirst")
-    {
-      config.cur_file_first = val == "true";
-    }
-    else if(key == "cachedtagsontop")
-    {
-      config.cached_tags_on_top = val == "true";
-    }
-    else if(key == "indexeditedfile")
-    {
-      config.index_edited_file = val == "true";
-    }
-    else if(key == "sortclassmembersbyname")
-    {
-      config.sort_class_members_by_name = val == "true";
-    }
-    else if(key == "usebuiltinctags")
-    {
-      config.use_built_in_ctags = val == "true";
-    }
-    else if(key == "resetcachecounterstimeouthours")
-    {
-      int timeout = 0;
-      if (sscanf(val.c_str(), "%d", &timeout) == 1 && timeout >= 0)
-        config.reset_cache_counters_timeout_hours = timeout;
-    }
-    else if(key == "restorelastvisitedonload")
-    {
-      config.restore_last_visited_on_load = val == "true";
-    }
-    else if(key == "platformlanguagelookup")
-    {
-      config.platform_language_lookup = val == "true" ? ThreeStateFlag::Enabled : ThreeStateFlag::Disabled;
-    }
-  }
-
-  config.history_len = config.history_file.empty() ? 0 : config.history_len;
-  return std::move(config);
+  std::ifstream file;
+  file.exceptions(std::ifstream::goodbit);
+  file.open(fileName);
+  return reader->Read(file, *mapper);
 }
 
 static auto Storage = Tags::RepositoryStorage::Create();
