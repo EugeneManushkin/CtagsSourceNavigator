@@ -85,6 +85,47 @@ namespace Plugin
       }
     }
 
+    TEST(ConfigDataMapper, SetAllNotDefaultValuesByKey)
+    {
+      Config const defaults;
+      std::vector<std::pair<std::string, std::string>> const keyValues = {
+        {"pathtoexe", defaults.exe + "?exe"},
+        {"usebuiltinctags", !defaults.use_built_in_ctags ? "true" : "false"},
+        {"commandline", defaults.opt + "?opt"},
+        {"maxresults", std::to_string(defaults.max_results + 1)},
+        {"threshold", std::to_string(defaults.threshold + 1)},
+        {"thresholdfilterlen", std::to_string(defaults.threshold_filter_len + 1)},
+        {"platformlanguagelookup", (defaults.platform_language_lookup != Plugin::ThreeStateFlag::Enabled ? "true" : "false")},
+        {"resetcachecounterstimeouthours", std::to_string(defaults.reset_cache_counters_timeout_hours + 1)},
+        {"casesensfilt", !defaults.casesens ? "true" : "false"},
+        {"sortclassmembersbyname", !defaults.sort_class_members_by_name ? "true" : "false"},
+        {"curfilefirst", !defaults.cur_file_first ? "true" : "false"},
+        {"cachedtagsontop", !defaults.cached_tags_on_top ? "true" : "false"},
+        {"indexeditedfile", !defaults.index_edited_file ? "true" : "false"},
+        {"wordchars", defaults.wordchars + "?wordchars"},
+        {"tagsmask", defaults.tagsmask + "?tagsmask"},
+        {"historyfile", defaults.history_file + "?history_file"},
+        {"historylen", std::to_string(defaults.history_len + 1)},
+        {"autoload", defaults.permanents + "?permanents"},
+        {"restorelastvisitedonload", !defaults.restore_last_visited_on_load ? "true" : "false"},
+      };
+
+      auto SUT = ConfigDataMapper::Create();
+      Config config;
+      for (auto const& kv : keyValues)
+      {
+        ASSERT_TRUE(SUT->Set(kv.first, kv.second, config)) << "key: " << kv.first << ", value: " << kv.second;
+      }
+
+      for (int i = 0; i < static_cast<int>(ConfigFieldId::MaxFieldId); ++i)
+      {
+        auto field = SUT->Get(i, config);
+        auto default = SUT->Get(i, defaults);
+        ASSERT_NE(field.value, default.value) << "ConfigFieldId = " << i << ", key = " << field.key;
+      }
+    }
+
+
     TEST(ConfigDataMapper, ThrowIfInvalidId)
     {
       auto SUT = ConfigDataMapper::Create();
