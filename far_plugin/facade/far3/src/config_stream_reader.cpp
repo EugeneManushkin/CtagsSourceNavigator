@@ -35,7 +35,6 @@ namespace
     std::string value;
     for (; begin != end && !IsLineEnd(*begin) && value.length() < maxLen; value += *begin, ++begin);
     if (begin != end && !IsLineEnd(*begin)) return false;
-    SkipLine(begin, end);
     result = value;
     return true;
   }
@@ -68,14 +67,10 @@ namespace
     std::istreambuf_iterator<char> const end;
     unsigned lines = 0;
     unsigned errors = 0;
-    for (; begin != end; ++lines)
+    for (; lines < MaxLines && begin != end; SkipLine(begin, end), ++lines)
     {
-      for (; lines < MaxLines && begin != end && IsLineEnd(*begin); SkipLine(begin, end), ++lines);
-      if (begin == end)
-        break;
-
-      if (lines == MaxLines)
-        throw Far3::Error(MTooManyLinesInConfigFile, "line", std::to_string(lines + 1));
+      if (IsLineEnd(*begin))
+        continue;
 
       std::string key;
       if (!ParseKey(begin, end, MaxKeyLen, key))
@@ -89,6 +84,9 @@ namespace
       if (errors > MaxErrors)
         throw Far3::Error(MTooManyErrorsInConfigFile, "line", std::to_string(lines + 1));
     }
+
+    if (begin != end)
+      throw Far3::Error(MTooManyLinesInConfigFile, "line", std::to_string(lines + 1));
 
     return result;
   }
