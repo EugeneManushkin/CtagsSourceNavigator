@@ -13,6 +13,14 @@ namespace
     return c == '\r' || c == '\n';
   }
 
+  bool ValidKeyChar(char c)
+  {
+    return c >= 'a' && c <= 'z'
+        || c >= 'A' && c <= 'Z'
+        || c >= '0' && c <= '9'
+        || c == '_';
+  }
+
   void SkipLine(std::istreambuf_iterator<char>& begin, std::istreambuf_iterator<char> const& end)
   {
     bool cr = begin != end && *begin == '\r';
@@ -23,8 +31,8 @@ namespace
   bool ParseKey(std::istreambuf_iterator<char>& begin, std::istreambuf_iterator<char> const& end, size_t maxLen, std::string& result)
   {
     std::string key;
-    for(; begin != end && *begin != '=' && key.length() < maxLen; key += *begin, ++begin);
-    if (begin == end || *begin != '=') return false;
+    for(; begin != end && ValidKeyChar(*begin) && *begin != '=' && key.length() < maxLen; key += *begin, ++begin);
+    if (begin == end || *begin != '=' || key.empty()) return false;
     ++begin;
     result = key;
     return true;

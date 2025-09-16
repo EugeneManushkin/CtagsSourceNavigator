@@ -299,6 +299,64 @@ namespace Far3
       ;
       ASSERT_NO_THROW(ConfigStreamReader::Create(UNLIMITED, UNLIMITED, UNLIMITED, maxLines)->Read(std::stringstream(input), *Plugin::ConfigDataMapper::Create()));
     }
+
+    TEST(ConfigStreamReader, ThrowsOnInvalidSyntaxFollowedByValidField)
+    {
+      std::string const input =
+        "\r\n"
+        "historyfile=\r\n"
+        "invalid field?syntax\r\n"
+        "threshold=3\r\n"
+        "\r\n"
+      ;
+      try
+      {
+        ConfigStreamReader::Create()->Read(std::stringstream(input), *Plugin::ConfigDataMapper::Create());
+        FAIL() << "Expected exception thrown";
+      }
+      catch(Error const& e)
+      {
+        ASSERT_EQ(ToString(e), ToString(Error(MInvalidConfigFileFormat, "line", "3")));
+      }
+    }
+
+    TEST(ConfigStreamReader, ThrowsOnEmptyKey)
+    {
+      std::string const input =
+        "\r\n"
+        "historyfile=\r\n"
+        "=empty key\r\n"
+        "threshold=3\r\n"
+      ;
+      try
+      {
+        ConfigStreamReader::Create()->Read(std::stringstream(input), *Plugin::ConfigDataMapper::Create());
+        FAIL() << "Expected exception thrown";
+      }
+      catch(Error const& e)
+      {
+        ASSERT_EQ(ToString(e), ToString(Error(MInvalidConfigFileFormat, "line", "3")));
+      }
+    }
+
+    TEST(ConfigStreamReader, ThrowsOnInvalidCharInKey)
+    {
+      std::string const input =
+        "\r\n"
+        "historyfile=\r\n"
+        "invalid@key=value\r\n"
+        "threshold=3\r\n"
+      ;
+      try
+      {
+        ConfigStreamReader::Create()->Read(std::stringstream(input), *Plugin::ConfigDataMapper::Create());
+        FAIL() << "Expected exception thrown";
+      }
+      catch(Error const& e)
+      {
+        ASSERT_EQ(ToString(e), ToString(Error(MInvalidConfigFileFormat, "line", "3")));
+      }
+    }
   }
 }
 
