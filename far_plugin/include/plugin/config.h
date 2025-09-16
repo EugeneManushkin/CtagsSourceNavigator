@@ -16,13 +16,13 @@ namespace Plugin
   {
     std::string exe = "ctags.exe";
     bool use_built_in_ctags = true;
-    std::string opt = "--c++-types=+px --c-types=+px --fields=+n -R *";
-    size_t max_results = 10;
-    size_t threshold = 1500;
-    size_t threshold_filter_len = 2;
+    std::string opt = "--c++-types=+lpx --c-types=+lpx --fields=+n --sort=no -R *";
+    size_t max_results = 25;
+    size_t threshold = 500;
+    size_t threshold_filter_len = 3;
     ThreeStateFlag platform_language_lookup = ThreeStateFlag::Undefined;
     size_t reset_cache_counters_timeout_hours = 12;
-    bool casesens = true;
+    bool casesens = false;
     bool sort_class_members_by_name = false;
     bool cur_file_first = true;
     bool cached_tags_on_top = true;

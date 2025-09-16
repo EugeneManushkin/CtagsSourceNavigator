@@ -21,16 +21,36 @@ namespace Far3
 
     TEST(ConfigStreamReader, ReadsConfig)
     {
+      Plugin::Config const defaults;
       std::string const input =
         "\r\n\r\n\r\n"
-        "exe=C:/path/to/exe\r\n"
-        "usebuiltinctags=false\r\n\r\n\r\n"
-        "commandline=-a --command --line"
+        "pathtoexe=C:\\tools\\yalta\\ctags_wrapper.bat\r\n"
+        "usebuiltinctags=false\r\n"
+        "commandline=--exclude=*.md --exclude=*.json --exclude=*.css --exclude=*.js --exclude=Makefile --exclude=*.htm? --cmake-types=+fmtvDpr --c++-types=+lpx --c-types=+lpx --fields=+n -R *\r\n"
+        "maxresults=7\r\n"
+        "threshold=789\r\n"
+        "thresholdfilterlen=7\r\n"
+        "platformlanguagelookup=true\r\n"
+        "resetcachecounterstimeouthours=17\r\n"
+        "casesensfilt=true\r\n"
+        "sortclassmembersbyname=true\r\n"
+        "curfilefirst=false\r\n"
+        "cachedtagsontop=false\r\n"
+        "indexeditedfile=false\r\n"
+        "wordchars=abcd01234\r\n"
+        "tagsmask=???,*.???\r\n"
+        "historyfile=C:\\.tags-history\r\n"
+        "historylen=89\r\n"
+        "restorelastvisitedonload=false\r\n"
+        "autoload=C:\\.tags-autoload"
       ;
       auto const config = ConfigStreamReader::Create()->Read(std::stringstream(input), *Plugin::ConfigDataMapper::Create());
-      ASSERT_EQ(config.exe, "C:/path/to/exe");
-      ASSERT_EQ(config.use_built_in_ctags, false);
-      ASSERT_EQ(config.opt, "-a --command --line");
+      ASSERT_EQ(config.exe, "C:\\tools\\yalta\\ctags_wrapper.bat");
+      ASSERT_EQ(config.opt, "--exclude=*.md --exclude=*.json --exclude=*.css --exclude=*.js --exclude=Makefile --exclude=*.htm? --cmake-types=+fmtvDpr --c++-types=+lpx --c-types=+lpx --fields=+n -R *");
+      ASSERT_EQ(config.wordchars, "abcd01234");
+      ASSERT_EQ(config.tagsmask, "???,*.???");
+      ASSERT_EQ(config.history_file, "C:\\.tags-history");
+      ASSERT_EQ(config.permanents, "C:\\.tags-autoload");
     }
 
     TEST(ConfigStreamReader, ReadsEmptyValue)
@@ -38,7 +58,7 @@ namespace Far3
       std::string const input =
         "\r\n\r\n\r\n"
         "historyfile=\r\n"
-        "exe=C:/path/to/exe\r\n"
+        "pathtoexe=C:/path/to/exe\r\n"
       ;
       auto const config = ConfigStreamReader::Create()->Read(std::stringstream(input), *Plugin::ConfigDataMapper::Create());
       ASSERT_EQ(config.exe, "C:/path/to/exe");
@@ -84,12 +104,12 @@ namespace Far3
       std::string const first =
         "\r\n\r\n\r\n"
         "historyfile=\r\n"
-        "exe=C:/path/to/exe\r\n"
+        "pathtoexe=C:/path/to/exe\r\n"
       ;
       std::string const second =
         "\r\n\r\n\r\n"
         "historyfile=C:/history/file\r\n"
-        "exe=C:/the/exe/path\r\n"
+        "pathtoexe=C:/the/exe/path\r\n"
       ;
       auto SUT = ConfigStreamReader::Create();
 
@@ -150,7 +170,7 @@ namespace Far3
     {
       unsigned const maxErrors = 10;
       std::string const input =
-        "exe=\n"
+        "pathtoexe=\n"
         "\n" // OK
         "unknownkey=\n"
         "usebuiltinctags=27\n"

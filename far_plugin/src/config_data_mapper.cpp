@@ -126,7 +126,7 @@ namespace
   {
     using FT = ConfigFieldType;
 
-    DEFINE_META_F(exe, "exe", FT::String, SetNotEmpty);
+    DEFINE_META_F(exe, "pathtoexe", FT::String, SetNotEmpty);
     DEFINE_META(opt, "commandline", FT::String);
     DEFINE_META(use_built_in_ctags, "usebuiltinctags", FT::Flag);
     DEFINE_META_F(max_results, "maxresults", FT::Size, SetNonzero);
