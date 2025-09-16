@@ -58,6 +58,27 @@ namespace Far3
       ASSERT_NO_THROW(ConfigStreamReader::Create()->Read(std::stringstream(input), *Plugin::ConfigDataMapper::Create()));
     }
 
+    TEST(ConfigStreamReader, ReadsFromSingleLineStream)
+    {
+      std::string const input = "resetcachecounterstimeouthours=27";
+      auto const config = ConfigStreamReader::Create()->Read(std::stringstream(input), *Plugin::ConfigDataMapper::Create());
+      ASSERT_EQ(config.reset_cache_counters_timeout_hours, 27);
+    }
+
+    TEST(ConfigStreamReader, ThrowsOnErrorInSingleLineStream)
+    {
+      std::string const input = "invalid field?syntax";
+      try
+      {
+        ConfigStreamReader::Create()->Read(std::stringstream(input), *Plugin::ConfigDataMapper::Create());
+        FAIL() << "Expected exception thrown";
+      }
+      catch(Error const& e)
+      {
+        ASSERT_EQ(ToString(e), ToString(Error(MInvalidConfigFileFormat, "line", "1")));
+      }
+    }
+
     TEST(ConfigStreamReader, ReusedToReadDifferentConfigs)
     {
       std::string const first =
@@ -178,6 +199,48 @@ namespace Far3
       catch(Error const& e)
       {
         ASSERT_EQ(ToString(e), ToString(Error(MTooManyLinesInConfigFile, "line", std::to_string(maxLines + 1))));
+      }
+    }
+
+    TEST(ConfigStreamReader, ThrowsOnTooManyEmptyLines)
+    {
+      size_t const maxLines = 4;
+      std::string const input =
+        "\r\n"
+        "\r\n"
+        "\r\n"
+        "\r\n"
+        "threshold=4"
+      ;
+      try
+      {
+        ConfigStreamReader::Create(UNLIMITED, UNLIMITED, UNLIMITED, maxLines)->Read(std::stringstream(input), *Plugin::ConfigDataMapper::Create());
+        FAIL() << "Expected exception thrown";
+      }
+      catch(Error const& e)
+      {
+        ASSERT_EQ(ToString(e), ToString(Error(MTooManyLinesInConfigFile, "line", std::to_string(maxLines + 1))));
+      }
+    }
+
+    TEST(ConfigStreamReader, ThrowsOnErrorInLastNotTerminatedLine)
+    {
+      size_t const maxLines = 5;
+      std::string const input =
+        "\r\n"
+        "\r\n"
+        "\r\n"
+        "\r\n"
+        "invalid field?syntax"
+      ;
+      try
+      {
+        ConfigStreamReader::Create(UNLIMITED, UNLIMITED, UNLIMITED, maxLines)->Read(std::stringstream(input), *Plugin::ConfigDataMapper::Create());
+        FAIL() << "Expected exception thrown";
+      }
+      catch(Error const& e)
+      {
+        ASSERT_EQ(ToString(e), ToString(Error(MInvalidConfigFileFormat, "line", std::to_string(maxLines))));
       }
     }
 
