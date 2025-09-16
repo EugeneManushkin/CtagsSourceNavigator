@@ -1140,7 +1140,7 @@ void WINAPI SetStartupInfoW(const struct PluginStartupInfo *Info)
   FSF = *Info->FSF;
   I.FSF = &FSF;
   MigrateConfig();
-  config = LoadConfig(ToStdString(GetConfigFilePath()));
+  config = SafeCall(LoadConfig, Facade::ExceptionHandler(), ToStdString(GetConfigFilePath())).second;
   CurrentEditor = Far3::CreateCurrentEditor(I, PluginGuid); //TODO: prevent loading plugin if failed
   NavigatorInstance = Plugin::Navigator::Create(CurrentEditor); //TODO: prevent loading plugin if failed
 }
@@ -1827,7 +1827,7 @@ HANDLE WINAPI OpenW(const struct OpenInfo *info)
 {
   OPENFROM OpenFrom = info->OpenFrom;
   WideString tagfile;
-  config = LoadConfig(ToStdString(GetConfigFilePath()));
+  config = SafeCall(LoadConfig, Err, ToStdString(GetConfigFilePath())).second;
   if(OpenFrom==OPEN_EDITOR)
   {
     auto ei = GetCurrentEditorInfo();
