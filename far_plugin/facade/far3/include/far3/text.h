@@ -93,4 +93,5 @@ enum{
   MInvalidConfigFileFormat,
   MTooManyErrorsInConfigFile,
   MTooManyLinesInConfigFile,
+  MFailedLoadConfig,
 };
