@@ -697,7 +697,7 @@ static void VisitTags(std::string const& tagsFile)
   SaveHistory(history);
 }
 
-static Config LoadConfig(std::string const& fileName)
+static Config LoadConfig(std::string const& fileName) try
 {
   static auto reader = Far3::ConfigStreamReader::Create();
   static auto mapper = Plugin::ConfigDataMapper::Create();
@@ -706,6 +706,14 @@ static Config LoadConfig(std::string const& fileName)
   file.exceptions(std::ifstream::goodbit);
   file.open(fileName);
   return reader->Read(file, *mapper);
+}
+catch (Error const& e)
+{
+  throw Error(e.Code, "Config file", fileName);
+}
+catch (...)
+{
+  throw Error(MFailedLoadConfig, "Config file", fileName);
 }
 
 static auto Storage = Tags::RepositoryStorage::Create();
