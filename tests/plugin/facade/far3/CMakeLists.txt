@@ -6,3 +6,6 @@ target_link_libraries(guid_tests ctags_static gtest)
 
 add_executable(config_stream_reader_tests config_stream_reader/main.cpp)
 target_link_libraries(config_stream_reader_tests ctags_static gtest)
+
+add_executable(config_stream_writer_tests config_stream_writer/main.cpp)
+target_link_libraries(config_stream_writer_tests ctags_static gtest)
