@@ -21,6 +21,6 @@ namespace Far3
     , unsigned maxErrors = static_cast<int>(Plugin::ConfigFieldId::MaxFieldId)
     , unsigned maxLines = static_cast<int>(Plugin::ConfigFieldId::MaxFieldId) * 8
     );
-    virtual Plugin::Config Read(std::istream& stream, Plugin::ConfigDataMapper const& dataMapper) = 0;
+    virtual Plugin::Config Read(std::istream& stream, Plugin::ConfigDataMapper const& dataMapper) const = 0;
   };
 }

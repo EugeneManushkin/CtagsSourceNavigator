@@ -51,7 +51,7 @@ namespace
   {
   public:
     ConfigStreamReaderImpl(size_t maxKeyLen, size_t maxValueLen, unsigned maxErrors, unsigned maxLines);
-    Plugin::Config Read(std::istream& stream, Plugin::ConfigDataMapper const& dataMapper) override;
+    Plugin::Config Read(std::istream& stream, Plugin::ConfigDataMapper const& dataMapper) const override;
 
   private:
     size_t const MaxKeyLen;
@@ -68,7 +68,7 @@ namespace
   {
   }
 
-  Plugin::Config ConfigStreamReaderImpl::Read(std::istream& stream, Plugin::ConfigDataMapper const& dataMapper)
+  Plugin::Config ConfigStreamReaderImpl::Read(std::istream& stream, Plugin::ConfigDataMapper const& dataMapper) const
   {
     Plugin::Config result;
     std::istreambuf_iterator<char> begin(stream);
