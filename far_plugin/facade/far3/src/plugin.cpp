@@ -2203,8 +2203,8 @@ static intptr_t ConfigurePlugin()
   WideString const menuTitle = WideString(GetMsg(MPlugin)) + L" " + PluginVersionString();
   std::vector<DialogItem> items = {
 //   Type          X1  Y1  X2  Y2  FieldId Message<int,str> Flags
-    {DI_DOUBLEBOX, 3, ++y, 64, 37, NoId, {-1, menuTitle}},
-    {DI_TEXT,      5, ++y, 0,  0,  NoId, {MPathToExe, L""}},
+    {DI_DOUBLEBOX, 3, ++y, 64, 37, Plugin::ConfigFieldId::MaxFieldId, std::make_pair(-1, menuTitle), 0}
+/*    {DI_TEXT,      5, ++y, 0,  0,  NoId, {MPathToExe, L""}},
     {DI_EDIT,      5, ++y, 62, 3,  ID::exe},
     {DI_CHECKBOX,  5, ++y, 62, 10, ID::use_built_in_ctags, {MUseBuiltInCtags, L""}},
     {DI_TEXT,      5, ++y, 0,  0,  NoId, {MCmdLineOptions, L""}},
@@ -2240,6 +2240,7 @@ static intptr_t ConfigurePlugin()
     {DI_TEXT,      5, ++y, 62, 10, NoId, NoMessage, DIF_SEPARATOR|DIF_BOXCOLOR},
     {DI_BUTTON,    0, ++y, 0,  0,  NoId, {MOk, L""}, DIF_CENTERGROUP},
     {DI_BUTTON,    0,   y, 0,  0,  NoId, {MCancel, L""}, DIF_CENTERGROUP},
+*/
   };
   InitDialogItems(items, ConfigMapper(), currentConfig);
   std::vector<FarDialogItem> farItems(items.size());
