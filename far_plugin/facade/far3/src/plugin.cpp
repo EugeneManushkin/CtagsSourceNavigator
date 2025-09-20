@@ -22,6 +22,7 @@
 #include <facade/safe_call.h>
 #include <far3/break_keys.h>
 #include <far3/config_stream_reader.h>
+#include <far3/config_stream_writer.h>
 #include <far3/current_editor_impl.h>
 #include <far3/error.h>
 #include <far3/guid.h>
@@ -697,15 +698,20 @@ static void VisitTags(std::string const& tagsFile)
   SaveHistory(history);
 }
 
+Plugin::ConfigDataMapper const& ConfigMapper()
+{
+  static auto mapper = Plugin::ConfigDataMapper::Create();
+  return *mapper;
+}
+
 static Config LoadConfig(std::string const& fileName) try
 {
   static auto reader = Far3::ConfigStreamReader::Create();
-  static auto mapper = Plugin::ConfigDataMapper::Create();
 
   std::ifstream file;
   file.exceptions(std::ifstream::goodbit);
   file.open(fileName);
-  return reader->Read(file, *mapper);
+  return reader->Read(file, ConfigMapper());
 }
 catch (Error const& e)
 {
@@ -2074,69 +2080,69 @@ void WINAPI GetPluginInfoW(struct PluginInfo *pi)
 }
 
 //TODO: rework
-struct InitDialogItem
+struct DialogItem
 {
-  unsigned char Type;
-  unsigned char X1,Y1,X2,Y2;
-  unsigned char Focus;
+  FARDIALOGITEMTYPES Type;
+  intptr_t X1,Y1,X2,Y2;
+  Plugin::ConfigFieldId FieldId;
+  std::pair<int, WideString> Message;
+  FARDIALOGITEMFLAGS Flags;
   intptr_t Selected;
-  unsigned int Flags;
-  unsigned char DefaultButton;
-  intptr_t MessageID;
-  WideString MessageText;
-  struct SaveInfo
-  {
-    std::string KeyName;
-    bool NotNull;
-    bool IsCheckbox;
-  } Save;
+  WideString Data;
 };
 
-static void InitDialogItems(struct InitDialogItem *Init,struct FarDialogItem *Item,
-                    int ItemsNumber)
+static void InitDialogItems(std::vector<DialogItem>& items, Plugin::ConfigDataMapper const& mapper, Plugin::Config& config)
 {
-  FarDialogItem empty = {};
-  for (int i=0;i<ItemsNumber;i++)
+  for (auto& item : items)
   {
-    auto& item = Item[i];
-    auto const& init = Init[i];
-    item = empty;
-    item.Type=static_cast<FARDIALOGITEMTYPES>(init.Type);
-    item.X1=init.X1;
-    item.Y1=init.Y1;
-    item.X2=init.X2;
-    item.Y2=init.Y2;
-    item.Selected=init.Selected;
-    item.Flags=init.Flags;
-    item.Flags |= init.Focus ? DIF_FOCUS : 0;
-    item.Flags |= init.DefaultButton ? DIF_DEFAULTBUTTON : 0;
-    item.Data = init.MessageID < 0 ? init.MessageText.c_str() : I.GetMsg(&PluginGuid, init.MessageID);
+    if (item.FieldId == Plugin::ConfigFieldId::MaxFieldId)
+      continue;
+
+    auto const field = mapper.Get(static_cast<int>(item.FieldId), config);
+    item.Data = ToString(field.value);
+    item.Selected = field.type == Plugin::ConfigFieldType::Flag && field.value == "true" ? 1 : 0;
   }
 }
 
-std::string SelectedToString(intptr_t selected)
+static FarDialogItem ToFarItem(DialogItem const& item)
 {
-  return !!selected ? "true" : "false";
+  FarDialogItem result = {};
+  result.Type = item.Type;
+  result.X1 = item.X1;
+  result.Y1 = item.Y1;
+  result.X2 = item.X2;
+  result.Y2 = item.Y2;
+  result.Selected = item.Selected;
+  result.Flags = item.Flags;
+  result.Data = item.Message.first >= 0 ? GetMsg(item.Message.first)
+              : !item.Message.second.empty() ? item.Message.second.c_str()
+              : item.Data.c_str();
+  return result;
 }
 
-static void SaveConfig(InitDialogItem const* dlgItems, size_t count)
+static void SaveConfig(Plugin::ConfigDataMapper const& mapper, Plugin::Config const& config)
 {
-  Strings strings;
-  for (size_t i = 0; i < count; ++i)
-  {
-    auto const& item = dlgItems[i];
-    if (!item.Save.KeyName.empty() && (!item.Save.NotNull || !item.MessageText.empty()))
-      strings.push_back(item.Save.KeyName + "=" + (item.Save.IsCheckbox ? SelectedToString(item.Selected) : ToStdString(item.MessageText)));
-  }
-
-  SaveStrings(strings, ToStdString(GetConfigFilePath()), std::ifstream::badbit);
+  std::ofstream file;
+  file.exceptions(std::ifstream::badbit);
+  file.open(ToStdString(GetConfigFilePath()));
+  Far3::ConfigStreamWriter::Create()->Write(file, mapper, config);
 }
 
-static void EnsurePlatformLanguageLookup(InitDialogItem* begin, size_t count)
+static void EnsurePlatformLanguageLookup(Plugin::ConfigDataMapper const& mapper, Plugin::Config& config)
 {
-  for (; count > 0 && begin->Save.KeyName != "platformlanguagelookup"; --count, ++begin);
-  if (count > 0)
-    begin->Selected = !!begin->Selected && SafeCall(CheckPlatformLanguageLookupSupported, Err).first;
+  bool enabled = config.platform_language_lookup == Plugin::ThreeStateFlag::Enabled
+              && SafeCall(CheckPlatformLanguageLookupSupported, Err).first;
+  mapper.Set(static_cast<int>(Plugin::ConfigFieldId::platform_language_lookup), enabled ? "true" : "false", config);
+}
+
+static Plugin::Config MakeConfig(std::vector<DialogItem> const& items, Plugin::ConfigDataMapper const& mapper)
+{
+  Plugin::Config result;
+  for (auto const& item : items)
+    mapper.Set(static_cast<int>(item.FieldId), ToStdString(item.Data), result);
+
+  EnsurePlatformLanguageLookup(mapper, result);
+  return result;
 }
 
 static WideString PluginVersionString()
@@ -2169,16 +2175,16 @@ intptr_t WINAPI ConfigureDlgProc(
     intptr_t Param1,
     void* Param2)
 {
-  InitDialogItem* items = reinterpret_cast<InitDialogItem*>(I.SendDlgMessage(hDlg, DM_GETDLGDATA, 0, nullptr));
+  auto* items = reinterpret_cast<DialogItem*>(I.SendDlgMessage(hDlg, DM_GETDLGDATA, 0, nullptr));
 
   if (Msg == DN_EDITCHANGE)
   {
-    items[Param1].MessageText = get_text(hDlg, Param1);
+    items[Param1].Data = get_text(hDlg, Param1);
   }
 
   if (Msg == DN_BTNCLICK)
   {
-    items[Param1].Selected = reinterpret_cast<intptr_t>(Param2);
+    items[Param1].Data = !!reinterpret_cast<intptr_t>(Param2) ? L"true" : L"false";
   }
 
   I.SendDlgMessage(hDlg, DM_ENABLE , 2, reinterpret_cast<void*>(!GetItem(hDlg, 3).Selected));
@@ -2187,53 +2193,56 @@ intptr_t WINAPI ConfigureDlgProc(
 
 static intptr_t ConfigurePlugin()
 {
-  config = LoadConfig(ToStdString(GetConfigFilePath()));
-  unsigned char y = 0;
-  WideString menuTitle = WideString(GetMsg(MPlugin)) + L" " + PluginVersionString();
-  struct InitDialogItem initItems[]={
-//    Type        X1  Y2  X2 Y2  F S           Flags D Data
-    DI_DOUBLEBOX, 3, ++y, 64,37, 0,0,              0,0,-1,menuTitle.c_str(),{},
-    DI_TEXT,      5, ++y,  0, 0, 0,0,              0,0,MPathToExe,L"",{},
-    DI_EDIT,      5, ++y, 62, 3, 1,0,              0,0,-1,ToString(config.exe),{"pathtoexe", true},
-    DI_CHECKBOX,  5, ++y, 62,10, 1,config.use_built_in_ctags,0,0,MUseBuiltInCtags,L"",{"usebuiltinctags", false, true},
-    DI_TEXT,      5, ++y,  0, 0, 0,0,              0,0,MCmdLineOptions,L"",{},
-    DI_EDIT,      5, ++y, 62, 5, 1,0,              0,0,-1,ToString(config.opt),{"commandline"},
-    DI_TEXT,      5, ++y, 62,10, 1,0,DIF_SEPARATOR|DIF_BOXCOLOR,0,-1,L"",{},
-    DI_TEXT,      5, ++y,  0, 0, 0,0,              0,0,MMaxResults,L"",{},
-    DI_EDIT,      5, ++y, 62, 9, 1,0,              0,0,-1,ToString(std::to_string(config.max_results)),{"maxresults", true},
-    DI_TEXT,      5, ++y,  0, 0, 0,0,              0,0,MThreshold,L"",{},
-    DI_EDIT,      5, ++y, 62, 9, 1,0,              0,0,-1,ToString(std::to_string(config.threshold)),{"threshold", true},
-    DI_TEXT,      5, ++y,  0, 0, 0,0,              0,0,MThresholdFilterLen,L"",{},
-    DI_EDIT,      5, ++y, 62, 9, 1,0,              0,0,-1,ToString(std::to_string(config.threshold_filter_len)),{"thresholdfilterlen", true},
-    DI_CHECKBOX,  5, ++y, 62,10, 1,config.platform_language_lookup == ThreeStateFlag::Enabled ? 1 : 0,0,0,MPlatformLanguageLookup,L"",{"platformlanguagelookup", false, true},
-    DI_TEXT,      5, ++y, 62,10, 1,0,DIF_SEPARATOR|DIF_BOXCOLOR,0,-1,L"",{},
-    DI_TEXT,      5, ++y,  0, 0, 0,0,              0,0,MResetCountersAfter,L"",{},
-    DI_EDIT,      5, ++y, 62, 9, 1,0,              0,0,-1,ToString(std::to_string(config.reset_cache_counters_timeout_hours)),{"resetcachecounterstimeouthours", true},
-    DI_CHECKBOX,  5, ++y, 62,10, 1,config.casesens,0,0,MCaseSensFilt,L"",{"casesensfilt", false, true},
-    DI_CHECKBOX,  5, ++y, 62,10, 1,config.sort_class_members_by_name,0,0,MSortClassMembersByName,L"",{"sortclassmembersbyname", false, true},
-    DI_CHECKBOX,  5, ++y, 62,10, 1,config.cur_file_first,0,0,MCurFileFirst,L"",{"curfilefirst", false, true},
-    DI_CHECKBOX,  5, ++y, 62,10, 1,config.cached_tags_on_top,0,0,MCachedTagsOnTop,L"",{"cachedtagsontop", false, true},
-    DI_CHECKBOX,  5, ++y, 62,10, 1,config.index_edited_file,0,0,MIndexEditedFile,L"",{"indexeditedfile", false, true},
-    DI_TEXT,      5, ++y,  0, 0, 0,0,              0,0,MWordChars,L"",{},
-    DI_EDIT,      5, ++y, 62, 9, 1,0,              0,0,-1,ToString(config.wordchars),{"wordchars", true},
-    DI_TEXT,      5, ++y, 62,10, 1,0,DIF_SEPARATOR|DIF_BOXCOLOR,0,-1,L"",{},
-    DI_TEXT,      5, ++y,  0, 0, 0,0,              0,0,MTagsMask,L"",{},
-    DI_EDIT,      5, ++y, 62, 9, 1,0,              0,0,-1,ToString(config.tagsmask),{"tagsmask", true},
-    DI_TEXT,      5, ++y,  0, 0, 0,0,              0,0,MHistoryFile,L"",{},
-    DI_EDIT,      5, ++y, 62, 9, 1,0,              0,0,-1,ToString(config.history_file),{"historyfile"},
-    DI_TEXT,      5, ++y,  0, 0, 0,0,              0,0,MHistoryLength,L"",{},
-    DI_EDIT,      5, ++y, 62, 9, 1,0,              0,0,-1,ToString(std::to_string(config.history_len)),{"historylen", true},
-    DI_TEXT,      5, ++y,  0, 0, 0,0,              0,0,MPermanentsFile,L"",{},
-    DI_EDIT,      5, ++y, 62, 7, 1,0,              0,0,-1,ToString(config.permanents),{"autoload"},
-    DI_CHECKBOX,  5, ++y, 62,10, 1,config.restore_last_visited_on_load,0,0,MRestoreLastVisitedOnLoad,L"",{"restorelastvisitedonload", false, true},
-    DI_TEXT,      5, ++y, 62,10, 1,0,DIF_SEPARATOR|DIF_BOXCOLOR,0,-1,L"",{},
-    DI_BUTTON,    0, ++y,  0, 0, 0,0,DIF_CENTERGROUP,1,MOk,L"",{},
-    DI_BUTTON,    0,   y,  0, 0, 0,0,DIF_CENTERGROUP,0,MCancel,L"",{}
+  Plugin::Config currentConfig = LoadConfig(ToStdString(GetConfigFilePath()));
+  using ID = Plugin::ConfigFieldId;
+  auto const NoId = ID::MaxFieldId;
+  auto const NoMessage = std::make_pair(-1, WideString());
+  intptr_t y = 0;
+  WideString const menuTitle = WideString(GetMsg(MPlugin)) + L" " + PluginVersionString();
+  std::vector<DialogItem> items = {
+//   Type          X1  Y1  X2  Y2  FieldId Message<int,str> Flags
+    {DI_DOUBLEBOX, 3, ++y, 64, 37, NoId, {-1, menuTitle}, 0},
+    {DI_TEXT,      5, ++y, 0,  0,  NoId, {MPathToExe, L""}},
+    {DI_EDIT,      5, ++y, 62, 3,  ID::exe, NoMessage},
+    {DI_CHECKBOX,  5, ++y, 62, 10, ID::use_built_in_ctags, {MUseBuiltInCtags, L""}},
+    {DI_TEXT,      5, ++y, 0,  0,  NoId, {MCmdLineOptions, L""}},
+    {DI_EDIT,      5, ++y, 62, 5,  ID::opt, NoMessage},
+    {DI_TEXT,      5, ++y, 62, 10, NoId, NoMessage, DIF_SEPARATOR|DIF_BOXCOLOR},
+    {DI_TEXT,      5, ++y, 0,  0,  NoId, {MMaxResults, L""}},
+    {DI_EDIT,      5, ++y, 62, 9,  ID::max_results, NoMessage},
+    {DI_TEXT,      5, ++y, 0,  0,  NoId, {MThreshold, L""}},
+    {DI_EDIT,      5, ++y, 62, 9,  ID::threshold, NoMessage},
+    {DI_TEXT,      5, ++y, 0,  0,  NoId, {MThresholdFilterLen, L""}},
+    {DI_EDIT,      5, ++y, 62, 9,  ID::threshold_filter_len, NoMessage},
+    {DI_CHECKBOX,  5, ++y, 62, 10, ID::platform_language_lookup, {MPlatformLanguageLookup, L""}},
+    {DI_TEXT,      5, ++y, 62, 10, NoId, NoMessage, DIF_SEPARATOR|DIF_BOXCOLOR},
+    {DI_TEXT,      5, ++y, 0,  0,  NoId, {MResetCountersAfter, L""}},
+    {DI_EDIT,      5, ++y, 62, 9,  ID::reset_cache_counters_timeout_hours, NoMessage},
+    {DI_CHECKBOX,  5, ++y, 62, 10, ID::casesens, {MCaseSensFilt, L""}},
+    {DI_CHECKBOX,  5, ++y, 62, 10, ID::sort_class_members_by_name, {MSortClassMembersByName ,L""}},
+    {DI_CHECKBOX,  5, ++y, 62, 10, ID::cur_file_first, {MCurFileFirst, L""}},
+    {DI_CHECKBOX,  5, ++y, 62, 10, ID::cached_tags_on_top, {MCachedTagsOnTop, L""}},
+    {DI_CHECKBOX,  5, ++y, 62, 10, ID::index_edited_file, {MIndexEditedFile, L""}},
+    {DI_TEXT,      5, ++y, 0,  0,  NoId, {MWordChars, L""}},
+    {DI_EDIT,      5, ++y, 62, 9,  ID::wordchars, NoMessage},
+    {DI_TEXT,      5, ++y, 62, 10, NoId, NoMessage, DIF_SEPARATOR|DIF_BOXCOLOR},
+    {DI_TEXT,      5, ++y, 0,  0,  NoId, {MTagsMask, L""}},
+    {DI_EDIT,      5, ++y, 62, 9,  ID::tagsmask, NoMessage},
+    {DI_TEXT,      5, ++y, 0,  0,  NoId, {MHistoryFile, L""}},
+    {DI_EDIT,      5, ++y, 62, 9,  ID::history_file, NoMessage},
+    {DI_TEXT,      5, ++y, 0,  0,  NoId, {MHistoryLength, L""}},
+    {DI_EDIT,      5, ++y, 62, 9,  ID::history_len, NoMessage},
+    {DI_TEXT,      5, ++y, 0,  0,  NoId, {MPermanentsFile, L""}},
+    {DI_EDIT,      5, ++y, 62, 7,  ID::permanents, NoMessage},
+    {DI_CHECKBOX,  5, ++y, 62, 10, ID::restore_last_visited_on_load, {MRestoreLastVisitedOnLoad, L""}},
+    {DI_TEXT,      5, ++y, 62, 10, NoId, NoMessage, DIF_SEPARATOR|DIF_BOXCOLOR},
+    {DI_BUTTON,    0, ++y, 0,  0,  NoId, {MOk, L""}, DIF_CENTERGROUP},
+    {DI_BUTTON,    0,   y, 0,  0,  NoId, {MCancel, L""}, DIF_CENTERGROUP|DIF_FOCUS},
   };
+  InitDialogItems(items, ConfigMapper(), currentConfig);
+  std::vector<FarDialogItem> farItems(items.size());
+  std::transform(items.begin(), items.end(), farItems.begin(), ToFarItem);
 
-  constexpr size_t itemsCount = sizeof(initItems)/sizeof(initItems[0]);
-  struct FarDialogItem DialogItems[itemsCount];
-  InitDialogItems(initItems,DialogItems,itemsCount);
   auto handle = I.DialogInit(
                &PluginGuid,
                &InteractiveDialogGuid,
@@ -2242,21 +2251,22 @@ static intptr_t ConfigurePlugin()
                68,
                y + 3,
                L"ctagscfg",
-               DialogItems,
-               sizeof(DialogItems)/sizeof(DialogItems[0]),
+               farItems.data(),
+               farItems.size(),
                0,
                FDLG_NONE,
                &ConfigureDlgProc,
-               initItems);
+               items.data());
 
   if (handle == INVALID_HANDLE_VALUE)
     return FALSE;
 
   std::shared_ptr<void> handleHolder(handle, [](void* h){I.DialogFree(h);});
-  auto ExitCode = I.DialogRun(handle);
-  if(ExitCode!=itemsCount-2)return FALSE;
-  EnsurePlatformLanguageLookup(initItems, itemsCount);
-  if (SafeCall(SaveConfig, Err, initItems, itemsCount).first)
+  if(I.DialogRun(handle) != items.size() - 2)
+    return FALSE;
+
+  currentConfig = MakeConfig(items, ConfigMapper());
+  if (SafeCall(SaveConfig, Err, ConfigMapper(), currentConfig).first)
     config = LoadConfig(ToStdString(GetConfigFilePath()));
 
   return TRUE;
