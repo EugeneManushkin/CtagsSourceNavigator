@@ -102,8 +102,8 @@ namespace
 
 namespace Far3
 {
-  std::unique_ptr<ConfigStreamReader> ConfigStreamReader::Create(size_t maxKeyLen, size_t maxValueLen, unsigned maxErrors, unsigned maxLines)
+  std::unique_ptr<const ConfigStreamReader> ConfigStreamReader::Create(size_t maxKeyLen, size_t maxValueLen, unsigned maxErrors, unsigned maxLines)
   {
-    return std::unique_ptr<ConfigStreamReader>(new ConfigStreamReaderImpl(maxKeyLen, maxValueLen, maxErrors, maxLines));
+    return std::unique_ptr<const ConfigStreamReader>(new ConfigStreamReaderImpl(maxKeyLen, maxValueLen, maxErrors, maxLines));
   }
 }

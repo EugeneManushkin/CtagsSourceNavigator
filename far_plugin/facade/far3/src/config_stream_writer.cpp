@@ -23,8 +23,8 @@ namespace
 
 namespace Far3
 {
-  std::unique_ptr<ConfigStreamWriter> ConfigStreamWriter::Create()
+  std::unique_ptr<const ConfigStreamWriter> ConfigStreamWriter::Create()
   {
-    return std::unique_ptr<ConfigStreamWriter>(new ConfigStreamWriterImpl());
+    return std::unique_ptr<const ConfigStreamWriter>(new ConfigStreamWriterImpl());
   }
 }
