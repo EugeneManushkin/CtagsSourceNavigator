@@ -13,6 +13,16 @@ namespace Plugin
            : "not empty string";
     }
 
+    int TestSizeId()
+    {
+      return static_cast<int>(ConfigFieldId::max_results);
+    }
+
+    size_t& TestSizeField(Config& config)
+    {
+      return config.max_results;
+    }
+
     int TestBoolId()
     {
       return static_cast<int>(ConfigFieldId::use_built_in_ctags);
@@ -212,6 +222,24 @@ namespace Plugin
       ASSERT_TRUE(SUT->Set(static_cast<int>(ConfigFieldId::history_file), "", config));
       ASSERT_EQ(config.history_file, "");
       ASSERT_EQ(config.history_len, 0);
+    }
+
+    TEST(ConfigDataMapper, FailSetNegativeSize)
+    {
+      auto SUT = ConfigDataMapper::Create();
+      Config config;
+      auto const expected = TestSizeField(config);
+      ASSERT_FALSE(SUT->Set(TestSizeId(), "-25", config));
+      ASSERT_EQ(TestSizeField(config), expected);
+    }
+
+    TEST(ConfigDataMapper, FailSetFloatSize)
+    {
+      auto SUT = ConfigDataMapper::Create();
+      Config config;
+      auto const expected = TestSizeField(config);
+      ASSERT_FALSE(SUT->Set(TestSizeId(), "2.7", config));
+      ASSERT_EQ(TestSizeField(config), expected);
     }
   }
 }
