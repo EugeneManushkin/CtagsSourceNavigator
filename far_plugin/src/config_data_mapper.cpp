@@ -42,6 +42,9 @@ namespace
 
   bool SetValue(std::string const& source, size_t& dest, size_t limit = std::numeric_limits<size_t>::max()) try
   {
+    if (std::find_if_not(source.begin(), source.end(), [](char c) {return c >= '0' && c <= '9';}) != source.end())
+      return false;
+
     auto val = std::stoul(source);
     dest = std::min(static_cast<size_t>(val), limit);
     return true;
@@ -148,7 +151,7 @@ namespace
     );
     DEFINE_META_S(history_len, "historylen", FT::Size,
       [](std::string const& value, Config& conf) {
-        return SetValue(value, conf.history_len, Config::max_history_len);}
+        return SetValue(conf.history_file.empty() ? "0" : value, conf.history_len, Config::max_history_len);}
     );
     DEFINE_META(permanents, "autoload", FT::String);
     DEFINE_META(restore_last_visited_on_load, "restorelastvisitedonload", FT::Flag);
@@ -188,8 +191,8 @@ namespace
 
 namespace Plugin
 {
-  std::unique_ptr<ConfigDataMapper> ConfigDataMapper::Create()
+  std::unique_ptr<const ConfigDataMapper> ConfigDataMapper::Create()
   {
-    return std::unique_ptr<ConfigDataMapper>(new ConfigDataMapperImpl);
+    return std::unique_ptr<const ConfigDataMapper>(new ConfigDataMapperImpl);
   }
 }
