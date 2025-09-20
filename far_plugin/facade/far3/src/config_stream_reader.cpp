@@ -51,7 +51,7 @@ namespace
   {
   public:
     ConfigStreamReaderImpl(size_t maxKeyLen, size_t maxValueLen, unsigned maxErrors, unsigned maxLines);
-    Plugin::Config Read(std::istream& stream, Plugin::ConfigDataMapper const& dataMapper) override;
+    Plugin::Config Read(std::istream& stream, Plugin::ConfigDataMapper const& dataMapper) const override;
 
   private:
     size_t const MaxKeyLen;
@@ -68,7 +68,7 @@ namespace
   {
   }
 
-  Plugin::Config ConfigStreamReaderImpl::Read(std::istream& stream, Plugin::ConfigDataMapper const& dataMapper)
+  Plugin::Config ConfigStreamReaderImpl::Read(std::istream& stream, Plugin::ConfigDataMapper const& dataMapper) const
   {
     Plugin::Config result;
     std::istreambuf_iterator<char> begin(stream);
@@ -102,8 +102,8 @@ namespace
 
 namespace Far3
 {
-  std::unique_ptr<ConfigStreamReader> ConfigStreamReader::Create(size_t maxKeyLen, size_t maxValueLen, unsigned maxErrors, unsigned maxLines)
+  std::unique_ptr<const ConfigStreamReader> ConfigStreamReader::Create(size_t maxKeyLen, size_t maxValueLen, unsigned maxErrors, unsigned maxLines)
   {
-    return std::unique_ptr<ConfigStreamReader>(new ConfigStreamReaderImpl(maxKeyLen, maxValueLen, maxErrors, maxLines));
+    return std::unique_ptr<const ConfigStreamReader>(new ConfigStreamReaderImpl(maxKeyLen, maxValueLen, maxErrors, maxLines));
   }
 }

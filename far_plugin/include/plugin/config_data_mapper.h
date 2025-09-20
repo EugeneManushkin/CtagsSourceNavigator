@@ -24,7 +24,7 @@ namespace Plugin
   class ConfigDataMapper
   {
   public:
-    static std::unique_ptr<ConfigDataMapper> Create();
+    static std::unique_ptr<const ConfigDataMapper> Create();
 
     virtual ~ConfigDataMapper() = default;
     virtual ConfigFieldData Get(int fieldId, Config const& config) const = 0;
