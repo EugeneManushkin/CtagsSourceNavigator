@@ -21,6 +21,7 @@
 
 #include <facade/safe_call.h>
 #include <far3/break_keys.h>
+#include <far3/config_menu.h>
 #include <far3/config_stream_reader.h>
 #include <far3/config_stream_writer.h>
 #include <far3/current_editor_impl.h>
@@ -2263,6 +2264,7 @@ static intptr_t ConfigurePlugin()
 
   std::shared_ptr<void> handleHolder(handle, [](void* h){I.DialogFree(h);});
   if(I.DialogRun(handle) != items.size() - 2)
+  if (items[2].Data == L"?") {Far3::ConfigMenu::Create(I, PluginGuid)->Show(ConfigMapper(), currentConfig); return FALSE;} else //TODO: remove. For debug purposes only
     return FALSE;
 
   currentConfig = MakeConfig(items, ConfigMapper());
