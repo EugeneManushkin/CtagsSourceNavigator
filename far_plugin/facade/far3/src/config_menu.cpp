@@ -1,4 +1,5 @@
 #include <far3/config_menu.h>
+#include <far3/config_value_dialog.h>
 #include <far3/guid.h>
 #include <far3/plugin_sdk/api.h>
 #include <far3/text.h>
@@ -67,6 +68,13 @@ namespace
     return result;
   }
 
+  void ResetSelected(intptr_t selected, std::vector<FarMenuItem>& items)
+  {
+    for (size_t i = 0; i < items.size(); ++i)
+      items[i].Flags = i == selected ? (items[i].Flags | MIF_SELECTED)
+                                     : (items[i].Flags & (~MIF_SELECTED));
+  }
+
   WideString PluginVersionString()
   {
     return ToString(std::to_string(CTAGS_VERSION_MAJOR) + "." +
@@ -131,8 +139,13 @@ namespace
     intptr_t const defaultX = -1, defaultY = -1, defaultHeight = 0;
     auto const bottomText = nullptr;
     auto const breakKeys = nullptr;
+    auto const configureValueDialog = Far3::ConfigValueDialog::Create(I, PluginGuid);
     intptr_t breakKey = -1;
-    auto selected = I.Menu(
+    intptr_t selected = -1;
+    do
+    {
+      ResetSelected(selected, farMenuItems);
+      selected = I.Menu(
         &PluginGuid,
         &MenuGuid,
         defaultX,
@@ -146,13 +159,19 @@ namespace
         &breakKey,
         farMenuItems.data(),
         farMenuItems.size()
-    );
-    if (selected < 0)
-      return {NoId, ""};
+      );
+      if (selected < 0)
+        continue;
 
-    //TODO: Modify value
+      auto const selectedField = FieldsTexts.at(selected);
+      auto const selectedFieldData = dataMapper.Get(static_cast<int>(selectedField.first), config);
+      auto value = configureValueDialog->Show(selectedFieldData.value, selectedFieldData.type, selectedField.second);
+      if (value.first)
+        return {selectedField.first, value.second};
+    }
+    while (selected >= 0);
 
-    return {FieldsTexts.at(selected).first, ""};
+    return {NoId, ""};
   }
 }
 
