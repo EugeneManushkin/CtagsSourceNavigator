@@ -85,7 +85,6 @@ static const wchar_t* GetMsg(int MsgId);
 
 const Guid ErrorMessageGuid("{03cceb3e-20ba-438a-9972-85a48b0d28e4}");
 const Guid InfoMessageGuid("{58a20c1d-44e2-40ba-9223-5f96d31d8c09}");
-const Guid InteractiveDialogGuid("{fcd1e1b9-4060-4696-9e40-11f055c2909e}");
 const Guid InputBoxGuid("{6ac0c4bb-b907-43c6-8c7a-642e4a34ee35}");
 const Guid PluginGuid("{2e34b611-3df1-463f-8711-74b0f21558a5}");
 const Guid CtagsMenuGuid("{7f125c0d-5e18-4b7f-a6df-1caae013c48f}");
@@ -2080,47 +2079,6 @@ void WINAPI GetPluginInfoW(struct PluginInfo *pi)
   pi->CommandPrefix = L"tag";
 }
 
-//TODO: rework
-struct DialogItem
-{
-  FARDIALOGITEMTYPES Type;
-  intptr_t X1,Y1,X2,Y2;
-  Plugin::ConfigFieldId FieldId;
-  std::pair<int, WideString> Message;
-  FARDIALOGITEMFLAGS Flags;
-  intptr_t Selected;
-  WideString Data;
-};
-
-static void InitDialogItems(std::vector<DialogItem>& items, Plugin::ConfigDataMapper const& mapper, Plugin::Config& config)
-{
-  for (auto& item : items)
-  {
-    if (item.FieldId == Plugin::ConfigFieldId::MaxFieldId)
-      continue;
-
-    auto const field = mapper.Get(static_cast<int>(item.FieldId), config);
-    item.Data = ToString(field.value);
-    item.Selected = field.type == Plugin::ConfigFieldType::Flag && field.value == "true" ? 1 : 0;
-  }
-}
-
-static FarDialogItem ToFarItem(DialogItem const& item)
-{
-  FarDialogItem result = {};
-  result.Type = item.Type;
-  result.X1 = item.X1;
-  result.Y1 = item.Y1;
-  result.X2 = item.X2;
-  result.Y2 = item.Y2;
-  result.Selected = item.Selected;
-  result.Flags = item.Flags;
-  result.Data = item.Message.first >= 0 ? GetMsg(item.Message.first)
-              : !item.Message.second.empty() ? item.Message.second.c_str()
-              : item.Data.c_str();
-  return result;
-}
-
 static void SaveConfig(Plugin::ConfigDataMapper const& mapper, Plugin::Config const& config)
 {
   std::ofstream file;
@@ -2136,140 +2094,32 @@ static void EnsurePlatformLanguageLookup(Plugin::ConfigDataMapper const& mapper,
   mapper.Set(static_cast<int>(Plugin::ConfigFieldId::platform_language_lookup), enabled ? "true" : "false", config);
 }
 
-static Plugin::Config MakeConfig(std::vector<DialogItem> const& items, Plugin::ConfigDataMapper const& mapper)
+static void SetDefaultValue(Plugin::ConfigFieldId field, Plugin::ConfigDataMapper const& mapper, Plugin::Config& config)
 {
-  Plugin::Config result;
-  for (auto const& item : items)
-    mapper.Set(static_cast<int>(item.FieldId), ToStdString(item.Data), result);
-
-  EnsurePlatformLanguageLookup(mapper, result);
-  return result;
-}
-
-static WideString PluginVersionString()
-{
-  return ToString(std::to_string(CTAGS_VERSION_MAJOR) + "." +
-                  std::to_string(CTAGS_VERSION_MINOR) + "." +
-                  std::to_string(CTAGS_VERSION_REVISION) + "." +
-                  std::to_string(CTAGS_VERSION_BUILD));
-}
-
-WideString get_text(HANDLE hDlg, intptr_t ctrl_id) {
-  FarDialogItemData item = { sizeof(FarDialogItemData) };
-  item.PtrLength = I.SendDlgMessage(hDlg, DM_GETTEXT, ctrl_id, 0);
-  std::vector<wchar_t> buf(item.PtrLength + 1);
-  item.PtrData = buf.data();
-  I.SendDlgMessage(hDlg, DM_GETTEXT, ctrl_id, &item);
-  return WideString(item.PtrData, item.PtrLength);
-}
-
-static FarDialogItem GetItem(HANDLE hDlg, intptr_t id)
-{
-  FarDialogItem item;
-  I.SendDlgMessage(hDlg, DM_GETDLGITEMSHORT, id, &item);
-  return std::move(item);
-}
-
-intptr_t WINAPI ConfigureDlgProc(
-    HANDLE   hDlg,
-    intptr_t Msg,
-    intptr_t Param1,
-    void* Param2)
-{
-  auto* items = reinterpret_cast<DialogItem*>(I.SendDlgMessage(hDlg, DM_GETDLGDATA, 0, nullptr));
-
-  if (Msg == DN_EDITCHANGE)
-  {
-    items[Param1].Data = get_text(hDlg, Param1);
-  }
-
-  if (Msg == DN_BTNCLICK)
-  {
-    items[Param1].Data = !!reinterpret_cast<intptr_t>(Param2) ? L"true" : L"false";
-  }
-
-  I.SendDlgMessage(hDlg, DM_ENABLE , 2, reinterpret_cast<void*>(!GetItem(hDlg, 3).Selected));
-  return I.DefDlgProc(hDlg, Msg, Param1, Param2);
+  auto const data = mapper.Get(static_cast<int>(field), Plugin::Config());
+  mapper.Set(static_cast<int>(field), data.value, config);
 }
 
 static intptr_t ConfigurePlugin()
 {
-  Plugin::Config currentConfig = LoadConfig(ToStdString(GetConfigFilePath()));
   using ID = Plugin::ConfigFieldId;
   auto const NoId = ID::MaxFieldId;
-  auto const NoMessage = std::make_pair(-1, WideString());
-  intptr_t y = 0;
-  WideString const menuTitle = WideString(GetMsg(MPlugin)) + L" " + PluginVersionString();
-  std::vector<DialogItem> items = {
-//   Type          X1  Y1  X2  Y2  FieldId Message<int,str> Flags
-    {DI_DOUBLEBOX, 3, ++y, 64, 37, NoId, {-1, menuTitle}, 0},
-    {DI_TEXT,      5, ++y, 0,  0,  NoId, {MPathToExe, L""}},
-    {DI_EDIT,      5, ++y, 62, 3,  ID::exe, NoMessage},
-    {DI_CHECKBOX,  5, ++y, 62, 10, ID::use_built_in_ctags, {MUseBuiltInCtags, L""}},
-    {DI_TEXT,      5, ++y, 0,  0,  NoId, {MCmdLineOptions, L""}},
-    {DI_EDIT,      5, ++y, 62, 5,  ID::opt, NoMessage},
-    {DI_TEXT,      5, ++y, 62, 10, NoId, NoMessage, DIF_SEPARATOR|DIF_BOXCOLOR},
-    {DI_TEXT,      5, ++y, 0,  0,  NoId, {MMaxResults, L""}},
-    {DI_EDIT,      5, ++y, 62, 9,  ID::max_results, NoMessage},
-    {DI_TEXT,      5, ++y, 0,  0,  NoId, {MThreshold, L""}},
-    {DI_EDIT,      5, ++y, 62, 9,  ID::threshold, NoMessage},
-    {DI_TEXT,      5, ++y, 0,  0,  NoId, {MThresholdFilterLen, L""}},
-    {DI_EDIT,      5, ++y, 62, 9,  ID::threshold_filter_len, NoMessage},
-    {DI_CHECKBOX,  5, ++y, 62, 10, ID::platform_language_lookup, {MPlatformLanguageLookup, L""}},
-    {DI_TEXT,      5, ++y, 62, 10, NoId, NoMessage, DIF_SEPARATOR|DIF_BOXCOLOR},
-    {DI_TEXT,      5, ++y, 0,  0,  NoId, {MResetCountersAfter, L""}},
-    {DI_EDIT,      5, ++y, 62, 9,  ID::reset_cache_counters_timeout_hours, NoMessage},
-    {DI_CHECKBOX,  5, ++y, 62, 10, ID::casesens, {MCaseSensFilt, L""}},
-    {DI_CHECKBOX,  5, ++y, 62, 10, ID::sort_class_members_by_name, {MSortClassMembersByName ,L""}},
-    {DI_CHECKBOX,  5, ++y, 62, 10, ID::cur_file_first, {MCurFileFirst, L""}},
-    {DI_CHECKBOX,  5, ++y, 62, 10, ID::cached_tags_on_top, {MCachedTagsOnTop, L""}},
-    {DI_CHECKBOX,  5, ++y, 62, 10, ID::index_edited_file, {MIndexEditedFile, L""}},
-    {DI_TEXT,      5, ++y, 0,  0,  NoId, {MWordChars, L""}},
-    {DI_EDIT,      5, ++y, 62, 9,  ID::wordchars, NoMessage},
-    {DI_TEXT,      5, ++y, 62, 10, NoId, NoMessage, DIF_SEPARATOR|DIF_BOXCOLOR},
-    {DI_TEXT,      5, ++y, 0,  0,  NoId, {MTagsMask, L""}},
-    {DI_EDIT,      5, ++y, 62, 9,  ID::tagsmask, NoMessage},
-    {DI_TEXT,      5, ++y, 0,  0,  NoId, {MHistoryFile, L""}},
-    {DI_EDIT,      5, ++y, 62, 9,  ID::history_file, NoMessage},
-    {DI_TEXT,      5, ++y, 0,  0,  NoId, {MHistoryLength, L""}},
-    {DI_EDIT,      5, ++y, 62, 9,  ID::history_len, NoMessage},
-    {DI_TEXT,      5, ++y, 0,  0,  NoId, {MPermanentsFile, L""}},
-    {DI_EDIT,      5, ++y, 62, 7,  ID::permanents, NoMessage},
-    {DI_CHECKBOX,  5, ++y, 62, 10, ID::restore_last_visited_on_load, {MRestoreLastVisitedOnLoad, L""}},
-    {DI_TEXT,      5, ++y, 62, 10, NoId, NoMessage, DIF_SEPARATOR|DIF_BOXCOLOR},
-    {DI_BUTTON,    0, ++y, 0,  0,  NoId, {MOk, L""}, DIF_CENTERGROUP},
-    {DI_BUTTON,    0,   y, 0,  0,  NoId, {MCancel, L""}, DIF_CENTERGROUP|DIF_FOCUS},
-  };
-  InitDialogItems(items, ConfigMapper(), currentConfig);
-  std::vector<FarDialogItem> farItems(items.size());
-  std::transform(items.begin(), items.end(), farItems.begin(), ToFarItem);
+  auto menu = Far3::ConfigMenu::Create(I, PluginGuid);
+  std::pair<ID, std::string> fieldValue = std::make_pair(NoId, "");
+  do
+  {
+    Plugin::Config config = LoadConfig(ToStdString(GetConfigFilePath()));
+    fieldValue = menu->Show(fieldValue.first, ConfigMapper(), config);
+    if (fieldValue.first == NoId)
+      continue;
 
-  auto handle = I.DialogInit(
-               &PluginGuid,
-               &InteractiveDialogGuid,
-               -1,
-               -1,
-               68,
-               y + 3,
-               L"ctagscfg",
-               farItems.data(),
-               farItems.size(),
-               0,
-               FDLG_NONE,
-               &ConfigureDlgProc,
-               items.data());
+    if (!ConfigMapper().Set(static_cast<int>(fieldValue.first), fieldValue.second, config))
+      SetDefaultValue(fieldValue.first, ConfigMapper(), config);
 
-  if (handle == INVALID_HANDLE_VALUE)
-    return FALSE;
-
-  std::shared_ptr<void> handleHolder(handle, [](void* h){I.DialogFree(h);});
-  if(I.DialogRun(handle) != items.size() - 2)
-  if (items[2].Data == L"?") {Far3::ConfigMenu::Create(I, PluginGuid)->Show(ConfigMapper(), currentConfig); return FALSE;} else //TODO: remove. For debug purposes only
-    return FALSE;
-
-  currentConfig = MakeConfig(items, ConfigMapper());
-  if (SafeCall(SaveConfig, Err, ConfigMapper(), currentConfig).first)
-    config = LoadConfig(ToStdString(GetConfigFilePath()));
+    EnsurePlatformLanguageLookup(ConfigMapper(), config);
+    SafeCall(SaveConfig, Err, ConfigMapper(), config);
+  }
+  while(fieldValue.first != NoId);
 
   return TRUE;
 }
