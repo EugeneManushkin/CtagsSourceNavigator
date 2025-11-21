@@ -75,6 +75,12 @@ namespace
                                      : (items[i].Flags & (~MIF_SELECTED));
   }
 
+  intptr_t IndexOf(ID field, std::vector<FieldText> const& fieldsTexts)
+  {
+    auto found = std::find_if(fieldsTexts.cbegin(), fieldsTexts.cend(), [field](FieldText const& val){return val.first == field;});
+    return found == fieldsTexts.cend() ? -1 : std::distance(fieldsTexts.cbegin(), found);
+  }
+
   WideString PluginVersionString()
   {
     return ToString(std::to_string(CTAGS_VERSION_MAJOR) + "." +
@@ -87,7 +93,7 @@ namespace
   {
   public:
     ConfigMenuImpl(PluginStartupInfo const& i, Guid const& pluginGuid);
-    std::pair<ID, std::string> Show(Plugin::ConfigDataMapper const& dataMapper, Plugin::Config const& config) const override;
+    std::pair<ID, std::string> Show(ID selectField, Plugin::ConfigDataMapper const& dataMapper, Plugin::Config const& config) const override;
 
   private:
     std::vector<WideString> MakeMenuStrings(Plugin::ConfigDataMapper const& dataMapper, Plugin::Config const& config) const;
@@ -128,7 +134,7 @@ namespace
     return result;
   }
 
-  std::pair<ID, std::string> ConfigMenuImpl::Show(Plugin::ConfigDataMapper const& dataMapper, Plugin::Config const& config) const
+  std::pair<ID, std::string> ConfigMenuImpl::Show(ID selectField, Plugin::ConfigDataMapper const& dataMapper, Plugin::Config const& config) const
   {
     auto const menuStrings = MakeMenuStrings(dataMapper, config);
     auto farMenuItems = MakeFarMenuItems(menuStrings);
@@ -141,7 +147,8 @@ namespace
     auto const breakKeys = nullptr;
     auto const configureValueDialog = Far3::ConfigValueDialog::Create(I, PluginGuid);
     intptr_t breakKey = -1;
-    intptr_t selected = -1;
+    intptr_t selected = IndexOf(selectField, FieldsTexts);
+
     do
     {
       ResetSelected(selected, farMenuItems);

@@ -23,6 +23,6 @@ namespace Far3
     static std::unique_ptr<const ConfigMenu> Create(PluginStartupInfo const& i, Guid const& pluginGuid);
 
     virtual ~ConfigMenu() = default;
-    virtual std::pair<Plugin::ConfigFieldId, std::string> Show(Plugin::ConfigDataMapper const& dataMapper, Plugin::Config const& config) const = 0;
+    virtual std::pair<Plugin::ConfigFieldId, std::string> Show(Plugin::ConfigFieldId selectField, Plugin::ConfigDataMapper const& dataMapper, Plugin::Config const& config) const = 0;
   };
 }
