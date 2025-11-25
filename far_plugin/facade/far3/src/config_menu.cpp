@@ -5,6 +5,7 @@
 #include <far3/text.h>
 #include <far3/wide_string.h>
 
+#include <plugin/config.h>
 #include <plugin/config_data_mapper.h>
 
 #include <algorithm>
@@ -53,7 +54,7 @@ namespace
 
   std::string MakeMenuValue(ID id, Plugin::ConfigDataMapper const& dataMapper, Plugin::Config const& config)
   {
-    auto const field = dataMapper.Get(static_cast<int>(id), config);
+    auto const field = dataMapper.Get(id, config);
     return field.type == Plugin::ConfigFieldType::Flag ? "[" + std::string(field.value == "true" ? "x" : " ") + "]"
          : field.type == Plugin::ConfigFieldType::Size ? field.value
          : "...";
@@ -171,8 +172,8 @@ namespace
         continue;
 
       auto const selectedField = FieldsTexts.at(selected);
-      auto const selectedFieldData = dataMapper.Get(static_cast<int>(selectedField.first), config);
-      auto const defaultValue = dataMapper.Get(static_cast<int>(selectedField.first), Plugin::Config()).value;
+      auto const selectedFieldData = dataMapper.Get(selectedField.first, config);
+      auto const defaultValue = dataMapper.Get(selectedField.first, Plugin::Config()).value;
       auto value = configureValueDialog->Show(selectedFieldData.value, defaultValue, selectedFieldData.type, selectedField.second);
       if (value.first)
         return {selectedField.first, value.second};

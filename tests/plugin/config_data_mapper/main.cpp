@@ -1,11 +1,19 @@
 #include <gtest/gtest.h>
 
+#include <plugin/config.h>
 #include <plugin/config_data_mapper.h>
 
 namespace Plugin
 {
   namespace Tests
   {
+    auto const MaxFields = static_cast<int>(ConfigFieldId::MaxFieldId);
+
+    ConfigFieldId ID(int i)
+    {
+      return static_cast<ConfigFieldId>(i);
+    }
+
     std::string TestValue(ConfigFieldType type)
     {
       return type == ConfigFieldType::Size ? "97"
@@ -13,9 +21,9 @@ namespace Plugin
            : "not empty string";
     }
 
-    int TestSizeId()
+    ConfigFieldId TestSizeId()
     {
-      return static_cast<int>(ConfigFieldId::max_results);
+      return ConfigFieldId::max_results;
     }
 
     size_t& TestSizeField(Config& config)
@@ -23,9 +31,9 @@ namespace Plugin
       return config.max_results;
     }
 
-    int TestBoolId()
+    ConfigFieldId TestBoolId()
     {
-      return static_cast<int>(ConfigFieldId::use_built_in_ctags);
+      return ConfigFieldId::use_built_in_ctags;
     }
 
     bool& TestBoolField(Config& config)
@@ -33,9 +41,9 @@ namespace Plugin
       return config.use_built_in_ctags;
     }
 
-    int TestThreeStateId()
+    ConfigFieldId TestThreeStateId()
     {
-      return static_cast<int>(ConfigFieldId::platform_language_lookup);
+      return ConfigFieldId::platform_language_lookup;
     }
 
     ThreeStateFlag TestThreeStateField(Config& config)
@@ -43,9 +51,9 @@ namespace Plugin
       return config.platform_language_lookup;
     }
 
-    int TestNotEmptyStrId()
+    ConfigFieldId TestNotEmptyStrId()
     {
-      return static_cast<int>(ConfigFieldId::exe);
+      return ConfigFieldId::exe;
     }
 
     std::string TestNotEmptyStrField(Config& config)
@@ -57,23 +65,23 @@ namespace Plugin
     {
       auto SUT = ConfigDataMapper::Create();
       Config config;
-      for (int i = 0; i < static_cast<int>(ConfigFieldId::MaxFieldId); ++i)
-        ASSERT_NO_THROW(SUT->Get(i, config)) << "ConfigFieldId = " << i;
+      for (int i = 0; i < MaxFields; ++i)
+        ASSERT_NO_THROW(SUT->Get(ID(i), config)) << "ConfigFieldId = " << i;
     }
 
     TEST(ConfigDataMapper, GetAndSetFieldsById)
     {
       auto SUT = ConfigDataMapper::Create();
       Config config;
-      for (int i = 0; i < static_cast<int>(ConfigFieldId::MaxFieldId); ++i)
+      for (int i = 0; i < MaxFields; ++i)
       {
-        auto field = SUT->Get(i, config);
-        ASSERT_TRUE(SUT->Set(i, TestValue(field.type), config)) << "ConfigFieldId = " << i;
+        auto field = SUT->Get(ID(i), config);
+        ASSERT_TRUE(SUT->Set(ID(i), TestValue(field.type), config)) << "ConfigFieldId = " << i;
       }
 
-      for (int i = 0; i < static_cast<int>(ConfigFieldId::MaxFieldId); ++i)
+      for (int i = 0; i < MaxFields; ++i)
       {
-        auto field = SUT->Get(i, config);
+        auto field = SUT->Get(ID(i), config);
         ASSERT_EQ(field.value, TestValue(field.type)) << "ConfigFieldId = " << i;
       }
     }
@@ -82,15 +90,15 @@ namespace Plugin
     {
       auto SUT = ConfigDataMapper::Create();
       Config config;
-      for (int i = 0; i < static_cast<int>(ConfigFieldId::MaxFieldId); ++i)
+      for (int i = 0; i < MaxFields; ++i)
       {
-        auto field = SUT->Get(i, config);
+        auto field = SUT->Get(ID(i), config);
         ASSERT_TRUE(SUT->Set(field.key, TestValue(field.type), config)) << "ConfigFieldId = " << i << ", key = " << field.key;
       }
 
-      for (int i = 0; i < static_cast<int>(ConfigFieldId::MaxFieldId); ++i)
+      for (int i = 0; i < MaxFields; ++i)
       {
-        auto field = SUT->Get(i, config);
+        auto field = SUT->Get(ID(i), config);
         ASSERT_EQ(field.value, TestValue(field.type)) << "ConfigFieldId = " << i;
       }
     }
@@ -127,10 +135,10 @@ namespace Plugin
         ASSERT_TRUE(SUT->Set(kv.first, kv.second, config)) << "key: " << kv.first << ", value: " << kv.second;
       }
 
-      for (int i = 0; i < static_cast<int>(ConfigFieldId::MaxFieldId); ++i)
+      for (int i = 0; i < MaxFields; ++i)
       {
-        auto field = SUT->Get(i, config);
-        auto default = SUT->Get(i, defaults);
+        auto field = SUT->Get(ID(i), config);
+        auto default = SUT->Get(ID(i), defaults);
         ASSERT_NE(field.value, default.value) << "ConfigFieldId = " << i << ", key = " << field.key;
       }
     }
@@ -140,18 +148,18 @@ namespace Plugin
     {
       auto SUT = ConfigDataMapper::Create();
       Config config;
-      ASSERT_ANY_THROW(SUT->Get(-1, config));
-      ASSERT_ANY_THROW(SUT->Get(static_cast<int>(ConfigFieldId::MaxFieldId), config));
-      ASSERT_ANY_THROW(SUT->Get(static_cast<int>(ConfigFieldId::MaxFieldId) + 1, config));
+      ASSERT_ANY_THROW(SUT->Get(ID(-1), config));
+      ASSERT_ANY_THROW(SUT->Get(ConfigFieldId::MaxFieldId, config));
+      ASSERT_ANY_THROW(SUT->Get(ID(MaxFields + 1), config));
     }
 
     TEST(ConfigDataMapper, FailSetValueForInvalidId)
     {
       auto SUT = ConfigDataMapper::Create();
       Config config;
-      ASSERT_FALSE(SUT->Set(-1, "123", config));
-      ASSERT_FALSE(SUT->Set(static_cast<int>(ConfigFieldId::MaxFieldId), "123", config));
-      ASSERT_FALSE(SUT->Set(static_cast<int>(ConfigFieldId::MaxFieldId) + 1, "123", config));
+      ASSERT_FALSE(SUT->Set(ID(-1), "123", config));
+      ASSERT_FALSE(SUT->Set(ConfigFieldId::MaxFieldId, "123", config));
+      ASSERT_FALSE(SUT->Set(ID(MaxFields + 1), "123", config));
     }
 
     TEST(ConfigDataMapper, FailSetValueForInvalidKey)
@@ -208,7 +216,7 @@ namespace Plugin
       auto SUT = ConfigDataMapper::Create();
       Config config;
       config.history_len = 100;
-      ASSERT_TRUE(SUT->Set(static_cast<int>(ConfigFieldId::history_file), "expected value", config));
+      ASSERT_TRUE(SUT->Set(ConfigFieldId::history_file, "expected value", config));
       ASSERT_EQ(config.history_file, "expected value");
       ASSERT_EQ(config.history_len, 100);
     }
@@ -219,7 +227,7 @@ namespace Plugin
       Config config;
       config.history_file = "not empty string";
       config.history_len = 100;
-      ASSERT_TRUE(SUT->Set(static_cast<int>(ConfigFieldId::history_file), "", config));
+      ASSERT_TRUE(SUT->Set(ConfigFieldId::history_file, "", config));
       ASSERT_EQ(config.history_file, "");
       ASSERT_EQ(config.history_len, 0);
     }

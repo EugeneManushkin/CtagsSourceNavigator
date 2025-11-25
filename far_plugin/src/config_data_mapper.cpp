@@ -1,3 +1,4 @@
+#include <plugin/config.h>
 #include <plugin/config_data_mapper.h>
 
 #include <algorithm>
@@ -98,14 +99,14 @@ namespace
   public:
     ConfigDataMapperImpl();
 
-    ConfigFieldData Get(int fieldId, Config const& config) const override;
+    ConfigFieldData Get(ConfigFieldId fieldId, Config const& config) const override;
     bool Set(std::string const& key, std::string const& value, Config& config) const override;
-    bool Set(int fieldId, std::string const& value, Config& config) const override;
+    bool Set(ConfigFieldId fieldId, std::string const& value, Config& config) const override;
 
   private:
     void InitField(ConfigFieldId fieldId, std::string&& key, ConfigFieldType type, GetterCallback&& getter, SetterCallback&& setter)
     {
-      FieldsMeta[static_cast<int>(fieldId)] = {
+      FieldsMeta[fieldId] = {
         std::move(key),
         type,
         std::move(getter),
@@ -113,7 +114,7 @@ namespace
       };
     }
 
-    std::unordered_map<int, ConfigFieldMeta> FieldsMeta;
+    std::unordered_map<ConfigFieldId, ConfigFieldMeta> FieldsMeta;
   };
 
   #define DEFINE_GETTER(field) [](Config const& config){return ToString(config.##field);}
@@ -157,11 +158,11 @@ namespace
     DEFINE_META(restore_last_visited_on_load, "restorelastvisitedonload", FT::Flag);
   }
 
-  ConfigFieldData ConfigDataMapperImpl::Get(int fieldId, Config const& config) const
+  ConfigFieldData ConfigDataMapperImpl::Get(ConfigFieldId fieldId, Config const& config) const
   {
     auto found = FieldsMeta.find(fieldId);
     if (found == FieldsMeta.end())
-      throw std::logic_error("Field id=" + std::to_string(fieldId) + " not found");
+      throw std::logic_error("Field id=" + std::to_string(static_cast<int>(fieldId)) + " not found");
 
     return {
       found->second.key,
@@ -179,7 +180,7 @@ namespace
     return found->second.setter(value, config);
   }
 
-  bool ConfigDataMapperImpl::Set(int fieldId, std::string const& value, Config& config) const
+  bool ConfigDataMapperImpl::Set(ConfigFieldId fieldId, std::string const& value, Config& config) const
   {
     auto found = FieldsMeta.find(fieldId);
     if (found == FieldsMeta.end())
