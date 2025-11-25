@@ -94,4 +94,5 @@ enum{
   MTooManyErrorsInConfigFile,
   MTooManyLinesInConfigFile,
   MFailedLoadConfig,
+  MDefault,
 };

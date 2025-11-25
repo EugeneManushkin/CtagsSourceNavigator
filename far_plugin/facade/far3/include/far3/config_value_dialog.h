@@ -21,6 +21,6 @@ namespace Far3
     static std::unique_ptr<const ConfigValueDialog> Create(PluginStartupInfo const& i, Guid const& pluginGuid);
 
     virtual ~ConfigValueDialog() = default;
-    virtual std::pair<bool, std::string> Show(std::string const& initValue, Plugin::ConfigFieldType type, int textId) const = 0;
+    virtual std::pair<bool, std::string> Show(std::string const& initValue, std::string const& defaultValue, Plugin::ConfigFieldType type, int textId) const = 0;
   };
 }

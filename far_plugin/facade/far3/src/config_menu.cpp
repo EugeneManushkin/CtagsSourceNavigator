@@ -172,7 +172,8 @@ namespace
 
       auto const selectedField = FieldsTexts.at(selected);
       auto const selectedFieldData = dataMapper.Get(static_cast<int>(selectedField.first), config);
-      auto value = configureValueDialog->Show(selectedFieldData.value, selectedFieldData.type, selectedField.second);
+      auto const defaultValue = dataMapper.Get(static_cast<int>(selectedField.first), Plugin::Config()).value;
+      auto value = configureValueDialog->Show(selectedFieldData.value, defaultValue, selectedFieldData.type, selectedField.second);
       if (value.first)
         return {selectedField.first, value.second};
     }
