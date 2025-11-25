@@ -2091,13 +2091,13 @@ static void EnsurePlatformLanguageLookup(Plugin::ConfigDataMapper const& mapper,
 {
   bool enabled = config.platform_language_lookup == Plugin::ThreeStateFlag::Enabled
               && SafeCall(CheckPlatformLanguageLookupSupported, Err).first;
-  mapper.Set(static_cast<int>(Plugin::ConfigFieldId::platform_language_lookup), enabled ? "true" : "false", config);
+  mapper.Set(Plugin::ConfigFieldId::platform_language_lookup, enabled ? "true" : "false", config);
 }
 
 static void SetDefaultValue(Plugin::ConfigFieldId field, Plugin::ConfigDataMapper const& mapper, Plugin::Config& config)
 {
-  auto const data = mapper.Get(static_cast<int>(field), Plugin::Config());
-  mapper.Set(static_cast<int>(field), data.value, config);
+  auto const data = mapper.Get(field, Plugin::Config());
+  mapper.Set(field, data.value, config);
 }
 
 static intptr_t ConfigurePlugin()
@@ -2113,7 +2113,7 @@ static intptr_t ConfigurePlugin()
     if (fieldValue.first == NoId)
       continue;
 
-    if (!ConfigMapper().Set(static_cast<int>(fieldValue.first), fieldValue.second, config))
+    if (!ConfigMapper().Set(fieldValue.first, fieldValue.second, config))
       SetDefaultValue(fieldValue.first, ConfigMapper(), config);
 
     EnsurePlatformLanguageLookup(ConfigMapper(), config);

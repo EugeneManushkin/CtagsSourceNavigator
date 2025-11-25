@@ -15,7 +15,7 @@ namespace
   {
     for (int i = 0; i < static_cast<int>(Plugin::ConfigFieldId::MaxFieldId); ++i)
     {
-      auto fieldData = dataMapper.Get(i, config);
+      auto fieldData = dataMapper.Get(static_cast<Plugin::ConfigFieldId>(i), config);
       stream << fieldData.key << "=" << fieldData.value << std::endl;
     }
   }

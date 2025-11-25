@@ -23,7 +23,7 @@ namespace Far3
       {
         std::string line;
         std::getline(stream, line);
-        auto field = mapper->Get(i, config);
+        auto field = mapper->Get(static_cast<Plugin::ConfigFieldId>(i), config);
         ASSERT_EQ(line, field.key + "=" + field.value);
       }
     }
