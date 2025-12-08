@@ -1,0 +1,133 @@
+.Language=English,English
+.Options CtrlColorChar=\
+.Options CtrlStartPosChar=^<wrap>
+
+@ Contents=Contents
+@ About=About
+@ Usage=Usage
+@ Macro=Macro
+@ Features=Features
+@ Config=Config
+@ PanelMenu=PanelMenu
+@ Editor=Editor
+
+@Contents
+$^#Ctags Source Navigator
+$^#${CTAGS_VERSION_MAJOR}.${CTAGS_VERSION_MINOR}.${CTAGS_VERSION_REVISION}.${CTAGS_VERSION_BUILD}
+
+#Table of contents#
+
+~About~@ About@
+
+~How to use~@ Usage@
+
+~Panel menu~@ PanelMenu@
+
+~Editor menu~@ Editor@
+
+~Configuration menu~@ Config@
+
+~Macro~@ Macro@
+
+~Features~@ Features@
+
+
+
+
+@About
+$^#Ctags Source Navigator
+$^#${CTAGS_VERSION_MAJOR}.${CTAGS_VERSION_MINOR}.${CTAGS_VERSION_REVISION}.${CTAGS_VERSION_BUILD}
+
+#About this plugin#
+
+This is a #Far Manager# plugin for browsing source code indexed by #Ctags# utility (~https://en.wikipedia.org/wiki/Ctags~@https://en.wikipedia.org/wiki/Ctags@).
+
+#Plugin Homepage:# ~https://github.com/EugeneManushkin/CtagsSourceNavigator~@https://github.com/EugeneManushkin/CtagsSourceNavigator@
+
+#Far PlugRing:# ~https://plugring.farmanager.com/plugin.php?pid=478~@https://plugring.farmanager.com/plugin.php?pid=478@
+
+#Discussion Thread:# ~https://forum.farmanager.com/viewtopic.php?f=5&t=6394~@https://forum.farmanager.com/viewtopic.php?f=5&t=6394@
+
+If you found a bug or you need a feature please create an issue (~https://github.com/EugeneManushkin/CtagsSourceNavigator/issues/new~@https://github.com/EugeneManushkin/CtagsSourceNavigator/issues/new@)
+
+Please click on the Star button on the plugin's GitHub page, I appreciate it.
+
+~Table of contents~@ Contents@
+
+
+
+
+@Usage
+$^#Ctags Source Navigator
+$^#${CTAGS_VERSION_MAJOR}.${CTAGS_VERSION_MINOR}.${CTAGS_VERSION_REVISION}.${CTAGS_VERSION_BUILD}
+
+#How to use#
+
+TBD
+
+~Table of contents~@ Contents@
+
+
+
+
+@PanelMenu
+$^#Ctags Source Navigator
+$^#${CTAGS_VERSION_MAJOR}.${CTAGS_VERSION_MINOR}.${CTAGS_VERSION_REVISION}.${CTAGS_VERSION_BUILD}
+
+#Panel menu#
+
+TBD
+
+~Table of contents~@ Contents@
+
+
+
+
+@Editor
+$^#Ctags Source Navigator
+$^#${CTAGS_VERSION_MAJOR}.${CTAGS_VERSION_MINOR}.${CTAGS_VERSION_REVISION}.${CTAGS_VERSION_BUILD}
+
+#Editor menu#
+
+TBD
+
+~Table of contents~@ Contents@
+
+
+
+
+@Config
+$^#Ctags Source Navigator
+$^#${CTAGS_VERSION_MAJOR}.${CTAGS_VERSION_MINOR}.${CTAGS_VERSION_REVISION}.${CTAGS_VERSION_BUILD}
+
+#Configuration menu#
+
+TBD
+
+~Table of contents~@ Contents@
+
+
+
+
+@Macro
+$^#Ctags Source Navigator
+$^#${CTAGS_VERSION_MAJOR}.${CTAGS_VERSION_MINOR}.${CTAGS_VERSION_REVISION}.${CTAGS_VERSION_BUILD}
+
+#Macro#
+
+TBD
+
+~Table of contents~@ Contents@
+
+
+
+
+@Features
+$^#Ctags Source Navigator
+$^#${CTAGS_VERSION_MAJOR}.${CTAGS_VERSION_MINOR}.${CTAGS_VERSION_REVISION}.${CTAGS_VERSION_BUILD}
+
+#Features#
+
+TBD
+
+~Table of contents~@ Contents@

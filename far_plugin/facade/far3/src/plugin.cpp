@@ -27,6 +27,7 @@
 #include <far3/current_editor_impl.h>
 #include <far3/error.h>
 #include <far3/guid.h>
+#include <far3/help.h>
 #include <far3/plugin_sdk/api.h>
 #include <far3/text.h>
 #include <far3/wide_string.h>
@@ -54,6 +55,8 @@
 #include <vector>
 #include <unordered_map>
 #include <unordered_set>
+
+namespace Help = Far3::Help;
 
 using WideString = Far3::WideString;
 using Far3::ToString;
@@ -812,19 +815,19 @@ struct MI{
 
 using MenuList = std::vector<MI>;
 
-std::pair<int, int> Menu(const wchar_t *title, MenuList const& lst, int sel, FarKey const* breakKeys)
+std::pair<int, int> Menu(const wchar_t *title, const wchar_t *help, MenuList const& lst, int sel, FarKey const* breakKeys)
 {
   std::vector<FarMenuItem> menu(lst.size());
   std::transform(lst.begin(), lst.end(), menu.begin(), [sel](MI const& mi) {return mi.GetFarItem(sel);});
   intptr_t bkey = -1;
   auto res=I.Menu(&PluginGuid, &CtagsMenuGuid, -1, -1, 0, FMENU_WRAPMODE, title, L"",
-                  L"content", breakKeys, &bkey, &menu[0], lst.size());
+                  help, breakKeys, &bkey, &menu[0], lst.size());
   return std::make_pair(res == -1 ? -1 : lst.at(res).data, static_cast<int>(bkey));
 }
 
-int Menu(const wchar_t *title, MenuList const& lst, int sel = 0)
+int Menu(const wchar_t *title, const wchar_t *help, MenuList const& lst, int sel = 0)
 {
-  return Menu(title, lst, sel, nullptr).first;
+  return Menu(title, help, lst, sel, nullptr).first;
 }
 
 std::unique_ptr<BreakKeys> CreateLookupBreakKeys(UseLayouts useLayouts)
@@ -973,7 +976,7 @@ static LookupResult LookupTagsMenu(TagsViewer const& viewer, TagInfo& tag, std::
       ResetSelected(menu, selected);
       intptr_t bkey = -1;
       selected = I.Menu(&PluginGuid, &CtagsMenuGuid,-1,-1,0,FMENU_WRAPMODE|FMENU_SHOWAMPERSAND,ftitle.c_str(),
-                       GetMsg(MLookupMenuBottom),L"content",breakKeys.GetBreakKeys(),&bkey, menu.empty() ? nullptr : &menu[0],menu.size());
+                       GetMsg(MLookupMenuBottom), Help::Contents, breakKeys.GetBreakKeys(), &bkey, menu.empty() ? nullptr : &menu[0], menu.size());
       if(selected == -1 && bkey == -1) return LookupResult::Cancel;
       auto selectedTag = selected >= 0 ? tagsView[menu[selected].UserData].GetTag() : nullptr;
       auto event = breakKeys.GetEvent(static_cast<int>(bkey));
@@ -1003,6 +1006,7 @@ static LookupResult LookupTagsMenu(TagsViewer const& viewer, TagInfo& tag, std::
       {
         ResetCacheCountersOnTimeout(*selectedTag);
         Storage->EraseCachedTag(*selectedTag, FlushTagsCache);
+        break;
       }
       if (selectedTag && event == KeyEvent::CtrlR)
       {
@@ -1095,7 +1099,7 @@ static void ManageRepositories()
     auto regulars_count = std::distance(repositories.begin(), std::stable_partition(repositories.begin(), repositories.end(), [](Tags::RepositoryInfo const& repo) {return repo.Type == Tags::RepositoryType::Regular;}));
     auto history = LoadHistory();
     for (size_t i = 0; i < history.size() / 2; std::swap(history[i], history[history.size() - 1 - i]), ++i);
-    auto res = Menu(GetMsg(MUnloadTagsFile), GetRepoMenuList(repositories, history), selected, breakKeys->GetBreakKeys());
+    auto res = Menu(GetMsg(MUnloadTagsFile), Help::Contents, GetRepoMenuList(repositories, history), selected, breakKeys->GetBreakKeys());
     if (res.first == -1)
       return;
 
@@ -1373,7 +1377,7 @@ static void NavigationHistory(bool setPanelDir)
 
   auto selected = NavigatorInstance->CurrentHistoryIndex();
   selected = selected == size && size > 0 ? size - 1 : selected;
-  auto index = Menu(GetMsg(MNavigationHistoryMenuTitle), menuList, static_cast<int>(selected));
+  auto index = Menu(GetMsg(MNavigationHistoryMenuTitle), Help::Contents, menuList, static_cast<int>(selected));
   if (index < 0)
     return;
 
@@ -1500,7 +1504,7 @@ static WideString SelectTags(std::vector<WideString> const& foundTags)
   for (auto const& tagsFile : foundTags)
     lst.push_back(MI(tagsFile, i++));
 
-  auto res = Menu(GetMsg(MSelectTags), lst);
+  auto res = Menu(GetMsg(MSelectTags), Help::Contents, lst);
   if (res < 0)
     return WideString();
 
@@ -1525,7 +1529,7 @@ static WideString IndexSelectedRepository(std::vector<WideString> const& reposit
   for (auto const& str : repositories)
     lst.push_back(MI(str, i++));
 
-  auto res = Menu(GetMsg(MAskIndexFoundRepositories), lst);
+  auto res = Menu(GetMsg(MAskIndexFoundRepositories), Help::Contents, lst);
   if (res < 0)
     return WideString();
 
@@ -1868,7 +1872,7 @@ HANDLE WINAPI OpenW(const struct OpenInfo *info)
       , MI::Separator()
       , MI(MPluginConfiguration, miPluginConfiguration, 'C')
     };
-    int res=Menu(GetMsg(MPlugin),ml,miReindexFile);
+    int res=Menu(GetMsg(MPlugin), Help::Editor, ml, miReindexFile);
     if(res==-1)return nullptr;
     if ((res == miFindSymbol
       || res == miComplete
@@ -1956,7 +1960,7 @@ HANDLE WINAPI OpenW(const struct OpenInfo *info)
     {
       enum {miLoadFromHistory,miLoadTagsFile,miUnloadTagsFile, miReindexRepo,
             miCreateTagsFile,miAddPermanentRepository, miLookupSymbol, miSearchFile,
-            miPluginConfiguration, miNavigationHistory,
+            miPluginConfiguration, miNavigationHistory, miHelp
       };
       MenuList ml = {
            MI(MLookupSymbol, miLookupSymbol, '1')
@@ -1971,9 +1975,10 @@ HANDLE WINAPI OpenW(const struct OpenInfo *info)
          , MI(MCreateTagsFile, miCreateTagsFile, '7')
          , MI(MReindexRepo, miReindexRepo, '8')
          , MI::Separator()
+         , MI(MHelp, miHelp, '?')
          , MI(MPluginConfiguration, miPluginConfiguration, 'C')
       };
-      int rc=Menu(GetMsg(MPlugin),ml,miReindexRepo);
+      int rc=Menu(GetMsg(MPlugin), Help::PanelMenu, ml, miReindexRepo);
       switch(rc)
       {
         case miLoadFromHistory:
@@ -2021,6 +2026,10 @@ HANDLE WINAPI OpenW(const struct OpenInfo *info)
         case miPluginConfiguration:
         {
           SafeCall(ConfigurePlugin, Err);
+        }break;
+        case miHelp:
+        {
+          I.ShowHelp(reinterpret_cast<wchar_t const*>(&PluginGuid), Help::Contents, FHELP_GUID);
         }break;
       }
     }
