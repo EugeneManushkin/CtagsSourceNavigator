@@ -1,6 +1,7 @@
 #include <far3/config_menu.h>
 #include <far3/config_value_dialog.h>
 #include <far3/guid.h>
+#include <far3/help.h>
 #include <far3/plugin_sdk/api.h>
 #include <far3/text.h>
 #include <far3/wide_string.h>
@@ -14,6 +15,8 @@
 
 namespace
 {
+  namespace Help = Far3::Help;
+
   using Far3::Guid;
   using Far3::ToString;
   using Far3::WideString;
@@ -36,11 +39,11 @@ namespace
       {ID::threshold_filter_len, MThresholdFilterLen},
       {ID::platform_language_lookup, MPlatformLanguageLookup},
       separator,
-      {ID::reset_cache_counters_timeout_hours, MResetCountersAfter},
       {ID::casesens, MCaseSensFilt},
       {ID::sort_class_members_by_name, MSortClassMembersByName },
       {ID::cur_file_first, MCurFileFirst},
       {ID::cached_tags_on_top, MCachedTagsOnTop},
+      {ID::reset_cache_counters_timeout_hours, MResetCountersAfter},
       {ID::index_edited_file, MIndexEditedFile},
       {ID::wordchars, MWordChars},
       separator,
@@ -162,7 +165,7 @@ namespace
         FMENU_WRAPMODE,
         menuTitle.c_str(),
         bottomText,
-        L"configmenu",
+        Help::Config,
         breakKeys,
         &breakKey,
         farMenuItems.data(),

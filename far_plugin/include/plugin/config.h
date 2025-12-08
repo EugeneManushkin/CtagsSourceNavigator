@@ -21,11 +21,11 @@ namespace Plugin
     size_t threshold = 500;
     size_t threshold_filter_len = 3;
     ThreeStateFlag platform_language_lookup = ThreeStateFlag::Undefined;
-    size_t reset_cache_counters_timeout_hours = 12;
     bool casesens = false;
     bool sort_class_members_by_name = false;
     bool cur_file_first = true;
     bool cached_tags_on_top = true;
+    size_t reset_cache_counters_timeout_hours = 12;
     bool index_edited_file = true;
     std::string wordchars = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz~$_";
     std::string tagsmask = "tags,*.tags";
@@ -45,11 +45,11 @@ namespace Plugin
     threshold,
     threshold_filter_len,
     platform_language_lookup,
-    reset_cache_counters_timeout_hours,
     casesens,
     sort_class_members_by_name,
     cur_file_first,
     cached_tags_on_top,
+    reset_cache_counters_timeout_hours,
     index_edited_file,
     wordchars,
     tagsmask,

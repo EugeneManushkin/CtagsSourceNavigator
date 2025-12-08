@@ -27,9 +27,11 @@ add_library(ctags SHARED ${SOURCES})
 target_link_libraries(ctags ctags_static)
 
 set(PLUGIN_DIR ${CMAKE_BINARY_DIR}/$<CONFIG>/ctags CACHE STRING "Plugin release folder")
+configure_file(src/tagseng.hlf.in tagseng.hlf)
 file(GLOB README_FILES "${CMAKE_SOURCE_DIR}/README*.md")
 add_custom_command(TARGET ctags POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E make_directory ${PLUGIN_DIR}
+    COMMAND ${CMAKE_COMMAND} -E copy tagseng.hlf ${PLUGIN_DIR}
     COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_SOURCE_DIR}/src/tagseng.lng ${PLUGIN_DIR}
     COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:ctags> ${PLUGIN_DIR}
     COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_SOURCE_DIR}/COPYING ${PLUGIN_DIR}

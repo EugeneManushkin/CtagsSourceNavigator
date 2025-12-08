@@ -95,4 +95,5 @@ enum{
   MTooManyLinesInConfigFile,
   MFailedLoadConfig,
   MDefault,
+  MHelp,
 };

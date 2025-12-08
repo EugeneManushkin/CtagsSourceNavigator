@@ -1,5 +1,6 @@
 #include <far3/config_value_dialog.h>
 #include <far3/guid.h>
+#include <far3/help.h>
 #include <far3/plugin_sdk/api.h>
 #include <far3/text.h>
 #include <far3/wide_string.h>
@@ -11,6 +12,8 @@
 
 namespace
 {
+  namespace Help = Far3::Help;
+
   using Far3::Guid;
   using Far3::ToString;
   using Far3::ToStdString;
@@ -99,7 +102,7 @@ namespace
       autocenterY,
       Width,
       Bottom() + 2,
-      nullptr,
+      Help::Config,
       Items.data(),
       Items.size(),
       0,
