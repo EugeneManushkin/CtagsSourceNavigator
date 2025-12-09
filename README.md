@@ -63,45 +63,48 @@ This is a [Far Manager](https://www.farmanager.com/) plugin for browsing source 
 ### BTW if you are Lua developer check out [Yet Another Lua TAgs](https://github.com/EugeneManushkin/Yalta)
    It easily integrates with the plugin. Just download [latest release](https://github.com/EugeneManushkin/Yalta/releases), unzip it and put full path to
    ctags_wrapper.bat script located in \<unpacked_release_folder\>\yalta\ctags_wrapper.bat to 'Path to ctags.exe' in plugin configuration menu.
-## Usage
-#### 1. Navigate to source code in not indexed files
+## How to use
+### Navigate to source code in not indexed files
 You may use the plugin in an opened file even if it is not indexed by ctags utility. Plugin will automatically index currently edited file and let you search names in it
-#### 2. Index your repository
+### Index your repository
 If you want to search names and files in entire repository you should index it with the ctags utility. Use ctags plugin to do this: goto your repository folder, navigate cursor to folder you want to index by ctags or navigate to top folder ("..") if you want to index entire repository folder. Press **F11->Ctags Source Navigator->Index selected directory**. Tags file will be created inside selected folder and all symbols will be automatically loaded in plugin. If you already have a repository indexed by ctags you may load index file ('tags') to tell the plugin that you want to browse this repository. Do either:
-* *Do not do anything*: on attempt to search a name plugin will suggest to load one of the 'tags' files found in parent directories.
-* Navigate cursor to the 'tags' file, and just press Enter.
-* Navigate cursor to the 'tags' file, press **F11->Ctags Source Navigator->Load tags file** (the most boring way to load tags).
-* Load recently opened 'tags' file. Press **F11->Ctags Source Navigator->Load from history** and select your tags file.
 
-Now plugin 'knows' about symbols in your repository and you can browse it's source code and lookup names in it.
-#### 3. Permanent repositories
+* Just start using plugin. On attempt to search a name plugin will suggest to load one of the 'tags' files found in parent directories or suggest to index your git or svn repository.
+* Navigate cursor to the 'tags' file, and just press Enter.
+* Navigate cursor to the 'tags' file, press #F11->Ctags Source Navigator->Load tags file#.
+* Load recent 'tags' file from 'Manage repositories' menu: #F11->Ctags Source Navigator->Manage repositories#.
+
+Now plugin 'knows' about symbols in your repository and you can browse it's source code and search names.
+### Reindex file or entire repository
+Plugin does not do anything in background. If you noticed that plugin cannot find something too often then you may reindex your repository.
+Press **F11->Ctags Source Navigator->Reindex repository** in main menu or in editor menu and then plugin will suggest you to select one of the tags files which you may reindex. **If something goes wrong while reindexing (e.g. reindexing is canceled) plugin will rollback on old tags file.**
+You may also reindex currently editing file. Press **F11->Ctags Source Navigator->Reindex this file** in editor menu.
+### Permanent repositories
 By default plugin does not allow to search names from places that are not belong to a certain repository. However this behaviour may be changed by making a repository permanent.
 Navigate to a repository folder and press **F11->Ctags Source Navigator->Add permanent repository**. Plugin will suggest you to select one of the tags files which corresponds to a selected repository.
 To unload permanent repository open menu **F11->Ctags Source Navigator->Manage repositories**, select permanent repository and then press Ctrl+Del.
-#### 4. Go to declaration/definition (Ctrl+F)
+### Go to declaration/definition (Ctrl+F)
 Open a file inside your repository folder, navigate to a name you want to search definition/declaration of. Press **F11->Ctags Source Navigator->Go to** and plugin will automatically move the cursor to declaration of that name. If a name has multiple declarations (e.g. in C++ definition of a name is also a name declaration) plugin will suggest to load one of the declaration
-#### 5. Open include file (Ctrl+F)
-Open a file inside your repository folder, set cursor to an include file inside angle brackets or to any quoted file path. Press **F11->Ctags Source Navigator->Go to** and plugin will open the file
-#### 6. Autocomplete name (Ctrl+Space)
-Start typing name in editor and then press **F11->Ctags Source Navigator->Complete symbol**
-#### 7. Return cursor to previous position (Ctrl+G)
-Press **F11->Ctags Source Navigator->Go back** to return cursor to previous position
-#### 8. Return to current position from previous position (Ctrl+D)
-If you moved the cursor to a previous position by using "Go Back" option you may return the cursor back. To do this press **F11->Ctags Source Navigator->Go forward**
-#### 9. List all class members
-Set cursor on class name and then press **F11->Ctags Source Navigator->Class members**
-#### 10. Search names defined in current file (Ctrl+Shift+X) 
-Press **F11->Ctags Source Navigator->Search name in opened file** and begin typing (or insert by Ctrl+V or Shift+Ins) a name you want to search.
-#### 11. Search names defined in entire repository (Ctrl+Shift+T)
+### Search names in entire repository (Ctrl+Shift+T)
 This option works in plugin main menu and in editor menu. Press **F11->Ctags Source Navigator->Search name in entire repository** and begin typing (or insert by Ctrl+V or Shift+Ins) a name you want to search.
-#### 12. Search indexed file (Ctrl+Shift+R)
+### Search names in opened file (Ctrl+Shift+X)
+Press **F11->Ctags Source Navigator->Search name in opened file** and begin typing (or insert by Ctrl+V or Shift+Ins) a name you want to search.
+### Search file by name (Ctrl+Shift+R)
 This feature is available from main and editor menu: press **F11->Ctags Source Navigator->Search file by name** and begin typing a file name you want to open. You may specify a partial path to file with a filename to filter search result by location: ```tests\tags_cache\main.cpp```.
 You may also specify a line number after a colon symbol like ```my_file.h:1234```
-#### 14. Filter results in any select menu (Tab - new filter, Esc - return to previous filter, Ctrl+Z - close menu)
+### Open include file (Ctrl+F)
+Open a file inside your repository folder, set cursor to an include file inside angle brackets or to any quoted file path. Press **F11->Ctags Source Navigator->Go to** and plugin will open the file
+### Autocomplete name (Ctrl+Space)
+Start typing name in editor and then press **F11->Ctags Source Navigator->Complete symbol**
+### Return cursor to previous position (Ctrl+G)
+Press **F11->Ctags Source Navigator->Go back** to return cursor to previous position
+### Return to current position from previous position (Ctrl+D)
+If you moved the cursor to a previous position by using "Go Back" option you may return the cursor back. To do this press **F11->Ctags Source Navigator->Go forward**
+### List all class members
+Set cursor on class name and then press **F11->Ctags Source Navigator->Class members**
+### Filter results in any select menu (Tab - new filter, Esc - return to previous filter, Ctrl+Z - close menu)
 You may filter any results and even filter your filtered results in any select menu. Press **Tab** to begin new filter, **Esc** or **Backspace** to return to previous filter and **Ctrl+Z** to close menu.
 Regular expressions are supported.
-#### 15. Reindex your repository 
-You may reindex your repository if current code database is outdated. Press **F11->Ctags Source Navigator->Reindex repository** in main menu or in editor menu and then plugin will suggest you to select one of the tags files which you may reindex. **If something goes wrong while reindexing (e.g. reindexing is canceled) plugin will rollback on old tags file.**
 ## Default macro hotkeys (available if installed)
 ### Editor hotkeys:
 + Go to - ```Ctrl+F```

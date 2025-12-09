@@ -15,21 +15,22 @@
 $^#Ctags Source Navigator
 $^#${CTAGS_VERSION_MAJOR}.${CTAGS_VERSION_MINOR}.${CTAGS_VERSION_REVISION}.${CTAGS_VERSION_BUILD}
 
-#Table of contents#
+# Table of contents#
 
-~About~@ About@
 
-~How to use~@ Usage@
+ ~How to use~@ Usage@
 
-~Panel menu~@ PanelMenu@
+ ~Panel menu~@ PanelMenu@
 
-~Editor menu~@ Editor@
+ ~Editor menu~@ Editor@
 
-~Configuration menu~@ Config@
+ ~Configuration menu~@ Config@
 
-~Macro~@ Macro@
+ ~Macro~@ Macro@
 
-~Features~@ Features@
+ ~Features~@ Features@
+
+ ~About~@ About@
 
 
 
@@ -38,21 +39,22 @@ $^#${CTAGS_VERSION_MAJOR}.${CTAGS_VERSION_MINOR}.${CTAGS_VERSION_REVISION}.${CTA
 $^#Ctags Source Navigator
 $^#${CTAGS_VERSION_MAJOR}.${CTAGS_VERSION_MINOR}.${CTAGS_VERSION_REVISION}.${CTAGS_VERSION_BUILD}
 
-#About this plugin#
+# About this plugin#
 
-This is a #Far Manager# plugin for browsing source code indexed by #Ctags# utility (~https://en.wikipedia.org/wiki/Ctags~@https://en.wikipedia.org/wiki/Ctags@).
 
-#Plugin Homepage:# ~https://github.com/EugeneManushkin/CtagsSourceNavigator~@https://github.com/EugeneManushkin/CtagsSourceNavigator@
+ This is a #Far Manager# plugin for browsing source code indexed by #Ctags# utility (~https://en.wikipedia.org/wiki/Ctags~@https://en.wikipedia.org/wiki/Ctags@).
 
-#Far PlugRing:# ~https://plugring.farmanager.com/plugin.php?pid=478~@https://plugring.farmanager.com/plugin.php?pid=478@
+# Plugin Homepage:# ~https://github.com/EugeneManushkin/CtagsSourceNavigator~@https://github.com/EugeneManushkin/CtagsSourceNavigator@
 
-#Discussion Thread:# ~https://forum.farmanager.com/viewtopic.php?f=5&t=6394~@https://forum.farmanager.com/viewtopic.php?f=5&t=6394@
+# Far PlugRing:# ~https://plugring.farmanager.com/plugin.php?pid=478~@https://plugring.farmanager.com/plugin.php?pid=478@
 
-If you found a bug or you need a feature please create an issue (~https://github.com/EugeneManushkin/CtagsSourceNavigator/issues/new~@https://github.com/EugeneManushkin/CtagsSourceNavigator/issues/new@)
+# Discussion Thread:# ~https://forum.farmanager.com/viewtopic.php?f=5&t=6394~@https://forum.farmanager.com/viewtopic.php?f=5&t=6394@
 
-Please click on the Star button on the plugin's GitHub page, I appreciate it.
+ If you found a bug or you need a feature please create an issue (~https://github.com/EugeneManushkin/CtagsSourceNavigator/issues/new~@https://github.com/EugeneManushkin/CtagsSourceNavigator/issues/new@)
 
-~Table of contents~@ Contents@
+ Please click on the Star button on the plugin's GitHub page, I appreciate it.
+
+ ~Table of contents~@ Contents@
 
 
 
@@ -61,11 +63,97 @@ Please click on the Star button on the plugin's GitHub page, I appreciate it.
 $^#Ctags Source Navigator
 $^#${CTAGS_VERSION_MAJOR}.${CTAGS_VERSION_MINOR}.${CTAGS_VERSION_REVISION}.${CTAGS_VERSION_BUILD}
 
-#How to use#
+# How to use#
 
-TBD
 
-~Table of contents~@ Contents@
+# Navigate to source code in not indexed files#
+
+ You may use the plugin in an opened file even if it is not indexed by ctags utility. Plugin will automatically index currently edited file and let you search names in it
+
+
+# Index your repository#
+
+ If you want to search names and files in entire repository you should index it with the ctags utility. Use ctags plugin to do this: goto your repository folder, navigate cursor to folder you want to index by ctags or navigate to top folder ("..") if you want to index entire repository folder. Press #F11->Ctags Source Navigator->Index selected directory#. Tags file will be created inside selected folder and all symbols will be automatically loaded in plugin. If you already have a repository indexed by ctags you may load index file ('tags') to tell the plugin that you want to browse this repository. Do either:
+
+	#*# Just start using plugin. On attempt to search a name plugin will suggest to load one of the 'tags' files found in parent directories or suggest to index your git or svn repository.
+
+	#*# Navigate cursor to the 'tags' file, and just press Enter.
+
+	#*# Navigate cursor to the 'tags' file, press #F11->Ctags Source Navigator->Load tags file#.
+
+	#*# Load recent 'tags' file from 'Manage repositories' menu: #F11->Ctags Source Navigator->Manage repositories#.
+
+ Now plugin 'knows' about symbols in your repository and you can browse it's source code and search names.
+
+
+# Reindex file or entire repository #
+
+ Plugin does not do anything in background. If you noticed that plugin cannot find something too often then you may reindex your repository.
+Press #F11->Ctags Source Navigator->Reindex repository# in main menu or in editor menu and then plugin will suggest you to select one of the tags files which you may reindex. #If something goes wrong while reindexing (e.g. reindexing is canceled) plugin will rollback on old tags file.#
+You may also reindex currently editing file. Press #F11->Ctags Source Navigator->Reindex this file# in editor menu.
+
+
+# Permanent repositories#
+
+ By default plugin does not allow to search names from places that are not belong to a certain repository. However this behaviour may be changed by making a repository permanent.
+Navigate to a repository folder and press #F11->Ctags Source Navigator->Add permanent repository#. Plugin will suggest you to select one of the tags files which corresponds to a selected repository.
+To unload permanent repository open menu #F11->Ctags Source Navigator->Manage repositories#, select permanent repository and then press Ctrl+Del.
+
+
+# Go to declaration/definition (Ctrl+F)#
+
+ Open a file inside your repository folder, navigate to a name you want to search definition/declaration of. Press #F11->Ctags Source Navigator->Go to# and plugin will automatically move the cursor to declaration of that name. If a name has multiple declarations (e.g. in C++ definition of a name is also a name declaration) plugin will suggest to load one of the declaration
+
+
+# Search names in entire repository (Ctrl+Shift+T)#
+
+ This option works in plugin main menu and in editor menu. Press #F11->Ctags Source Navigator->Search name in entire repository# and begin typing (or insert by Ctrl+V or Shift+Ins) a name you want to search.
+
+
+# Search names in opened file (Ctrl+Shift+X) #
+
+ Press #F11->Ctags Source Navigator->Search name in opened file# and begin typing (or insert by Ctrl+V or Shift+Ins) a name you want to search.
+
+
+# Search file by name (Ctrl+Shift+R)#
+
+ This feature is available from main and editor menu: press #F11->Ctags Source Navigator->Search file by name# and begin typing a file name you want to open. You may specify a partial path to file with a filename to filter search result by location: ```tests\tags_cache\main.cpp```.
+You may also specify a line number after a colon symbol like ```my_file.h:1234```
+
+
+# Open include file (Ctrl+F)#
+
+ Open a file inside your repository folder, set cursor to an include file inside angle brackets or to any quoted file path. Press #F11->Ctags Source Navigator->Go to# and plugin will open the file
+
+
+# Autocomplete name (Ctrl+Space)#
+
+ Start typing name in editor and then press #F11->Ctags Source Navigator->Complete symbol#
+
+
+# Return cursor to previous position (Ctrl+G)#
+
+ Press #F11->Ctags Source Navigator->Go back# to return cursor to previous position
+
+
+# Return to current position from previous position (Ctrl+D)#
+
+ If you moved the cursor to a previous position by using "Go Back" option you may return the cursor back. To do this press #F11->Ctags Source Navigator->Go forward#
+
+
+# List all class members#
+
+ Set cursor on class name and then press #F11->Ctags Source Navigator->Class members#
+
+
+# Filter results in any select menu (Tab - new filter, Esc - return to previous filter, Ctrl+Z - close menu)#
+
+ You may filter any results and even filter your filtered results in any select menu. Press #Tab# to begin new filter, #Esc# or #Backspace# to return to previous filter and #Ctrl+Z# to close menu.
+Regular expressions are supported.
+
+
+
+ ~Table of contents~@ Contents@
 
 
 
@@ -74,11 +162,12 @@ TBD
 $^#Ctags Source Navigator
 $^#${CTAGS_VERSION_MAJOR}.${CTAGS_VERSION_MINOR}.${CTAGS_VERSION_REVISION}.${CTAGS_VERSION_BUILD}
 
-#Panel menu#
+# Panel menu#
 
-TBD
 
-~Table of contents~@ Contents@
+ TBD
+
+ ~Table of contents~@ Contents@
 
 
 
@@ -87,11 +176,11 @@ TBD
 $^#Ctags Source Navigator
 $^#${CTAGS_VERSION_MAJOR}.${CTAGS_VERSION_MINOR}.${CTAGS_VERSION_REVISION}.${CTAGS_VERSION_BUILD}
 
-#Editor menu#
+# Editor menu#
 
-TBD
+ TBD
 
-~Table of contents~@ Contents@
+ ~Table of contents~@ Contents@
 
 
 
@@ -100,11 +189,11 @@ TBD
 $^#Ctags Source Navigator
 $^#${CTAGS_VERSION_MAJOR}.${CTAGS_VERSION_MINOR}.${CTAGS_VERSION_REVISION}.${CTAGS_VERSION_BUILD}
 
-#Configuration menu#
+# Configuration menu#
 
-TBD
+ TBD
 
-~Table of contents~@ Contents@
+ ~Table of contents~@ Contents@
 
 
 
@@ -113,11 +202,11 @@ TBD
 $^#Ctags Source Navigator
 $^#${CTAGS_VERSION_MAJOR}.${CTAGS_VERSION_MINOR}.${CTAGS_VERSION_REVISION}.${CTAGS_VERSION_BUILD}
 
-#Macro#
+# Macro#
 
-TBD
+ TBD
 
-~Table of contents~@ Contents@
+ ~Table of contents~@ Contents@
 
 
 
@@ -126,8 +215,8 @@ TBD
 $^#Ctags Source Navigator
 $^#${CTAGS_VERSION_MAJOR}.${CTAGS_VERSION_MINOR}.${CTAGS_VERSION_REVISION}.${CTAGS_VERSION_BUILD}
 
-#Features#
+# Features#
 
-TBD
+ TBD
 
-~Table of contents~@ Contents@
+ ~Table of contents~@ Contents@
