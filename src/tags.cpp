@@ -106,6 +106,7 @@ struct TagFileInfo{
     , CacheModTime(0)
     , NamesCache(Tags::Internal::CreateTagsCache(0))
     , FilesCache(Tags::Internal::CreateTagsCache(0))
+    , OwnerInfo(std::make_shared<TagInfo::OwnerInfo>(TagInfo::OwnerInfo{filename}))
   {
     if (filename.empty() || IsPathSeparator(filename.back()))
       throw std::logic_error("Invalid tags file name");
@@ -118,6 +119,11 @@ struct TagFileInfo{
   bool IsFullPathRepo() const
   {
     return fullpathrepo;
+  }
+
+  std::shared_ptr<TagInfo::OwnerInfo> GetOwnerInfo() const
+  {
+    return OwnerInfo;
   }
 
   std::string const& GetName() const
@@ -212,6 +218,7 @@ private:
   std::string LastVisited;
   std::shared_ptr<Tags::Internal::TagsCache> NamesCache;
   std::shared_ptr<Tags::Internal::TagsCache> FilesCache;
+  std::shared_ptr<TagInfo::OwnerInfo> OwnerInfo;
   OffsetCont NamesOffsets;
 };
 
@@ -389,7 +396,7 @@ static void WriteTagsStat(FILE* f, TagsStat const& stat)
   }
 }
 
-static bool ReadTagsStat(FILE* f, std::string const& tagsFile, TagsStat& stat)
+static bool ReadTagsStat(FILE* f, std::shared_ptr<TagInfo::OwnerInfo> const& owner, TagsStat& stat)
 {
   unsigned int const capacityThreshold = 500;
   unsigned int sz = 0;
@@ -406,7 +413,7 @@ static bool ReadTagsStat(FILE* f, std::string const& tagsFile, TagsStat& stat)
     if (!ReadUnsignedInt(f, freq))
       return false;
 
-    tag.Owner.TagsFile = tagsFile;
+    tag.Owner = owner;
     stat.push_back(std::make_pair(tag, freq));
   }
 
@@ -621,7 +628,7 @@ static bool ParseLine(const char* buf, TagFields& result)
 static TagInfo MakeTag(TagFields const& fields, TagFileInfo const& fi)
 {
   TagInfo result;
-  result.Owner = {fi.GetName()};
+  result.Owner = fi.GetOwnerInfo();
   result.name = std::string(fields.Name.first, fields.Name.second);
   result.file = MakeFilename(fi.GetFullPath(std::string(fields.File.first, fields.File.second)));
   if (fields.Excmd.first)
@@ -1049,7 +1056,7 @@ bool TagFileInfo::LoadCache()
     TagsStat namesStat;
     TagsStat filesStat;
     auto tagsCacheBegins = ftell(&*f);
-    if (!ReadTagsStat(&*f, filename, namesStat) || !ReadTagsStat(&*f, filename, filesStat))
+    if (!ReadTagsStat(&*f, GetOwnerInfo(), namesStat) || !ReadTagsStat(&*f, GetOwnerInfo(), filesStat))
     {
       NamesCache = Tags::Internal::CreateTagsCache(0);
       FilesCache = Tags::Internal::CreateTagsCache(0);
@@ -1338,7 +1345,7 @@ static std::vector<TagInfo> GetMatchedTagsImpl(TagFileInfo const* fi, FILE* f, O
     GetLine(line, &*f);
     TagFields fields;
     auto tag = ParseLine(line.c_str(), fields) ? MakeTag(fields, *fi) : TagInfo();
-    if (!tag.Owner.TagsFile.empty() && visitor.Filter(tag))
+    if (!!tag.Owner && visitor.Filter(tag))
       result.push_back(std::move(tag));
   }
   return std::move(result);

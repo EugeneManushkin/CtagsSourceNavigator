@@ -763,7 +763,7 @@ static void LoadTags(std::string const& tagsFile, bool silent)
 
 static void ManualResetCacheCounters(TagInfo const& tag)
 {
-  auto info = Storage->GetInfo(tag.Owner.TagsFile.c_str());
+  auto info = Storage->GetInfo(tag.Owner->TagsFile.c_str());
   std::stringstream elapsed;
   elapsed << std::setfill('0') << std::setw(2) << info.ElapsedSinceCached / 3600 << std::setw(0) << ":"
                                << std::setw(2) << (info.ElapsedSinceCached / 60) % 60 << std::setw(0) << ":"
@@ -775,8 +775,8 @@ static void ManualResetCacheCounters(TagInfo const& tag)
 static void ResetCacheCountersOnTimeout(TagInfo const& tag)
 {
   time_t timeout = config.reset_cache_counters_timeout_hours * 3600;
-  if (!!timeout && Storage->GetInfo(tag.Owner.TagsFile.c_str()).ElapsedSinceCached > timeout)
-    Storage->ResetCacheCounters(tag.Owner.TagsFile.c_str(), FlushTagsCache);
+  if (!!timeout && Storage->GetInfo(tag.Owner->TagsFile.c_str()).ElapsedSinceCached > timeout)
+    Storage->ResetCacheCounters(tag.Owner->TagsFile.c_str(), FlushTagsCache);
 }
 
 static WideString LabelToStr(char label)
@@ -1104,7 +1104,7 @@ static void ManageRepositories()
       return;
 
     auto event = breakKeys->GetEvent(res.second);
-    bool repository_selected = res.first < repositories.size();
+    bool repository_selected = static_cast<size_t>(res.first) < repositories.size();
     size_t index = repository_selected ? res.first : res.first - repositories.size();
     if (event == KeyEvent::CtrlDel && repository_selected)
     {

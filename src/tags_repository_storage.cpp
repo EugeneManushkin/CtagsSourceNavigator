@@ -79,14 +79,14 @@ namespace
 
     void CacheTag(TagInfo const& tag, size_t cacheSize, bool flush) override
     {
-      auto info = GetRuntimeInfo(tag.Owner.TagsFile.c_str());
+      auto info = GetRuntimeInfo(tag.Owner->TagsFile.c_str());
       if (!Empty(info))
         info.Repository->CacheTag(tag, cacheSize, flush);
     }
 
     void EraseCachedTag(TagInfo const& tag, bool flush) override
     {
-      auto info = GetRuntimeInfo(tag.Owner.TagsFile.c_str());
+      auto info = GetRuntimeInfo(tag.Owner->TagsFile.c_str());
       if (!Empty(info))
         info.Repository->EraseCachedTag(tag, flush);
     }
