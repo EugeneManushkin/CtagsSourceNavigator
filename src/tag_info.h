@@ -1,5 +1,6 @@
 #pragma once
 
+#include <memory>
 #include <string>
 
 struct TagInfo
@@ -11,15 +12,15 @@ struct TagInfo
   char kind;
   std::string info;
 
-  struct
+  struct OwnerInfo
   {
     std::string TagsFile;
-  } Owner;
+  };
+  std::shared_ptr<OwnerInfo> Owner;
 
   TagInfo()
     : kind(0)
     , lineno(-1)
-    , Owner{}
   {
   }
 
