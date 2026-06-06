@@ -19,8 +19,13 @@ This is a [Far Manager](https://www.farmanager.com/) plugin for browsing source 
 + Creating Ctags database for selected repository root
 + Reindexing single file or repository.
 + Hotkeys macro
-## What's new 
-### 2.1.106.x
+## What's new
+### 2.1.108.x
++ Configuration dialog become a configuration menu
+  [#149](https://github.com/EugeneManushkin/CtagsSourceNavigator/issues/149)
++ Help file added
+  [#69](https://github.com/EugeneManushkin/CtagsSourceNavigator/issues/69)
+### 2.1.106.648
 + Versioning has been changed. The last number in the version string is moved on 3-rd place and became a revision number.
   Now the last number in the version string corresponds to incremental counter of the release pipeline
   [#111](https://github.com/EugeneManushkin/CtagsSourceNavigator/issues/111)
@@ -45,10 +50,6 @@ This is a [Far Manager](https://www.farmanager.com/) plugin for browsing source 
 + Ctrl+Enter shortcut in search menu navigates Far Manager to file where selected item is located [#99](https://github.com/EugeneManushkin/CtagsSourceNavigator/issues/99)
 + Limit total search list to 1500 (may be configured or disabled) for short filters [#103](https://github.com/EugeneManushkin/CtagsSourceNavigator/issues/103)
 + Fixed bugs: [#101](https://github.com/EugeneManushkin/CtagsSourceNavigator/issues/101), [#107](https://github.com/EugeneManushkin/CtagsSourceNavigator/issues/107)
-### 2.1.0.92
-+ Opening a repository in "Manage Repositories" menu moves you to last visited directory [#93](https://github.com/EugeneManushkin/CtagsSourceNavigator/issues/93)
-+ Navigation history is reworked. "Go back" and "Go forward" options become more convinient [#94](https://github.com/EugeneManushkin/CtagsSourceNavigator/issues/94)
-+ Plugin become more stable. Fixed bugs: [#95](https://github.com/EugeneManushkin/CtagsSourceNavigator/issues/95), [#96](https://github.com/EugeneManushkin/CtagsSourceNavigator/issues/96), [#97](https://github.com/EugeneManushkin/CtagsSourceNavigator/issues/97)
 ## Installation
 1. Download latest release from [release page](https://github.com/EugeneManushkin/CtagsSourceNavigator/releases)
 2. Extract downloaded archive to FarManager/Plugins folder
