@@ -165,7 +165,50 @@ $^#${CTAGS_VERSION_MAJOR}.${CTAGS_VERSION_MINOR}.${CTAGS_VERSION_REVISION}.${CTA
 # Panel menu#
 
 
- TBD
+# 1 Search name in entire repository# (Ctrl+Shift+T)
+
+ Type a name to search in a repository. Names are searched in current repository and all premanent repositories.
+Search is limited with #Maximum results displayed# option set in ~Configuration menu~@ Config@.
+Names are ordered in such a way that most visited names goes on the top of the search (may be configured in ~Configuration menu~@ Config@).
+Use Ctrl+V or Ctrl+Insert to insert text from clipboard. Use Ctrl+C to copy selected item to clipboard
+
+# 2 Search file by name# (Ctrl+Shift+R)
+
+ Type a file name to search in a repository. You may specify a partial path to file with a name to filter
+search result by location: tests\tags_cache\main.cpp. You may also specify line number in compiler-error like style: file.cpp:123.
+Use Ctrl+V or Ctrl+Insert to insert text from clipboard. Use Ctrl+C to copy selected item to clipboard
+
+# H Navigation history# (no hotkey)
+
+# 3 Load tags file# (no hotkey)
+
+ Usually you don't need this
+
+# 5 Manage repositories# (no hotkey)
+
+ Open #Manage repositories# menu. Here you may load and unload recently opened repository, navigate to a repository,
+make a repository permanent or remove repository from permanents.
+
+# 6 Add permanent repository# (no hotkey)
+
+ Please use #5 Manage repositories# menu instead
+
+# 7 Index selected directory# (no hotkey)
+
+ Create a new repository inside the directory pointed to by the cursor
+
+# 8 Reindex repository# (no hotkey)
+
+ Reindex entire repository
+
+# ? Help# (no hotkey)
+
+# C Plugin configuration# (no hotkey)
+
+ Open ~Configuration menu~@ Config@
+
+
+ ~How to use~@ Usage@
 
  ~Table of contents~@ Contents@
 
@@ -178,7 +221,54 @@ $^#${CTAGS_VERSION_MAJOR}.${CTAGS_VERSION_MINOR}.${CTAGS_VERSION_REVISION}.${CTA
 
 # Editor menu#
 
- TBD
+
+# 1 Go to# (Ctrl+F)
+
+ Open declaration/definition of a name or open include file
+
+# 2 Complete name# (Ctrl+Space)
+
+# 3 Go back# (Ctrl+G)
+
+# F Go forward# (Ctrl+D)
+
+# H Navigation history# (no hotkey)
+
+# 4 Class members# (no hotkey)
+
+ List of all class members. Set cursor on a class name then call this menu
+
+# 5 Search name in opened file# (Ctrl+Shift+X)
+
+ List all names defined/declared in currently edited file
+
+# 6 Search name in entire repository# (Ctrl+Shift+T)
+
+ Type a name to search in a repository. Names are searched in current repository and all premanent repositories.
+Search is limited with #Maximum results displayed# option set in ~Configuration menu~@ Config@.
+Names are ordered in such a way that most visited names goes on the top of the search (may be configured in ~Configuration menu~@ Config@).
+Use Ctrl+V or Ctrl+Insert to insert text from clipboard. Use Ctrl+C to copy selected item to clipboard
+
+# 7 Search file by name# (Ctrl+Shift+R)
+
+ Type a file name to search in a repository. You may specify a partial path to file with a filename to filter
+search result by location: tests\tags_cache\main.cpp. You may also specify line number in compiler-error like style: file.cpp:123.
+Use Ctrl+V or Ctrl+Insert to insert text from clipboard. Use Ctrl+C to copy selected item to clipboard
+
+# 8 Reindex repository# (no hotkey)
+
+ Reindex entire repository
+
+# R Reindex this file# (no hotkey)
+
+ Reindex currently edited file.
+
+# C Plugin configuration# (no hotkey)
+
+ Open ~Configuration menu~@ Config@
+
+
+ ~How to use~@ Usage@
 
  ~Table of contents~@ Contents@
 
